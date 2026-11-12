@@ -1,0 +1,22 @@
+# Gradle
+/.gradle/
+/build/
+/versions/*/build/
+/versions/*/.gradle/
+/.kotlin/
+# Stonecutter / Loom
+/run/
+/versions/*/run/
+/run-data/
+# IDE
+/.idea/
+/*.iml
+/.vscode/
+/.settings/
+/.classpath
+/.project
+/bin/
+.DS_Store
+Thumbs.db
+# Output locali
+/libs-out/
