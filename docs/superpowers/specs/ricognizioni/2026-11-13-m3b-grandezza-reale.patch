@@ -1,0 +1,246 @@
+diff --git a/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java b/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
+index a5e24df..9927468 100644
+--- a/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
++++ b/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
+@@ -27,6 +27,7 @@ public final class RedstoneExoframes {
+         ModCreativeTabs.register();
+         Compat.frameState().registerCommon();
+         ExoframeCommand.register();
++        dev.architectury.event.events.common.TickEvent.PLAYER_PRE.register(com.toxineren.exoframes.frame.SuitSize::tick); // SPIKE
+         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
+     }
+ 
+diff --git a/src/main/java/com/toxineren/exoframes/frame/SuitSize.java b/src/main/java/com/toxineren/exoframes/frame/SuitSize.java
+new file mode 100644
+index 0000000..6230ca6
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/frame/SuitSize.java
+@@ -0,0 +1,56 @@
++package com.toxineren.exoframes.frame;
++
++import com.google.common.collect.MapMaker;
++import com.toxineren.exoframes.content.ModItems;
++import java.util.concurrent.ConcurrentMap;
++import net.minecraft.world.entity.EntityDimensions;
++import net.minecraft.world.entity.EquipmentSlot;
++import net.minecraft.world.entity.Pose;
++import net.minecraft.world.entity.player.Player;
++
++/**
++ * SPIKE (ricognizione grandezza reale): ingombro e altezza degli occhi di chi indossa la tuta, sui due lati.
++ * Codice comune, senza direttive: i due mixin per versione chiamano solo questi metodi.
++ */
++public final class SuitSize {
++    /** Scala verticale: quella del disegno (client/SuitScale.S, che qui non si puo' importare: e' codice client). */
++    public static final float HEIGHT_SCALE = 1.65f;
++    /** Larghezza 0,8: passa i 13/16 lasciati da scala a pioli, porta aperta, botola aperta. */
++    public static final float WIDTH_SCALE = 0.8f / 0.6f;
++
++    /** Ultimo stato visto per giocatore, per lato; chiavi deboli per identita' (MapMaker.weakKeys). */
++    private static final ConcurrentMap<Player, Boolean> SEEN = new MapMaker().weakKeys().makeMap();
++
++    private SuitSize() {
++    }
++
++    /** Vero se il giocatore ha il segnaposto del torso nello slot. Sicuro anche dentro il costruttore di Entity. */
++    public static boolean wearsSuit(Player player) {
++        if (player.getInventory() == null || !ModItems.EXOFRAME_TORSO.isPresent()) {
++            return false; // Entity.<init> chiama getDimensions prima che Player abbia l'inventario
++        }
++        return player.getItemBySlot(EquipmentSlot.CHEST).is(ModItems.EXOFRAME_TORSO.get());
++    }
++
++    /** Ingombro per la posa: quello vanilla scalato; le dimensioni fisse (sonno, morte) restano come sono. */
++    public static EntityDimensions dimensions(Player player, Pose pose, EntityDimensions vanilla) {
++        return wearsSuit(player) ? vanilla.scale(WIDTH_SCALE, HEIGHT_SCALE) : vanilla;
++    }
++
++    /** Solo 1.20.1: altezza degli occhi per la posa (su 1.21.1 sta dentro EntityDimensions). */
++    public static float eyeHeight(Player player, Pose pose, float vanilla) {
++        return wearsSuit(player) ? vanilla * HEIGHT_SCALE : vanilla;
++    }
++
++    /** A ogni tick di ogni giocatore, sui due lati (TickEvent.PLAYER_PRE): ricalcola l'ingombro quando cambia. */
++    public static void tick(Player player) {
++        boolean now = wearsSuit(player);
++        Boolean before = SEEN.put(player, now);
++        if (before == null ? now : before != now) {
++            player.refreshDimensions();
++            com.toxineren.exoframes.RedstoneExoframes.LOGGER.info("SPIKE refresh client={} player={} suited={} w={} h={} eye={}",
++                    player.level().isClientSide, player.getGameProfile().getName(), now, player.getBbWidth(),
++                    player.getBbHeight(), player.getEyeHeight());
++        }
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java b/src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java
+index c03b8e5..8767be2 100644
+--- a/src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java
++++ b/src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java
+@@ -74,6 +74,8 @@ public final class ExoframeGameTests {
+     public static Collection<TestFunction> generate() {
+         List<TestFunction> tests = new ArrayList<>();
+         add(tests, "wiringPlacesABlock", ExoframeGameTests::wiringPlacesABlock);
++        add(tests, "spikeSuitGrowsBoxAndEyes", ExoframeGameTests::spikeSuitGrowsBoxAndEyes);
++        add(tests, "spikeSuitCrawlsUnderLowCeiling", ExoframeGameTests::spikeSuitCrawlsUnderLowCeiling);
+         add(tests, "frameStateOnMockPlayer", ExoframeGameTests::frameStateOnMockPlayer);
+         add(tests, "itemDataRoundTripsOnARealStack", ExoframeGameTests::itemDataRoundTripsOnARealStack);
+         add(tests, "placeholdersAreArmorItems", ExoframeGameTests::placeholdersAreArmorItems);
+@@ -379,6 +381,72 @@ public final class ExoframeGameTests {
+      * Aggiunge un test obbligatorio nella struttura vuota. Il nome {@code temaCaso} diventa
+      * {@code redstone_exoframes:tema_caso}: Forge lo legge come ResourceLocation, che non ammette maiuscole.
+      */
++    // --- SPIKE grandezza reale ---
++
++    private static String size(ServerPlayer p) {
++        return String.format(Locale.ROOT, "pose=%s w=%.4f h=%.4f eye=%.4f crouchEye=%.4f", p.getPose(), p.getBbWidth(),
++                p.getBbHeight(), p.getEyeHeight(), p.getEyeHeight(net.minecraft.world.entity.Pose.CROUCHING));
++    }
++
++    private static boolean near(float a, float b) {
++        return Math.abs(a - b) < 1e-3f;
++    }
++
++    /** Il segnaposto del torso fa crescere ingombro e occhi sul server; toglierlo li riporta a quelli vanilla. */
++    private static void spikeSuitGrowsBoxAndEyes(GameTestHelper helper) {
++        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
++        com.toxineren.exoframes.frame.SuitSize.tick(player);
++        String before = size(player);
++        helper.assertTrue(near(player.getBbHeight(), 1.8f) && near(player.getEyeHeight(), 1.62f), "vanilla: " + before);
++
++        DebugWear.wear(player, SuitSummary.BARE);
++        String afterWearNoTick = size(player);
++        com.toxineren.exoframes.frame.SuitSize.tick(player);
++        String suited = size(player);
++        RedstoneExoframes.LOGGER.info("SPIKE size before={} | wear,no refresh={} | suited={}", before, afterWearNoTick,
++                suited);
++        helper.assertTrue(near(player.getBbHeight(), 1.8f * 1.65f), "suited height: " + suited);
++        helper.assertTrue(near(player.getBbWidth(), 0.8f), "suited width: " + suited);
++        helper.assertTrue(near(player.getEyeHeight(), 1.62f * 1.65f), "suited eyes: " + suited);
++        helper.assertTrue(near(player.getEyeHeight(net.minecraft.world.entity.Pose.CROUCHING), 1.27f * 1.65f),
++                "suited crouch eyes: " + suited);
++        helper.assertTrue(near((float) (player.getBoundingBox().maxY - player.getY()), 1.8f * 1.65f),
++                "bounding box not rebuilt: " + suited);
++
++        DebugWear.remove(player);
++        com.toxineren.exoframes.frame.SuitSize.tick(player);
++        String after = size(player);
++        RedstoneExoframes.LOGGER.info("SPIKE size after remove={}", after);
++        helper.assertTrue(near(player.getBbHeight(), 1.8f) && near(player.getEyeHeight(), 1.62f), "removed: " + after);
++        helper.succeed();
++    }
++
++    /** In uno spazio alto 2 la tuta non sta in piedi ne' accovacciata: il gioco la mette a carponi da solo. */
++    private static void spikeSuitCrawlsUnderLowCeiling(GameTestHelper helper) {
++        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
++        for (int x = 2; x <= 6; x++) {
++            for (int z = 2; z <= 6; z++) {
++                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
++                helper.setBlock(new BlockPos(x, 4, z), Blocks.STONE);
++            }
++        }
++        net.minecraft.world.phys.Vec3 feet = helper.absoluteVec(new net.minecraft.world.phys.Vec3(4.5, 2.0, 4.5));
++        player.moveTo(feet.x, feet.y, feet.z, 0f, 0f);
++        player.doTick();
++        String plain = size(player);
++        helper.assertTrue(player.getPose() == net.minecraft.world.entity.Pose.STANDING, "plain player: " + plain);
++
++        DebugWear.wear(player, SuitSummary.BARE);
++        player.doTick(); // PLAYER_PRE: refresh (2,97, nel soffitto), poi updatePlayerPose
++        String first = size(player);
++        player.doTick();
++        String second = size(player);
++        RedstoneExoframes.LOGGER.info("SPIKE low ceiling plain={} | tick1={} | tick2={}", plain, first, second);
++        helper.assertTrue(player.getPose() == net.minecraft.world.entity.Pose.SWIMMING, "suited under 2: " + second);
++        helper.assertTrue(near(player.getBbHeight(), 0.6f * 1.65f), "crawl box: " + second);
++        helper.succeed();
++    }
++
+     private static void add(List<TestFunction> tests, String name, Consumer<GameTestHelper> test) {
+         String id = RedstoneExoframes.MOD_ID + ":" + name.replaceAll("([A-Z])", "_$1").toLowerCase(Locale.ROOT);
+         tests.add(new TestFunction(RedstoneExoframes.MOD_ID, id, EMPTY_STRUCTURE, MAX_TICKS, 0L, true, test));
+diff --git a/src/main/java/com/toxineren/exoframes/mixin/PlayerSize120Mixin.java b/src/main/java/com/toxineren/exoframes/mixin/PlayerSize120Mixin.java
+new file mode 100644
+index 0000000..ab89c02
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/mixin/PlayerSize120Mixin.java
+@@ -0,0 +1,26 @@
++package com.toxineren.exoframes.mixin;
++
++import com.toxineren.exoframes.frame.SuitSize;
++import net.minecraft.world.entity.EntityDimensions;
++import net.minecraft.world.entity.Pose;
++import net.minecraft.world.entity.player.Player;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
++
++/** SPIKE, solo 1.20.1 (elencato solo in resources-mc1.20.1): ingombro e occhi del giocatore nella tuta. */
++@Mixin(Player.class)
++abstract class PlayerSize120Mixin {
++    @Inject(method = "getDimensions(Lnet/minecraft/world/entity/Pose;)Lnet/minecraft/world/entity/EntityDimensions;",
++            at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
++        cir.setReturnValue(SuitSize.dimensions((Player) (Object) this, pose, cir.getReturnValue()));
++    }
++
++    @Inject(method = "getStandingEyeHeight(Lnet/minecraft/world/entity/Pose;"
++            + "Lnet/minecraft/world/entity/EntityDimensions;)F", at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitEyeHeight(Pose pose, EntityDimensions dimensions, CallbackInfoReturnable<Float> cir) {
++        cir.setReturnValue(SuitSize.eyeHeight((Player) (Object) this, pose, cir.getReturnValueF()));
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/mixin/PlayerSize121Mixin.java b/src/main/java/com/toxineren/exoframes/mixin/PlayerSize121Mixin.java
+new file mode 100644
+index 0000000..08f9b61
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/mixin/PlayerSize121Mixin.java
+@@ -0,0 +1,20 @@
++package com.toxineren.exoframes.mixin;
++
++import com.toxineren.exoframes.frame.SuitSize;
++import net.minecraft.world.entity.EntityDimensions;
++import net.minecraft.world.entity.Pose;
++import net.minecraft.world.entity.player.Player;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
++
++/** SPIKE, solo 1.21.1 (elencato solo in resources-mc1.21.1): ingombro, occhi e attacchi nella tuta. */
++@Mixin(Player.class)
++abstract class PlayerSize121Mixin {
++    @Inject(method = "getDefaultDimensions(Lnet/minecraft/world/entity/Pose;)"
++            + "Lnet/minecraft/world/entity/EntityDimensions;", at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitDimensions(Pose pose, CallbackInfoReturnable<EntityDimensions> cir) {
++        cir.setReturnValue(SuitSize.dimensions((Player) (Object) this, pose, cir.getReturnValue()));
++    }
++}
+diff --git a/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json b/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
+index c9b79a8..33f6505 100644
+--- a/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
++++ b/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
+@@ -3,6 +3,9 @@
+   "minVersion": "0.8",
+   "package": "com.toxineren.exoframes.mixin",
+   "compatibilityLevel": "JAVA_17",
++  "mixins": [
++    "PlayerSize120Mixin"
++  ],
+   "client": [
+     "client.ItemInHandLayerMixin",
+     "client.PlayerRendererMixin"
+diff --git a/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json b/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
+index e6221fb..283d4e3 100644
+--- a/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
++++ b/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
+@@ -3,6 +3,9 @@
+   "minVersion": "0.8",
+   "package": "com.toxineren.exoframes.mixin",
+   "compatibilityLevel": "JAVA_21",
++  "mixins": [
++    "PlayerSize121Mixin"
++  ],
+   "client": [
+     "client.ItemInHandLayerMixin",
+     "client.PlayerRendererMixin"
