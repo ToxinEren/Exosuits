@@ -285,6 +285,8 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 
 ### Task 12: Pilota dentro la tuta (due mixin client)
 
+> **Revisione 3 (13 novembre 2026, dalla revisione del task).** Il testo qui sotto chiedeva di sollevare il pilota nello spazio del mondo, in testa a `PlayerRenderer.render`, e di annullare il sollevamento a ogni uscita. Era un difetto del piano: con il giocatore sdraiato, a nuoto o in caduta da morto la tuta restava sospesa mezzo blocco sopra il corpo. Come è stato fatto: il sollevamento è una traslazione nello spazio del modello, `translate(0, -PILOT_RAISE_PX / 16, 0)`, in coda a `PlayerRenderer.scale(AbstractClientPlayer, PoseStack, float)`, che `LivingEntityRenderer.render` chiama dentro il proprio push/pop dopo le rotazioni; non servono più gli agganci in testa e in uscita di `render` né `PilotPose.lower`. Lo spostamento dell'oggetto impugnato si calcola dal perno corrente del braccio (`PilotPose.handShiftPx`), non dal valore fisso (±2, +0,8). La targhetta col nome non si alza con il pilota: la porterà su l'ingombro reale della parte 3b.
+
 **Files:**
 - Create: `mixin/client/PlayerRendererMixin.java`, `mixin/client/ItemInHandLayerMixin.java`, `client/PilotPose.java`, `src/main/resources-mc1.20.1/redstone_exoframes.mixins.json`, `src/main/resources-mc1.21.1/redstone_exoframes.mixins.json`
 - Modify: `client/SuitLayer.java`, i metadati dei tre loader (`fabric.mod.json`, configurazione Forge del mixin in `build.gradle.kts`, `neoforge.mods.toml`), `build.gradle.kts`, `tools/check_sources.sh`, `tools/check_jars.sh`, `docs/compat.md`
