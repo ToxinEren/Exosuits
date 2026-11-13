@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat;
 
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -45,4 +46,10 @@ public interface GameTests {
      * @return false se il telaio non e' piazzato o se il dato salvato e' in sola lettura
      */
     boolean addRawStowed(MinecraftServer server, UUID frameId, CompoundTag entry);
+
+    /**
+     * Le voci stivate rimaste nei telai tolti dal registro con questa identita' (copie, nell'ordine), come le conserva
+     * il dato salvato (vedi {@link FrameStateAccess#removePlaced}); vuota se non ce ne sono. Esiste solo per i test.
+     */
+    List<CompoundTag> orphanedStowed(MinecraftServer server, UUID frameId);
 }

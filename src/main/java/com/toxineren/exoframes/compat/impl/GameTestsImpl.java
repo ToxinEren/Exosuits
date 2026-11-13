@@ -1,9 +1,14 @@
 package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.compat.GameTests;
+import com.toxineren.exoframes.compat.NbtKeys;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
@@ -101,5 +106,19 @@ public final class GameTestsImpl implements GameTests {
         record.stowed().add(entry.copy());
         data.setDirty();
         return true;
+    }
+
+    @Override
+    public List<CompoundTag> orphanedStowed(MinecraftServer server, UUID frameId) {
+        List<CompoundTag> entries = new ArrayList<>();
+        for (CompoundTag group : FrameStateSavedData.get(server).orphaned()) {
+            if (SchemaIds.readUuid(group, NbtKeys.FRAME).filter(frameId::equals).isPresent()) {
+                ListTag list = group.getList(NbtKeys.ENTRIES, Tag.TAG_COMPOUND);
+                for (int i = 0; i < list.size(); i++) {
+                    entries.add(list.getCompound(i).copy());
+                }
+            }
+        }
+        return entries;
     }
 }

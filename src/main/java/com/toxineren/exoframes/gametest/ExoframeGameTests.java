@@ -56,6 +56,7 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -108,6 +109,7 @@ public final class ExoframeGameTests {
         add(tests, "stowedArmorSurvivesEnterAndExit", ExoframeGameTests::stowedArmorSurvivesEnterAndExit);
         add(tests, "stowedStackFromOlderVersionIsRead", ExoframeGameTests::stowedStackFromOlderVersionIsRead);
         add(tests, "summaryTagRoundTrips", ExoframeGameTests::summaryTagRoundTrips);
+        add(tests, "exitPlacesTheFrameInTheGivenDimension", ExoframeGameTests::exitPlacesTheFrameInTheGivenDimension);
         add(tests, "pieceItemsKnowTheirKind", ExoframeGameTests::pieceItemsKnowTheirKind);
         add(tests, "pieceItemRoundTripsAPiece", ExoframeGameTests::pieceItemRoundTripsAPiece);
         add(tests, "cellItemCarriesItsCharge", ExoframeGameTests::cellItemCarriesItsCharge);
@@ -566,9 +568,45 @@ public final class ExoframeGameTests {
         unknown.putInt("count", 1);
         helper.assertTrue(Compat.gameTests().addRawStowed(server, frameId, stowedEntry(current, unknown)),
                 "raw stowed entry not added");
+        helper.assertTrue(!frames.placed(server, frameId).orElseThrow().hasStowed(),
+                "hasStowed counts an unreadable entry");
+        CompoundTag unreadable = stowedEntry(current, unknown);
         helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).isEmpty(), "unreadable entry was taken");
         helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).isEmpty(), "unreadable entry was taken later");
-        helper.assertTrue(frames.placed(server, frameId).orElseThrow().hasStowed(), "unreadable entry was dropped");
+        // nulla da restituire: il telaio si puo' smontare, e la voce non si perde
+        helper.assertTrue(!frames.placed(server, frameId).orElseThrow().hasStowed(),
+                "a frame with only unreadable stowed entries claims armor to give back");
+
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        helper.assertTrue(List.of(unreadable).equals(Compat.gameTests().orphanedStowed(server, frameId)),
+                "unreadable entry not kept among the orphaned ones of its frame: "
+                        + Compat.gameTests().orphanedStowed(server, frameId));
+        helper.succeed();
+    }
+
+    /**
+     * L'uscita mette il telaio nella dimensione del livello dato, anche se non e' quella del giocatore (il Nether del
+     * server di test): {@code placedIn} lo trova li' e non nel livello del giocatore.
+     */
+    private static void exitPlacesTheFrameInTheGivenDimension(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        ServerLevel nether = server.getLevel(Level.NETHER);
+        helper.assertTrue(nether != null && nether != level, "test server has no separate Nether level");
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 5)));
+        UUID frameId = frames.place(level, new FrameState(RedstoneExoframes.config()), spot, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "could not enter the placed frame");
+
+        Vec3 netherSpot = new Vec3(8.5, 70.0, -3.5);
+        helper.assertTrue(Optional.of(frameId).equals(frames.exit(player, nether, netherSpot, 30f)), "exit failed");
+        PlacedFrame placed = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(placed != null && placed.dimension().equals(Level.NETHER)
+                && placed.position().equals(netherSpot) && placed.yaw() == 30f,
+                "frame not placed in the Nether at the exit spot: " + placed);
+        helper.assertTrue(placedIds(nether).contains(frameId), "frame missing from the Nether's placed frames");
+        helper.assertTrue(!placedIds(level).contains(frameId), "frame listed in the player's level");
 
         helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
         helper.succeed();

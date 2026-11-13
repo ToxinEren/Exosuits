@@ -9,8 +9,9 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Un telaio piazzato del registro dei telai, come lo vede il resto del gioco (vedi {@link FrameStateAccess#placed}):
- * identita', stato, dimensione, posizione dei piedi, orientamento in gradi e se ha armatura stivata (anche voci che
- * non si leggono). Lo stato e' quello vivo del registro: va trattato in sola lettura, e ogni modifica passa da
+ * identita', stato, dimensione, posizione dei piedi, orientamento in gradi e se ha armatura stivata da restituire
+ * ({@code hasStowed}: almeno una voce che si legge; le voci che non si leggono non contano, cosi' non impediscono di
+ * smontare o raccogliere il telaio, e alla rimozione restano nel dato salvato). Lo stato e' quello vivo del registro: va trattato in sola lettura, e ogni modifica passa da
  * {@link FrameStateAccess#updatePlaced}. Nessun componente puo' essere null.
  */
 public record PlacedFrame(UUID frameId, FrameState state, ResourceKey<Level> dimension, Vec3 position, float yaw,

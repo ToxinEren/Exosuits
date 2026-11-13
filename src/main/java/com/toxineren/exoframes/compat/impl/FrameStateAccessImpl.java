@@ -10,7 +10,6 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -143,43 +142,39 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
 
     @Override
     public Optional<PlacedFrame> placed(MinecraftServer server, UUID frameId) {
+        Objects.requireNonNull(frameId, "frameId must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(server);
         FrameRecord record = data.placed(frameId);
-        return record == null ? Optional.empty() : Optional.of(view(record, data.spot(frameId)));
+        return record == null ? Optional.empty()
+                : Optional.of(view(record, data.spot(frameId), server.registryAccess()));
     }
 
     @Override
     public List<PlacedFrame> placedIn(ServerLevel level) {
         FrameStateSavedData data = FrameStateSavedData.get(level.getServer());
+        HolderLookup.Provider registries = level.getServer().registryAccess();
         List<PlacedFrame> frames = new ArrayList<>();
         for (UUID frameId : data.placedIn(dimensionId(level))) {
-            frames.add(view(data.placed(frameId), data.spot(frameId)));
+            frames.add(view(data.placed(frameId), data.spot(frameId), registries));
         }
         return frames;
     }
 
     @Override
     public boolean updatePlaced(MinecraftServer server, UUID frameId, Consumer<FrameState> change) {
+        Objects.requireNonNull(frameId, "frameId must not be null");
+        Objects.requireNonNull(change, "change must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(server);
         if (data.readOnly()) {
             data.logRefusedChange();
             return false;
         }
-        FrameRecord record = data.placed(frameId);
-        if (record == null) {
-            return false;
-        }
-        try {
-            change.accept(record.state());
-        } finally {
-            // anche se la modifica lancia a meta': il disco resta allineato alla memoria
-            data.setDirty();
-        }
-        return true;
+        return data.updatePlaced(frameId, change);
     }
 
     @Override
     public boolean removePlaced(MinecraftServer server, UUID frameId) {
+        Objects.requireNonNull(frameId, "frameId must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(server);
         if (data.readOnly()) {
             data.logRefusedChange();
@@ -194,6 +189,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
 
     @Override
     public boolean enter(ServerPlayer player, UUID frameId) {
+        Objects.requireNonNull(frameId, "frameId must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(player.server);
         if (data.readOnly()) {
             data.logRefusedChange();
@@ -237,10 +233,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return;
         }
-        FrameRecord record = data.worn(player.getUUID());
-        if (record == null) {
-            throw new IllegalStateException("player " + player.getUUID() + " wears no frame to stow armor in");
-        }
         // prima tutte le voci, poi la lista: uno stack che non si scrive non lascia la stiva a meta'
         HolderLookup.Provider registries = player.server.registryAccess();
         List<CompoundTag> entries = new ArrayList<>();
@@ -250,8 +242,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
                 entries.add(StackTags.write(registries, stowed.slot(), stowed.stack()));
             }
         }
-        record.stowed().addAll(entries);
-        data.setDirty();
+        data.addStowed(player.getUUID(), entries);
     }
 
     @Override
@@ -261,17 +252,20 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return List.of();
         }
-        return take(data, data.worn(player.getUUID()), player.server);
+        HolderLookup.Provider registries = player.server.registryAccess();
+        return data.takeStowedOfWorn(player.getUUID(), (frameId, tag) -> StackTags.read(registries, tag, frameId));
     }
 
     @Override
     public List<StowedStack> takeStowedOfPlaced(MinecraftServer server, UUID frameId) {
+        Objects.requireNonNull(frameId, "frameId must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(server);
         if (data.readOnly()) {
             data.logRefusedChange();
             return List.of();
         }
-        return take(data, data.placed(frameId), server);
+        HolderLookup.Provider registries = server.registryAccess();
+        return data.takeStowedOfPlaced(frameId, (id, tag) -> StackTags.read(registries, tag, id));
     }
 
     @Override
@@ -284,40 +278,31 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
 
     @Override
     public Optional<SuitSummary> readSummaryTag(CompoundTag tag) {
+        Objects.requireNonNull(tag, "tag must not be null");
         return SuitSummaryTags.read(tag);
     }
 
     /**
-     * Toglie dal record (se c'e') le voci stivate che si leggono e le restituisce come stack, nell'ordine; quelle che
-     * non si leggono restano nella lista cosi' come sono. Segna il dato come da salvare se il record c'e'.
+     * Il telaio piazzato come lo vede il resto del gioco; {@code hasStowed} e' vero solo se almeno una voce stivata
+     * si legge (una voce illeggibile non si puo' restituire, e non deve bloccare lo smontaggio).
      */
-    private static List<StowedStack> take(FrameStateSavedData data, FrameRecord record, MinecraftServer server) {
-        if (record == null) {
-            return List.of();
-        }
-        HolderLookup.Provider registries = server.registryAccess();
-        List<StowedStack> taken = new ArrayList<>();
-        for (Iterator<CompoundTag> it = record.stowed().iterator(); it.hasNext(); ) {
-            Optional<StowedStack> stowed = StackTags.read(registries, it.next());
-            if (stowed.isPresent()) {
-                taken.add(stowed.get());
-                it.remove();
-            }
-        }
-        data.setDirty();
-        return taken;
-    }
-
-    /** Il telaio piazzato come lo vede il resto del gioco. */
-    private static PlacedFrame view(FrameRecord record, PlacedSpot spot) {
+    private static PlacedFrame view(FrameRecord record, PlacedSpot spot, HolderLookup.Provider registries) {
         // l'id della dimensione e' gia' stato validato in lettura e scritto da un livello vero
         ResourceKey<Level> dimension = ResourceKey.create(Registries.DIMENSION,
                 Objects.requireNonNull(ResourceLocation.tryParse(spot.dimension()), "invalid dimension id"));
+        boolean hasReadable = false;
+        for (CompoundTag entry : record.stowed()) {
+            if (StackTags.read(registries, entry, record.frameId()).isPresent()) {
+                hasReadable = true;
+                break;
+            }
+        }
         return new PlacedFrame(record.frameId(), record.state(), dimension, new Vec3(spot.x(), spot.y(), spot.z()),
-                spot.yaw(), !record.stowed().isEmpty());
+                spot.yaw(), hasReadable);
     }
 
     private static PlacedSpot spotOf(ServerLevel level, Vec3 position, float yaw) {
+        Objects.requireNonNull(level, "level must not be null");
         Objects.requireNonNull(position, "position must not be null");
         return new PlacedSpot(dimensionId(level), position.x, position.y, position.z, yaw);
     }

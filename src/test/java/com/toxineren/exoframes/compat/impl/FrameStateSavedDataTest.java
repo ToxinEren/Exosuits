@@ -352,6 +352,116 @@ class FrameStateSavedDataTest {
     }
 
     @Test
+    void removedRecordsKeepTheirStowedEntriesAsOrphans() {
+        FrameStateSavedData data = empty();
+        FrameState owned = state();
+        owned.setOwner(OTHER);
+        CompoundTag unknownItem = stowedEntry("head", "removed_mod:helmet");
+        CompoundTag boots = stowedEntry("feet", "minecraft:leather_boots");
+        data.place(new FrameRecord(FRAME_A, owned, List.of(unknownItem, boots)), OVERWORLD_SPOT);
+        data.place(new FrameRecord(FRAME_B, state()), NETHER_SPOT);
+        FrameRecord worn = data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        data.addStowed(GOOD, List.of(stowedEntry("chest", "minecraft:elytra")));
+
+        assertTrue(data.removePlaced(FRAME_A));
+        assertTrue(data.removePlaced(FRAME_B)); // nessuna voce: nessun gruppo
+        assertTrue(data.removeWorn(GOOD));
+
+        CompoundTag placedGroup = new CompoundTag();
+        placedGroup.put(NbtKeys.FRAME, NbtUtils.createUUID(FRAME_A));
+        placedGroup.put(NbtKeys.OWNER, NbtUtils.createUUID(OTHER));
+        ListTag placedEntries = new ListTag();
+        placedEntries.add(unknownItem);
+        placedEntries.add(boots);
+        placedGroup.put(NbtKeys.ENTRIES, placedEntries);
+        // il telaio indossato non ha proprietario: vale chi lo indossava
+        CompoundTag wornGroup = new CompoundTag();
+        wornGroup.put(NbtKeys.FRAME, NbtUtils.createUUID(worn.frameId()));
+        wornGroup.put(NbtKeys.OWNER, NbtUtils.createUUID(GOOD));
+        ListTag wornEntries = new ListTag();
+        wornEntries.add(stowedEntry("chest", "minecraft:elytra"));
+        wornGroup.put(NbtKeys.ENTRIES, wornEntries);
+        assertEquals(List.of(placedGroup, wornGroup), data.orphaned());
+
+        // si scrive e si rilegge identica, a ogni giro
+        CompoundTag written = data.write(new CompoundTag());
+        FrameStateSavedData again = FrameStateSavedData.load(written.copy(), FrameStateCodec::read);
+        assertEquals(List.of(placedGroup, wornGroup), again.orphaned());
+        assertEquals(written, again.write(new CompoundTag()));
+    }
+
+    @Test
+    void orphanedListIsWrittenBackUnchanged() {
+        CompoundTag group = new CompoundTag();
+        group.put(NbtKeys.FRAME, NbtUtils.createUUID(FRAME_A));
+        group.put(NbtKeys.ENTRIES, new ListTag());
+        group.putString("added_later", "kept");
+        ListTag list = new ListTag();
+        list.add(group);
+        CompoundTag root = new CompoundTag();
+        root.putInt(NbtKeys.SCHEMA, 2);
+        root.put(NbtKeys.WORN, new CompoundTag());
+        root.put(NbtKeys.PLACED, new CompoundTag());
+        root.put(NbtKeys.ORPHANED, list);
+        CompoundTag original = root.copy();
+        FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+        assertEquals(List.of(group), data.orphaned());
+        assertEquals(original, data.write(new CompoundTag()));
+
+        // un file senza la lista va bene, e non la scrive
+        assertFalse(empty().write(new CompoundTag()).contains(NbtKeys.ORPHANED));
+
+        // un valore inatteso non si perde: resta identico dentro un gruppo
+        CompoundTag odd = new CompoundTag();
+        odd.putString(NbtKeys.ORPHANED, "not a list");
+        FrameStateSavedData withOdd = FrameStateSavedData.load(odd, FrameStateCodec::read);
+        assertEquals(StringTag.valueOf("not a list"), withOdd.orphaned().get(0).get(NbtKeys.ENTRIES));
+        assertEquals(withOdd.orphaned(), roundTrip(withOdd).orphaned());
+    }
+
+    @Test
+    void takeStowedRemovesOnlyWhatTheReaderReads() {
+        FrameStateSavedData data = empty();
+        FrameRecord worn = data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        CompoundTag head = stowedEntry("head", "minecraft:iron_helmet");
+        CompoundTag unreadable = stowedEntry("legs", "removed_mod:legs");
+        CompoundTag feet = stowedEntry("feet", "minecraft:leather_boots");
+        assertTrue(data.addStowed(GOOD, List.of(head, unreadable, feet)));
+        assertThrows(IllegalStateException.class, () -> data.addStowed(OTHER, List.of(head)));
+
+        List<UUID> frames = new java.util.ArrayList<>();
+        List<String> taken = data.takeStowedOfWorn(GOOD, (frameId, tag) -> {
+            frames.add(frameId);
+            String id = tag.getCompound(NbtKeys.ITEM).getString("id");
+            return id.startsWith("minecraft:") ? Optional.of(id) : Optional.empty();
+        });
+        assertEquals(List.of("minecraft:iron_helmet", "minecraft:leather_boots"), taken);
+        assertEquals(List.of(worn.frameId(), worn.frameId(), worn.frameId()), frames);
+        assertEquals(List.of(unreadable), worn.stowed());
+        assertEquals(List.of(), data.takeStowedOfWorn(OTHER, (frameId, tag) -> Optional.of(tag)));
+
+        data.place(new FrameRecord(FRAME_A, state(), List.of(head, unreadable)), OVERWORLD_SPOT);
+        assertEquals(List.of(head), data.takeStowedOfPlaced(FRAME_A,
+                (frameId, tag) -> tag.equals(head) ? Optional.of(tag) : Optional.empty()));
+        assertEquals(List.of(unreadable), data.placed(FRAME_A).stowed());
+        assertEquals(List.of(), data.takeStowedOfPlaced(FRAME_B, (frameId, tag) -> Optional.of(tag)));
+    }
+
+    @Test
+    void updatePlacedChangesOnlyAPlacedRecord() {
+        FrameStateSavedData data = empty();
+        data.place(new FrameRecord(FRAME_A, state()), OVERWORLD_SPOT);
+        data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        assertTrue(data.updatePlaced(FRAME_A, s -> s.setReinforced(true)));
+        assertTrue(data.placed(FRAME_A).state().reinforced());
+        assertTrue(data.isDirty());
+        assertFalse(data.updatePlaced(data.worn(GOOD).frameId(), s -> s.setReinforced(true)));
+        assertFalse(data.worn(GOOD).state().reinforced());
+        assertFalse(data.updatePlaced(FRAME_B, s -> s.setReinforced(true)));
+        assertThrows(NullPointerException.class, () -> data.updatePlaced(FRAME_B, null));
+    }
+
+    @Test
     void skippedEntriesAreWrittenBackVerbatim() {
         CompoundTag root = mixedRoot();
         CompoundTag original = root.copy();
@@ -455,6 +565,12 @@ class FrameStateSavedDataTest {
         assertFalse(data.removePlaced(FRAME_A));
         assertFalse(data.enter(OTHER, FRAME_A));
         assertEquals(Optional.empty(), data.exit(GOOD, OVERWORLD_SPOT));
+        assertFalse(data.updatePlaced(FRAME_A, s -> s.setReinforced(true)));
+        assertFalse(data.addStowed(GOOD, List.of(stowedEntry("head", "minecraft:iron_helmet"))));
+        assertFalse(data.addStowed(OTHER, List.of(stowedEntry("head", "minecraft:iron_helmet"))));
+        assertEquals(List.of(), data.takeStowedOfWorn(GOOD, (frameId, tag) -> Optional.of(tag)));
+        assertEquals(List.of(), data.takeStowedOfPlaced(FRAME_A, (frameId, tag) -> Optional.of(tag)));
+        assertTrue(data.orphaned().isEmpty());
         data.dropUnread(BAD);
         data.dropUnread(GOOD);
         data.setDirty();
@@ -470,6 +586,23 @@ class FrameStateSavedDataTest {
         root.putInt(NbtKeys.SCHEMA, 3);
         root.getCompound(NbtKeys.PLACED).put(FRAME_A.toString(), placedRecordTag(stateTag()));
         root.putString("added_by_schema_3", "kept");
+        assertReadOnlyAndUnchanged(root);
+    }
+
+    @Test
+    void schema99IsReadOnlyForEveryRegistryWrite() {
+        CompoundTag root = mixedRoot();
+        root.putInt(NbtKeys.SCHEMA, 99);
+        CompoundTag withStowed = placedRecordTag(stateTag());
+        ListTag stowed = new ListTag();
+        stowed.add(stowedEntry("head", "minecraft:iron_helmet"));
+        withStowed.put(NbtKeys.STOWED, stowed);
+        root.getCompound(NbtKeys.PLACED).put(FRAME_A.toString(), withStowed);
+        CompoundTag group = new CompoundTag();
+        group.put(NbtKeys.FRAME, NbtUtils.createUUID(FRAME_B));
+        ListTag orphaned = new ListTag();
+        orphaned.add(group);
+        root.put(NbtKeys.ORPHANED, orphaned);
         assertReadOnlyAndUnchanged(root);
     }
 

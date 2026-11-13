@@ -3,9 +3,13 @@ package com.toxineren.exoframes.compat.impl;
 import com.mojang.serialization.Dynamic;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.StowedStack;
+import java.util.Collections;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.WeakHashMap;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -32,10 +36,22 @@ import com.mojang.serialization.DataResult;
  * ({@link References#ITEM_STACK}): vanilla non converte da solo gli stack annidati nel dato salvato della mod.
  * <p>
  * Una voce che non si legge (slot sconosciuto, versione mancante o piu' recente di quella corrente, item sconosciuto,
- * stack corrotto, errore del correttore) da' vuoto con un avviso una volta per voce: il chiamante la lascia nel record
- * cosi' com'e', e non si perde mai.
+ * stack corrotto, errore del correttore) da' vuoto con un avviso una volta per voce e per telaio, che nomina il
+ * telaio: il chiamante la lascia nel record cosi' com'e', e non si perde mai.
+ * <p>
+ * Il correttore di dati vanilla scrive righe sue nel log per certe voci rovinate (per esempio
+ * {@code Unable to resolve BlockEntity for ItemStack} dallo schema V99 su 1.21.1), a ogni passaggio. Per questo il
+ * risultato di ogni voce piu' vecchia (lo stack corretto o il motivo per cui non si legge) e quello di ogni voce
+ * illeggibile si ricordano per voce: il correttore gira una volta sola per voce, e le prese e i controlli successivi
+ * riusano il risultato. La memoria ha chiavi deboli (le voci vive nei record) e confronta le voci per contenuto.
  */
 final class StackTags {
+    /**
+     * Per voce: lo stack gia' corretto ({@link CompoundTag}, nel formato corrente) o il motivo per cui la voce non si
+     * legge ({@link String}). Solo le voci piu' vecchie e quelle illeggibili ci entrano.
+     */
+    private static final Map<CompoundTag, Object> OUTCOMES = Collections.synchronizedMap(new WeakHashMap<>());
+
     private StackTags() {
     }
 
@@ -66,39 +82,51 @@ final class StackTags {
         return entry;
     }
 
-    /**
-     * Lo stack della voce con il suo slot; vuoto, con un avviso una volta per voce, se la voce non si legge. Non cambia
-     * il tag dato. Non lancia.
-     */
+    /** Come {@link #read(HolderLookup.Provider, CompoundTag, UUID)} senza un telaio da nominare nell'avviso. */
     static Optional<StowedStack> read(HolderLookup.Provider registries, CompoundTag tag) {
+        return read(registries, tag, null);
+    }
+
+    /**
+     * Lo stack della voce con il suo slot; vuoto, con un avviso una volta per voce e per telaio (che l'avviso nomina,
+     * se {@code frameId} non e' null), se la voce non si legge. Non cambia il tag dato. Non lancia.
+     */
+    static Optional<StowedStack> read(HolderLookup.Provider registries, CompoundTag tag, UUID frameId) {
+        Object known = OUTCOMES.get(tag);
+        if (known instanceof String reason) {
+            return unreadable(tag, frameId, reason);
+        }
         if (!tag.contains(NbtKeys.SLOT, Tag.TAG_STRING)) {
-            return unreadable(tag, "missing slot");
+            return unreadable(tag, frameId, "missing slot");
         }
         EquipmentSlot slot = slotById(tag.getString(NbtKeys.SLOT));
         if (slot == null) {
-            return unreadable(tag, "unknown slot");
+            return unreadable(tag, frameId, "unknown slot");
         }
         if (!tag.contains(NbtKeys.DATA_VERSION, Tag.TAG_ANY_NUMERIC)) {
-            return unreadable(tag, "missing data version");
+            return unreadable(tag, frameId, "missing data version");
         }
         int version = tag.getInt(NbtKeys.DATA_VERSION);
         int current = currentDataVersion();
         if (version > current) {
-            return unreadable(tag, "saved by a newer game version");
+            return unreadable(tag, frameId, "saved by a newer game version");
         }
         if (!tag.contains(NbtKeys.ITEM, Tag.TAG_COMPOUND)) {
-            return unreadable(tag, "missing item");
+            return unreadable(tag, frameId, "missing item");
         }
         // una copia: ne' il correttore ne' la lettura devono toccare il tag che resta nel record
         CompoundTag item = tag.getCompound(NbtKeys.ITEM).copy();
         try {
-            if (version < current) {
+            if (known instanceof CompoundTag fixedBefore) {
+                item = fixedBefore.copy();
+            } else if (version < current) {
                 Tag fixed = DataFixers.getDataFixer()
                         .update(References.ITEM_STACK, new Dynamic<>(NbtOps.INSTANCE, item), version, current)
                         .getValue();
                 if (!(fixed instanceof CompoundTag fixedItem)) {
-                    return unreadable(tag, "data fixer did not return a compound");
+                    return unreadable(tag, frameId, "data fixer did not return a compound");
                 }
+                OUTCOMES.put(tag, fixedItem.copy());
                 item = fixedItem;
             }
             //? if >=1.21 {
@@ -106,18 +134,19 @@ final class StackTags {
                     ItemStack.CODEC.parse(registries.createSerializationContext(NbtOps.INSTANCE), item);
             Optional<ItemStack> stack = result.result();
             if (stack.isEmpty()) {
-                return unreadable(tag, result.error().map(DataResult.Error::message).orElse("invalid stack"));
+                return unreadable(tag, frameId,
+                        result.error().map(DataResult.Error::message).orElse("invalid stack"));
             }
             return Optional.of(new StowedStack(slot, stack.get()));
             //?} else {
             /*ItemStack stack = ItemStack.of(item);
             if (stack.isEmpty()) {
-                return unreadable(tag, "unknown item or invalid stack");
+                return unreadable(tag, frameId, "unknown item or invalid stack");
             }
             return Optional.of(new StowedStack(slot, stack));*/
             //?}
         } catch (RuntimeException e) {
-            return unreadable(tag, e.toString());
+            return unreadable(tag, frameId, e.toString());
         }
     }
 
@@ -137,15 +166,19 @@ final class StackTags {
     }
 
     /**
-     * Vuoto, con un avviso una volta per voce (la chiave e' l'hash del contenuto della voce, quindi la stessa voce
-     * riletta a ogni presa non si ripete nel log). Id, versione e motivo passano da {@link SchemaIds#safeId}.
+     * Vuoto, con il motivo ricordato per la voce e un avviso una volta per telaio e per voce (la chiave e' il telaio
+     * con l'hash del contenuto della voce, quindi la stessa voce riletta a ogni presa non si ripete nel log, e la
+     * stessa voce in due telai si segnala per ciascuno). Id, versione e motivo passano da {@link SchemaIds#safeId}.
      */
-    private static Optional<StowedStack> unreadable(CompoundTag tag, String reason) {
+    private static Optional<StowedStack> unreadable(CompoundTag tag, UUID frameId, String reason) {
+        OUTCOMES.put(tag, reason);
         String itemId = tag.getCompound(NbtKeys.ITEM).getString("id");
         Tag version = tag.get(NbtKeys.DATA_VERSION);
-        SchemaIds.warnOnce("stowed:" + Integer.toHexString(tag.hashCode()),
-                "Unreadable stowed armor entry (item {}, data version {}), kept in the frame registry unchanged: {}",
-                SchemaIds.safeId(itemId), SchemaIds.safeId(String.valueOf(version)), SchemaIds.safeId(reason));
+        SchemaIds.warnOnce("stowed:" + frameId + ":" + Integer.toHexString(tag.hashCode()),
+                "Unreadable stowed armor entry in frame {} (item {}, data version {}), kept in the frame registry "
+                        + "unchanged: {}",
+                frameId == null ? "unknown" : frameId, SchemaIds.safeId(itemId),
+                SchemaIds.safeId(String.valueOf(version)), SchemaIds.safeId(reason));
         return Optional.empty();
     }
 }

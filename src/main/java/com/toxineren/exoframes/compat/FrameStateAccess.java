@@ -36,7 +36,12 @@ import net.minecraft.world.phys.Vec3;
  * record porta l'armatura stivata ({@link StowedStack}), che non va mai ai client. Le operazioni di registro sono solo
  * sul server, sul thread di gioco; ogni scrittura segna il dato come da salvare. Se il dato salvato e' in sola lettura
  * (salvato da una versione piu' recente della mod) le scritture non fanno nulla e danno falso, vuoto o null (un solo
- * ERROR nel log), e le letture non trovano nulla.
+ * ERROR nel log), e le letture non trovano nulla. Gli argomenti null sono rifiutati subito con un'eccezione.
+ * <p>
+ * Un telaio tolto dal registro ({@link #removePlaced}, {@link #clear}) con armatura stivata ancora dentro non la
+ * perde: le voci rimaste, che si leggano o no, passano identiche in una lista del dato salvato
+ * ({@code orphaned}), con l'identita' del telaio e il proprietario, e un avviso nel log. Chi toglie un telaio
+ * riprende prima l'armatura che si legge; la lista e' la rete per quello che resta.
  */
 public interface FrameStateAccess {
     /**
@@ -61,7 +66,10 @@ public interface FrameStateAccess {
      */
     boolean mutate(ServerPlayer p, Consumer<FrameState> change);
 
-    /** Rimuove lo stato del giocatore, segna il dato come da salvare e invia al giocatore uno stato assente. */
+    /**
+     * Rimuove lo stato del giocatore, segna il dato come da salvare e invia al giocatore uno stato assente. L'armatura
+     * stivata ancora nel record non si perde: passa, identica, fra quella dei telai tolti (vedi {@link #removePlaced}).
+     */
     void clear(ServerPlayer p);
 
     /**
@@ -98,8 +106,9 @@ public interface FrameStateAccess {
     boolean updatePlaced(MinecraftServer server, UUID frameId, Consumer<FrameState> change);
 
     /**
-     * Toglie dal registro il telaio piazzato, con la sua armatura stivata: chi lo smonta la riprende prima con
-     * {@link #takeStowedOfPlaced}.
+     * Toglie dal registro il telaio piazzato. Chi lo smonta riprende prima l'armatura stivata con
+     * {@link #takeStowedOfPlaced}; quello che resta (voci che non si leggono) passa, identico, fra l'armatura dei
+     * telai tolti nel dato salvato, con un avviso che nomina il telaio: non si perde mai.
      *
      * @return true se il telaio era piazzato ed e' stato tolto
      */
@@ -129,6 +138,10 @@ public interface FrameStateAccess {
     /**
      * Aggiunge l'armatura, ognuna con il suo slot, all'armatura stivata del telaio indossato dal giocatore; gli stack
      * vuoti si saltano. Gli stack si scrivono subito come tag: chi chiama li toglie poi dal giocatore.
+     * <p>
+     * Con il dato in sola lettura non fa nulla e non lo dice al chiamante (solo l'ERROR nel log): chi stiva deve
+     * averlo fatto dopo un {@link #enter} riuscito, che in sola lettura da' falso, e non deve togliere l'armatura al
+     * giocatore se l'ingresso non e' riuscito.
      *
      * @throws IllegalStateException se il giocatore non indossa un telaio (l'armatura non avrebbe dove stare)
      */

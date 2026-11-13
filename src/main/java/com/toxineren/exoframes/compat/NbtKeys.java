@@ -41,7 +41,10 @@ public final class NbtKeys {
     public static final String PATTERN = "pattern";
     /** Colore di una decalcomania (string non vuota, al massimo 64 caratteri), dentro una voce di {@link #DECALS}. */
     public static final String COLOR = "color";
-    /** Proprietario del telaio (UUID in forma di int array). */
+    /**
+     * Proprietario del telaio (UUID in forma di int array); anche in un gruppo di {@link #ORPHANED}, dove e' il
+     * proprietario del telaio tolto o, se non ne aveva, chi lo indossava.
+     */
     public static final String OWNER = "owner";
     /** Telaio sbloccato (boolean). */
     public static final String UNLOCKED = "unlocked";
@@ -64,6 +67,17 @@ public final class NbtKeys {
     public static final String STOWED = "stowed";
     /** Slot di provenienza di una voce di {@link #STOWED} (string: il nome dell'EquipmentSlot in minuscolo). */
     public static final String SLOT = "slot";
+    /**
+     * Armatura stivata rimasta in telai tolti dal registro (lista di compound, uno per telaio tolto, con
+     * {@link #FRAME}, {@link #OWNER} se noto ed {@link #ENTRIES}), nella radice del dato salvato accanto a
+     * {@link #WORN} e {@link #PLACED}; assente vale vuota. Si conserva e si riscrive identica; nessuno la legge ancora
+     * per il gioco.
+     */
+    public static final String ORPHANED = "orphaned";
+    /** Identita' del telaio tolto (UUID in forma di int array), in un gruppo di {@link #ORPHANED}. */
+    public static final String FRAME = "frame";
+    /** Le voci di {@link #STOWED} rimaste nel telaio tolto, identiche, in un gruppo di {@link #ORPHANED}. */
+    public static final String ENTRIES = "entries";
     /** Versione dei dati di Minecraft (int) con cui e' stato scritto lo stack di una voce di {@link #STOWED}. */
     public static final String DATA_VERSION = "data_version";
     /** Lo stack di una voce di {@link #STOWED} (compound nel formato degli stack della versione che l'ha scritto). */

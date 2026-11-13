@@ -7,6 +7,7 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
@@ -69,6 +71,13 @@ import net.minecraft.core.HolderLookup;
  * modifica non cambiano nulla; il dato non risulta mai da salvare, e se viene salvato lo stesso riproduce il tag letto
  * per intero. Nulla si legge, si cambia o si perde.
  * <p>
+ * Un record tolto dal registro ({@link #removeWorn}, {@link #removePlaced}) con armatura stivata ancora dentro, che si
+ * legga o no, non la perde: le voci passano identiche in {@link NbtKeys#ORPHANED}, un gruppo per telaio con
+ * l'identita' del telaio e il proprietario se noto, con un avviso che nomina il telaio. La lista si riscrive identica
+ * a ogni salvataggio (un valore che non e' una lista di compound si conserva dentro un gruppo, sotto
+ * {@link NbtKeys#ENTRIES}); nessuno la legge ancora per il gioco. Chi toglie un telaio riprende prima l'armatura che
+ * si legge: la lista e' la rete per quello che resta.
+ * <p>
  * Solo sul thread del server; i record sono vivi: chi cambia uno stato o un'armatura stivata deve chiamare
  * {@link #setDirty()}, come dopo ogni operazione del registro. Un ingresso nullo ({@code place}, {@code exit},
  * l'armatura stivata) e' rifiutato subito con un'eccezione, cosi' il salvataggio non lancia mai. Le identita' create
@@ -92,6 +101,8 @@ final class FrameStateSavedData extends SavedData {
     private final Map<String, Tag> unreadWorn = new LinkedHashMap<>();
     private final Map<String, Tag> unreadPlaced = new LinkedHashMap<>();
     private final Map<String, Tag> unreadFrames = new LinkedHashMap<>();
+    /** Gruppi dell'armatura stivata rimasta in telai tolti, riscritti identici sotto {@link NbtKeys#ORPHANED}. */
+    private final List<CompoundTag> orphaned = new ArrayList<>();
     /** Il tag letto per intero quando il dato e' in sola lettura (schema piu' recente o non numerico), altrimenti null. */
     private CompoundTag readOnlyRoot;
     /** Chiavi grezze gia' segnalate come spostate accanto a un record vivo, per avvisare una volta sola. */
@@ -140,9 +151,22 @@ final class FrameStateSavedData extends SavedData {
         return worn.computeIfAbsent(player, k -> new FrameRecord(UUID.randomUUID(), factory.get()));
     }
 
-    /** Rimuove il record indossato dal giocatore; false se non c'era o se il dato e' in sola lettura. */
+    /**
+     * Rimuove il record indossato dal giocatore; false se non c'era o se il dato e' in sola lettura. L'armatura
+     * stivata rimasta va fra le orfane ({@link #orphaned()}), con il proprietario del telaio o, se non ne ha, il
+     * giocatore.
+     */
     boolean removeWorn(UUID player) {
-        return !readOnly() && worn.remove(player) != null;
+        if (readOnly()) {
+            return false;
+        }
+        FrameRecord record = worn.remove(player);
+        if (record == null) {
+            return false;
+        }
+        UUID owner = record.state().owner();
+        orphan(record, owner != null ? owner : player);
+        return true;
     }
 
     /**
@@ -182,9 +206,117 @@ final class FrameStateSavedData extends SavedData {
         return ids;
     }
 
-    /** Rimuove il record piazzato; false se non c'era o se il dato e' in sola lettura. */
+    /**
+     * Rimuove il record piazzato; false se non c'era o se il dato e' in sola lettura. L'armatura stivata rimasta va
+     * fra le orfane ({@link #orphaned()}), con il proprietario del telaio se ne ha uno.
+     */
     boolean removePlaced(UUID frameId) {
-        return !readOnly() && placed.remove(frameId) != null;
+        if (readOnly()) {
+            return false;
+        }
+        Placed entry = placed.remove(frameId);
+        if (entry == null) {
+            return false;
+        }
+        orphan(entry.record(), entry.record().state().owner());
+        return true;
+    }
+
+    /**
+     * Se il telaio e' piazzato, applica la modifica al suo stato e segna il dato come da salvare (anche se la
+     * modifica lancia); false, senza cambiare nulla, se non e' piazzato o se il dato e' in sola lettura.
+     */
+    boolean updatePlaced(UUID frameId, Consumer<FrameState> change) {
+        Objects.requireNonNull(change, "change must not be null");
+        FrameRecord record = readOnly() ? null : placed(frameId);
+        if (record == null) {
+            return false;
+        }
+        try {
+            change.accept(record.state());
+        } finally {
+            setDirty();
+        }
+        return true;
+    }
+
+    /**
+     * Aggiunge le voci, in ordine, all'armatura stivata del telaio indossato dal giocatore e segna il dato come da
+     * salvare; false, senza cambiare nulla, se il dato e' in sola lettura.
+     *
+     * @throws IllegalStateException se il giocatore non indossa un telaio
+     */
+    boolean addStowed(UUID player, List<CompoundTag> entries) {
+        List<CompoundTag> copy = List.copyOf(entries);
+        if (readOnly()) {
+            return false;
+        }
+        FrameRecord record = worn.get(player);
+        if (record == null) {
+            throw new IllegalStateException("player " + player + " wears no frame to stow armor in");
+        }
+        record.stowed().addAll(copy);
+        setDirty();
+        return true;
+    }
+
+    /**
+     * Toglie dall'armatura stivata del telaio indossato dal giocatore le voci che {@code reader} legge (riceve
+     * identita' del telaio e voce) e le restituisce, nell'ordine; quelle che non legge restano identiche. Vuota se il
+     * giocatore non indossa un telaio o se il dato e' in sola lettura; segna il dato come da salvare se il record c'e'.
+     */
+    <T> List<T> takeStowedOfWorn(UUID player, BiFunction<UUID, CompoundTag, Optional<T>> reader) {
+        return take(readOnly() ? null : worn.get(player), reader);
+    }
+
+    /** Come {@link #takeStowedOfWorn}, per il telaio piazzato con questa identita'. */
+    <T> List<T> takeStowedOfPlaced(UUID frameId, BiFunction<UUID, CompoundTag, Optional<T>> reader) {
+        return take(readOnly() ? null : placed(frameId), reader);
+    }
+
+    private <T> List<T> take(FrameRecord record, BiFunction<UUID, CompoundTag, Optional<T>> reader) {
+        if (record == null) {
+            return List.of();
+        }
+        List<T> taken = new ArrayList<>();
+        try {
+            for (Iterator<CompoundTag> it = record.stowed().iterator(); it.hasNext(); ) {
+                Optional<T> read = reader.apply(record.frameId(), it.next());
+                if (read.isPresent()) {
+                    taken.add(read.get());
+                    it.remove();
+                }
+            }
+        } finally {
+            setDirty();
+        }
+        return taken;
+    }
+
+    /** Copie dei gruppi dell'armatura stivata rimasta in telai tolti, nell'ordine in cui sono stati tolti o letti. */
+    List<CompoundTag> orphaned() {
+        List<CompoundTag> copies = new ArrayList<>();
+        orphaned.forEach(group -> copies.add(group.copy()));
+        return copies;
+    }
+
+    /** Mette fra le orfane, identiche, le voci stivate rimaste nel record tolto, con un avviso; nulla se non ce ne sono. */
+    private void orphan(FrameRecord record, UUID owner) {
+        if (record.stowed().isEmpty()) {
+            return;
+        }
+        ListTag entries = new ListTag();
+        record.stowed().forEach(entry -> entries.add(entry.copy()));
+        CompoundTag group = new CompoundTag();
+        group.put(NbtKeys.FRAME, NbtUtils.createUUID(record.frameId()));
+        if (owner != null) {
+            group.put(NbtKeys.OWNER, NbtUtils.createUUID(owner));
+        }
+        group.put(NbtKeys.ENTRIES, entries);
+        orphaned.add(group);
+        RedstoneExoframes.LOGGER.warn("Frame {} (owner {}) left the registry with {} stowed armor entries still inside: "
+                + "kept in the saved data under '{}'", record.frameId(), owner == null ? "none" : owner, entries.size(),
+                NbtKeys.ORPHANED);
     }
 
     /**
@@ -299,6 +431,18 @@ final class FrameStateSavedData extends SavedData {
                 continue;
             }
             data.placed.put(frameId, entry);
+        }
+        Tag orphanedTag = tag.get(NbtKeys.ORPHANED);
+        if (orphanedTag instanceof ListTag list && (list.isEmpty() || list.getElementType() == Tag.TAG_COMPOUND)) {
+            for (int i = 0; i < list.size(); i++) {
+                data.orphaned.add(list.getCompound(i).copy());
+            }
+        } else if (orphanedTag != null) {
+            // nulla si perde: il valore inatteso resta, identico, dentro un gruppo
+            RedstoneExoframes.LOGGER.warn("Orphaned stowed armor is not a list of compounds, kept inside one group");
+            CompoundTag group = new CompoundTag();
+            group.put(NbtKeys.ENTRIES, orphanedTag.copy());
+            data.orphaned.add(group);
         }
         for (String key : new TreeSet<>(framesTag.getAllKeys())) {
             UUID player = entryKey(framesTag, key, data.unreadFrames, "schema 1 frame state");
@@ -460,8 +604,8 @@ final class FrameStateSavedData extends SavedData {
     /**
      * Scrive il marcatore di schema e le sezioni: in ognuna i record vivi e le voci grezze non lette, identiche (una
      * voce grezza la cui chiave nomina lo stesso UUID di un record vivo va sotto una chiave libera, vedi la classe); la
-     * sezione {@code frames} dello schema 1 solo se ha ancora voci non lette. In sola lettura riscrive il tag letto
-     * per intero.
+     * sezione {@code frames} dello schema 1 solo se ha ancora voci non lette, e le orfane se ce ne sono. In sola
+     * lettura riscrive il tag letto per intero.
      */
     CompoundTag write(CompoundTag tag) {
         if (readOnly()) {
@@ -496,6 +640,11 @@ final class FrameStateSavedData extends SavedData {
         tag.put(NbtKeys.PLACED, placedTag);
         if (!unreadFrames.isEmpty()) {
             tag.put(FRAMES, rawSection(unreadFrames));
+        }
+        if (!orphaned.isEmpty()) {
+            ListTag orphanedTag = new ListTag();
+            orphaned.forEach(group -> orphanedTag.add(group.copy()));
+            tag.put(NbtKeys.ORPHANED, orphanedTag);
         }
         return tag;
     }
