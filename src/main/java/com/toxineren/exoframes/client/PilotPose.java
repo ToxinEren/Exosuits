@@ -31,7 +31,7 @@ import net.minecraft.world.entity.LivingEntity;
 public final class PilotPose {
     /**
      * Spostamento dell'oggetto impugnato verso l'esterno, in pixel della tuta non scalata, dal punto d'impugnatura del
-     * gioco base (1 px dentro il perno del braccio) al centro del palmo della mano della tuta (x da 7,25 a 12,25 dal
+     * gioco base (1 px fuori dal perno del braccio) al centro del palmo della mano della tuta (x da 7,25 a 12,25 dal
      * centro in tools/art/designs/frame.py, quindi 9,75): 9,75 - 6 = 3,75. Provato sulla geometria generata in
      * {@code PilotPoseTest}.
      */
