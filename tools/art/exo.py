@@ -39,10 +39,10 @@ PILOT_LIFT_PX = 24 * (SUIT_SCALE - 1)
 
 # Ingombri massimi (pixel non scalati): FRAME_* per le ossa del telaio nudo (regione 'frame', gli stessi che
 # controlla ExoframeGeometryTest), SUIT_* per le ossa dei pezzi (telaio con i pezzi montati).
-FRAME_MIN = (-9.5, 0.0, -7.0)
-FRAME_MAX = (9.5, 30.7, 9.0)
-SUIT_MIN = (-10.75, 0.0, -8.0)
-SUIT_MAX = (10.75, 31.5, 9.5)
+FRAME_MIN = (-12.75, 0.0, -8.0)
+FRAME_MAX = (12.75, 30.7, 10.0)
+SUIT_MIN = (-13.5, 0.0, -8.75)
+SUIT_MAX = (13.5, 31.5, 10.5)
 
 # Giocatore di riferimento (pixel, grandezza normale, in piedi su y = 0): (nome, minimo, massimo, distanza minima
 # delle scatole dalla superficie). 0.25 sul corpo e sugli arti: il secondo strato della skin sta a +0.25 e una
@@ -63,7 +63,8 @@ PILOT = tuple(p for p in PLAYER if not p[0].endswith('Leg'))
 # DENSITY texel per pixel di modello su ogni faccia. 512x512, diviso in regioni fisse: ogni osso dichiara la sua e
 # l'impacchettatore riempie una regione alla volta, quindi aggiungere i pezzi (regioni piece_s*) non sposta mai i
 # rettangoli del telaio.
-#   frame     y   0..127  telaio nudo
+#   frame     y   0..111  telaio nudo
+#   decal     y 112..127  decalcomanie (texel trasparenti fino a M5)
 #   piece_s0  y 128..223  pezzi, stato 0 (integro)
 #   piece_s1  y 224..319  pezzi, stato 1 (danneggiato)
 #   piece_s2  y 320..415  pezzi, stato 2 (critico)
@@ -73,12 +74,29 @@ PILOT = tuple(p for p in PLAYER if not p[0].endswith('Leg'))
 DENSITY = 2
 ATLAS_SIZE = (512, 512)
 ATLAS_REGIONS = (
-    ('frame', (0, 0, 512, 128)),
+    ('frame', (0, 0, 512, 112)),
+    ('decal', (0, 112, 512, 16)),
     ('piece_s0', (0, 128, 512, 96)),
     ('piece_s1', (0, 224, 512, 96)),
     ('piece_s2', (0, 320, 512, 96)),
     ('piece_s3', (0, 416, 512, 96)),
 )
+
+# --- pezzi -------------------------------------------------------------------------------------------------
+# Stati visivi di un pezzo (0 integro, 1 danneggiato, 2 critico, 3 rotto) e regioni di colore (primaria, secondaria,
+# neutra): ossa piece<Slot>_s<stato>_<regione>, come in SuitBones.piece. Un design dichiara le scatole di un pezzo una
+# volta sola, nell'osso modello piece<Slot>_s*_<regione> (vedi piece()), e Model.box() le ripete nei quattro stati.
+STATES = 4
+REGIONS = ('p1', 'p2', 'n')
+ANY_STATE = '_s*_'
+
+
+def piece(slot, region):
+    """Osso modello di una regione del pezzo di uno slot: le scatole dichiarate qui finiscono in tutti gli stati."""
+    if region not in REGIONS:
+        raise ValueError(f'regione {region} sconosciuta')
+    return f'piece{slot}{ANY_STATE}{region}'
+
 
 EPS = 1e-6
 # Passo della griglia delle coordinate (Box le vuole in quarti di pixel).
@@ -138,7 +156,7 @@ class Bone:
 
 
 class Box:
-    def __init__(self, bone, name, lo, hi, mat, opts):
+    def __init__(self, bone, name, lo, hi, mat, opts, seed_name=None):
         self.bone, self.name = bone, name
         self.lo = tuple(float(v) for v in lo)
         self.hi = tuple(float(v) for v in hi)
@@ -153,7 +171,9 @@ class Box:
         self.mirror_of = None   # scatola sorgente se questa e' la copia specchiata (condivide le UV)
         self.mirrors = []       # copie specchiate di questa scatola
         self.faces = {}         # faccia -> (u, v, larghezza, altezza) in texel; facce sepolte assenti
-        self.seed = zlib.crc32(name.encode('utf-8'))
+        # le copie di uno stesso pezzo nei quattro stati hanno lo stesso seme: graffi e ammaccature stanno negli
+        # stessi punti e crescono con lo stato
+        self.seed = zlib.crc32((seed_name or name).encode('utf-8'))
 
     @property
     def size(self):
@@ -178,6 +198,13 @@ class Model:
         self.bones.append(b)
         return b
 
+    def piece_bones(self, slot, parent):
+        """Le dodici ossa del pezzo di uno slot: quattro stati (regioni piece_s0..s3) per tre regioni di colore."""
+        for state in range(STATES):
+            for region in REGIONS:
+                self.bone(piece(slot, region).replace(ANY_STATE, f'_s{state}_'), parent, f'piece_s{state}',
+                          state=state, paint=region)
+
     def _bone(self, name):
         for b in self.bones:
             if b.name == name:
@@ -185,11 +212,19 @@ class Model:
         raise ValueError(f'osso {name} non dichiarato')
 
     def box(self, bone, name, lo, hi, mat, **opts):
-        """Aggiunge una scatola all'osso `bone` (figlio dichiarato con bone()). lo/hi: angoli minimo e massimo."""
+        """Aggiunge una scatola all'osso `bone` (figlio dichiarato con bone()). lo/hi: angoli minimo e massimo.
+        Con un osso modello (piece()) aggiunge una copia per stato, con lo stesso seme. Restituisce l'elenco delle
+        scatole create."""
+        if ANY_STATE in bone:
+            return [self._add(bone.replace(ANY_STATE, f'_s{s}_'), f'{name}_s{s}', lo, hi, mat, opts, name)
+                    for s in range(STATES)]
+        return [self._add(bone, name, lo, hi, mat, opts, None)]
+
+    def _add(self, bone, name, lo, hi, mat, opts, seed_name):
         if name in self._names:
             raise ValueError(f'nome di scatola duplicato {name}')
         self._names.add(name)
-        b = Box(self._bone(bone), name, lo, hi, mat, opts)
+        b = Box(self._bone(bone), name, lo, hi, mat, opts, seed_name)
         self.boxes.append(b)
         return b
 
@@ -198,11 +233,12 @@ class Model:
         La copia riusa le UV della sorgente specchiate (uv_size negativo), come il flag mirror di Minecraft."""
         if hi[0] > EPS:
             raise ValueError(f'sym {name}: la sorgente va scritta sul lato destro (x <= 0)')
-        a = self.box(bone, name + '_r', lo, hi, mat, **opts)
-        b = self.box(mirror_name(bone), name + '_l', (-hi[0], lo[1], lo[2]), (-lo[0], hi[1], hi[2]), mat, **opts)
-        b.mirror_of = a
-        a.mirrors.append(b)
-        return a, b
+        right = self.box(bone, name + '_r', lo, hi, mat, **opts)
+        left = self.box(mirror_name(bone), name + '_l', (-hi[0], lo[1], lo[2]), (-lo[0], hi[1], hi[2]), mat, **opts)
+        for a, b in zip(right, left):
+            b.mirror_of = a
+            a.mirrors.append(b)
+        return right, left
 
     # --- geometria di supporto -----------------------------------------------------------------------------
     @staticmethod

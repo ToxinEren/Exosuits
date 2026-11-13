@@ -18,11 +18,12 @@ Materiali (stringa per tutta la scatola o dizionario {faccia: materiale, 'defaul
   paint    lamiera verniciata in grigio chiaro (il renderer la colora: ossa con paint 'p1' o 'p2')
   pipe     tubo di rame
   glass    vetro scuro con riflesso (luminoso)
+  decal    decalcomania: la faccia non si dipinge, i suoi texel restano trasparenti (fino a M5)
 Opzioni della scatola (parole chiave di Model.box): hub (bool), heat (bool: sorgente di tinta di calore oltre alle
 griglie), bolts (bool, predefinito True), hide (facce da non esportare, vedi exo.Model.pack).
 Luce dipinta: dall'alto, dal davanti e dal lato destro di chi indossa (x negativa del file).
 I materiali cell, lamp e glass finiscono anche nella maschera luminosa (vedi paint_model).
-Lo stato visivo dell'osso (Bone.state 1-3: piu' usura e ruggine) non e' ancora dipinto: arriva con i pezzi.
+Le ossa dei pezzi negli stati visivi 1-3 ricevono sopra l'usura di wear() (vedi WEAR e tools/art/README.md).
 """
 import zlib
 
@@ -112,6 +113,15 @@ def box_dist(P, lo, hi):
     return np.sqrt((d * d).sum(-1))
 
 
+def looks_at(box, other):
+    """True se la pittura di `box` tiene conto di `other` (occlusione, calore, grasso). Il telaio guarda solo il
+    telaio, quindi aggiungere o cambiare un pezzo non cambia nessun texel del telaio (e il telaio nudo non ha ombre
+    di pezzi che non ci sono); un pezzo guarda il telaio e i pezzi del suo stesso stato. Le decalcomanie no."""
+    if other.bone.region == 'frame':
+        return True
+    return box.bone.state is not None and other.bone.state == box.bone.state
+
+
 class Face:
     def __init__(self, model, box, face, rect):
         self.box, self.face = box, face
@@ -128,8 +138,8 @@ class Face:
         self.rng = HashRng(self.seed)
         self.vertical = face not in ('up', 'down')
         self.long_axis = int(np.argmax(box.size))
-        # vicini: scatole che possono essere visibili insieme a questa, entro 3 px
-        self.near = [c for c in model.boxes if c is not box and model._together(c, box)
+        # vicini: scatole che la pittura di questa guarda, entro 3 px
+        self.near = [c for c in model.boxes if c is not box and looks_at(box, c)
                      and all(c.lo[k] - 3 < box.hi[k] and c.hi[k] + 3 > box.lo[k] for k in range(3))]
         self.model = model
 
@@ -162,7 +172,7 @@ class Face:
     def dist_to(self, pred):
         d = np.full((self.h, self.w), 99.0)
         for c in self.model.boxes:
-            if c is not self.box and pred(c):
+            if c is not self.box and looks_at(self.box, c) and pred(c):
                 d = np.minimum(d, box_dist(self.S, c.lo, c.hi))
         return d
 
@@ -356,6 +366,130 @@ def paint_face(F, mat):
             dg = F.dist_to(lambda c: c.opts.get('hub'))
             g = (dg < 1.6) & (vnoise(F.P * np.array([1.5, 0.6, 1.5]), 1.0, F.seed + 13) > 0.58)
             col[g] = col[g] * 0.35 + np.array(PAL['grease']) * 0.65
+    glow = np.full((h, w), glow)
+    if F.box.bone.state:
+        col, glow = wear(F, col, mat, glow)
+    return col, glow
+
+
+# --- usura degli stati visivi ----------------------------------------------------------------------------------
+# Un pezzo ha quattro copie (stati 0-3) con le stesse scatole e lo stesso seme per scatola: ogni segno nasce da un
+# rumore o da un generatore che non dipendono dallo stato, e lo stato decide solo soglia, lunghezza o intensita'.
+# Cosi' le scheggiature si allargano, gli stessi graffi si allungano, le stesse ammaccature crescono: il pezzo
+# invecchia invece di cambiare, e uno stato non e' mai meno rovinato di quello prima.
+# Le regioni p1/p2 sono in grigio e il renderer le moltiplica per il colore: li' l'usura e' solo piu' scuro (vernice
+# saltata, ammaccature, fuliggine, crepe, bruciato) o piu' chiaro (graffi lucidi). Metallo nudo e ruggine con i
+# loro colori stanno solo nella regione neutra.
+#                 stato:  0     1     2     3
+WEAR = {
+    'chip':             (None, 0.80, 0.71, 0.60),   # soglia delle scheggiature (stesso rumore di quelle della vernice)
+    'dent':             (None, 0.70, 0.62, 0.55),   # soglia delle ammaccature
+    'scratches':        (0.0, 0.5, 0.8, 1.0),       # quota dei graffi lunghi tracciati
+    'scratch_len':      (0.0, 0.55, 0.8, 1.0),      # quota della loro lunghezza
+    'soot':             (0.0, 0.25, 0.65, 0.75),    # fuliggine a chiazze larghe
+    'grime':            (1.0, 0.88, 0.78, 0.70),    # scurimento generale
+    'cracks':           (0.0, 0.0, 0.6, 1.0),       # quota della lunghezza delle crepe (stato 3: larghe 2 texel)
+    'char':             (0.0, 0.0, 0.0, 0.8),       # bruciato: la vernice resta solo a isole
+    'rust':             (None, 0.78, 0.68, 0.58),   # soglia della ruggine (solo metallo della regione neutra)
+    'dead_light':       (None, None, 0.80, 0.45),   # soglia dei texel spenti di spie e vetri
+}
+RUST = np.array((132, 64, 30), float)
+CHAR = np.array((44, 42, 40), float)
+SOOT_SEED = 0x50D7
+METALS = ('gun', 'steel', 'brass', 'vent')
+
+
+def _line(F, rng, length, straight):
+    """Texel (i, j) di un segno lungo `length` texel, partendo da un punto a caso: dritto con una pendenza
+    (graffio) o con una deviazione a ogni passo (crepa). Dipende solo dal generatore, non dallo stato."""
+    w, h = F.w, F.h
+    i, j = float(rng.integers(0, w)), float(rng.integers(0, h))
+    angle = rng.random() * np.pi
+    if straight:
+        # graffi quasi orizzontali o in diagonale, come lasciati da uno strisciamento
+        angle = rng.choice([0.0, 0.25, -0.25, 0.6, -0.6]) + (rng.random() - 0.5) * 0.2
+    di, dj = np.cos(angle), np.sin(angle)
+    pts = []
+    for _ in range(length):
+        pts.append((int(round(i)), int(round(j))))
+        if not straight:
+            turn = (rng.random() - 0.5) * 1.2
+            di, dj = di * np.cos(turn) - dj * np.sin(turn), di * np.sin(turn) + dj * np.cos(turn)
+        i, j = i + di, j + dj
+    return [(a, b) for a, b in pts if 0 <= a < w and 0 <= b < h]
+
+
+def wear(F, col, mat, glow):
+    """Usura dello stato dell'osso (1-3) sopra la pittura dello stato 0. Restituisce colori e maschera luminosa."""
+    st = F.box.bone.state
+    w, h = F.w, F.h
+    neutral = F.box.bone.paint == 'n'
+    metal_n = neutral and mat in METALS
+    seed = F.box.seed
+    col = col.copy()
+    glow = glow.copy()
+    # scurimento generale e fuliggine a chiazze larghe (rumore continuo su tutta la tuta: si legge da lontano)
+    soot = np.clip((vnoise(F.P, 3.0, SOOT_SEED) - 0.35) / 0.4, 0, 1) * WEAR['soot'][st]
+    col *= (WEAR['grime'][st] * (1 - 0.8 * soot))[..., None]
+    # scheggiature: lo stesso rumore della vernice, soglia piu' bassa (si allargano)
+    chips = vnoise(F.P, 1.4, F.seed + 21) > WEAR['chip'][st]
+    if mat == 'paint':
+        col[chips] *= 0.55
+    elif metal_n:
+        col[chips] = col[chips] * 0.4 + RUST * 0.6
+    # ruggine sul metallo nudo della regione neutra
+    if metal_n:
+        rust = vnoise(F.P, 1.2, seed + 141) > WEAR['rust'][st]
+        tone = 0.8 + 0.4 * white(F.P, seed + 143)[rust]
+        col[rust] = col[rust] * 0.3 + RUST * 0.7 * tone[..., None]
+    # ammaccature: bordo alto in ombra, bordo basso illuminato (luce dall'alto)
+    dent = vnoise(F.P, 1.8, seed + 101) > WEAR['dent'][st]
+    if w >= 3 and h >= 3 and mat != 'lamp':
+        up = np.zeros_like(dent)
+        up[1:] = dent[:-1]
+        down = np.zeros_like(dent)
+        down[:-1] = dent[1:]
+        col[dent] *= 0.62
+        col[dent & ~up] *= 0.7
+        col[dent & ~down & up] *= 1.6
+    # bruciato (stato 3): la superficie diventa carbone, la vernice resta a isole
+    if WEAR['char'][st]:
+        keep = vnoise(F.P, 1.6, seed + 131) > 0.66
+        k = WEAR['char'][st] * (0.85 + 0.3 * white(F.P, seed + 133))
+        k[keep] *= 0.3
+        col = col * (1 - k[..., None]) + CHAR * k[..., None]
+    # graffi lunghi: un solco scuro con il labbro sopra lucido (sulla vernice un graffio solo chiaro non si vedrebbe:
+    # il grigio di base e' gia' vicino al bianco); sempre gli stessi, piu' numerosi e piu' lunghi con lo stato
+    rng = HashRng(F.seed + 0x5C2A)
+    if w >= 4 and h >= 4 and mat not in ('lamp', 'glass'):
+        total = min(6, 1 + w * h // 120)
+        shown = int(round(total * WEAR['scratches'][st]))
+        bright = np.array(PAL['steel'], float) * 1.25 if metal_n else None
+        for k in range(total):
+            full = int(max(w, h) * (0.5 + 0.4 * rng.random()))
+            pts = _line(F, rng, full, straight=True)
+            if k >= shown:
+                continue
+            for i, j in pts[:int(round(len(pts) * WEAR['scratch_len'][st]))]:
+                if j > 0:
+                    col[j - 1, i] = bright if bright is not None else np.minimum(col[j - 1, i] * 1.3 + 30, 245)
+                col[j, i] *= 0.35
+    # crepe scure (stati 2-3), larghe 2 texel nello stato 3
+    rng = HashRng(F.seed + 0xC4AC)
+    if w >= 6 and h >= 6 and WEAR['cracks'][st]:
+        for _ in range(min(3, 1 + w * h // 300)):
+            pts = _line(F, rng, int(max(w, h) * 0.7), straight=False)
+            for i, j in pts[:int(round(len(pts) * WEAR['cracks'][st]))]:
+                col[j, i] = CHAR * 0.35
+                glow[j, i] = False
+                if st >= 3 and i + 1 < w:
+                    col[j, i + 1] = CHAR * 0.5
+                    glow[j, i + 1] = False
+    # spie e vetri: texel spenti (fuori dalla maschera luminosa)
+    if mat in ('lamp', 'glass', 'cell') and WEAR['dead_light'][st] is not None:
+        dead = white(F.P, seed + 151) > WEAR['dead_light'][st]
+        col[dead] = np.array((48, 18, 14), float) if mat != 'glass' else np.array((14, 18, 20), float)
+        glow &= ~dead
     return col, glow
 
 
@@ -368,17 +502,37 @@ def paint_model(model, debug_position=False):
         if b.mirror_of is not None:
             continue
         for f, rect in b.faces.items():
+            if b.mat_for(f) == 'decal':
+                continue   # decalcomania: texel trasparenti (si disegnano in M5)
             F = Face(model, b, f, rect)
             if debug_position:
                 q = F.S
                 col = np.stack([(q[..., 0] + 14) / 28, q[..., 1] / 37, (q[..., 2] + 9) / 19], -1) * 230 + 15
                 col[(F.i == 0) & (F.j == 0)] = (255, 255, 255)
-                glow = False
+                glow = np.zeros((F.h, F.w), bool)
             else:
                 col, glow = paint_face(F, b.mat_for(f))
             sl = (slice(F.v, F.v + F.h), slice(F.u, F.u + F.w))
             atlas[sl][..., :3] = np.clip(col, 0, 255).astype(np.uint8)
             atlas[sl][..., 3] = 255
-            if glow:
-                glowmask[sl] = atlas[sl]
+            glowmask[sl][glow] = atlas[sl][glow]
     return atlas, glowmask
+
+
+def check_wear(model, atlas):
+    """Problemi della pittura degli stati: per ogni pezzo e regione la luminosita' media delle sue facce deve calare
+    da uno stato al successivo (uno stato piu' alto non sembra mai meno rovinato)."""
+    sums = {}
+    for b in model.boxes:
+        if b.bone.state is None or b.mirror_of is not None:
+            continue
+        acc = sums.setdefault(b.bone.name.replace(f'_s{b.bone.state}_', '_'), [[0.0, 0] for _ in range(4)])
+        for u, v, w, h in b.faces.values():
+            acc[b.bone.state][0] += float(atlas[v:v + h, u:u + w, :3].mean(-1).sum())
+            acc[b.bone.state][1] += w * h
+    problems = []
+    for name, acc in sorted(sums.items()):
+        mean = [s / n for s, n in acc if n]
+        if any(b >= a for a, b in zip(mean, mean[1:])):
+            problems.append(f'{name}: luminosita\' media per stato non decrescente {[round(x, 1) for x in mean]}')
+    return problems

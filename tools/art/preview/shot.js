@@ -4,6 +4,11 @@
 //   node shot.js --views fronte,porta   solo alcune viste standard
 //   node shot.js --assets <dir>         modello scritto da `build.py --out <dir>` invece dei file del mod
 //   node shot.js --jobs <file.json>     viste a piacere: [{name, cfg, width?, height?}] (cfg come in scene.html)
+//   node shot.js --state 2              pezzi nello stato visivo 2 (0-3, predefinito 0), o "nudo" per il telaio nudo
+//   node shot.js --colors 3A6EA5,D9D9D9 colori primario e secondario dei pezzi (predefiniti: quelli del Rottame)
+//
+// Le viste standard si chiamano out/<vista>.png nello stato 0 con i colori predefiniti, altrimenti
+// out/<vista>-s<stato>[-<colori>].png o out/<vista>-nudo.png.
 //
 // Viste standard: fronte, retro, lato (3/4 e di lato), testa e gamba (primi piani), porta (davanti, con griglia a
 // blocchi, porta 1x2 e box di collisione in piedi). La tuta e' scalata di S attorno ai piedi, il pilota e' a
@@ -25,7 +30,7 @@ try {
 
 const HERE = __dirname;
 const args = { assets: path.join(HERE, '..', '..', '..', 'src', 'main', 'resources', 'assets', 'redstone_exoframes'),
-  views: '', jobs: '' };
+  views: '', jobs: '', state: '0', colors: '' };
 for (let i = 2; i < process.argv.length; i += 2) {
   const k = process.argv[i].replace(/^--/, '');
   if (!(k in args) || process.argv[i + 1] === undefined) { console.error('opzione sconosciuta o senza valore:', process.argv[i]); process.exit(2); }
@@ -38,6 +43,14 @@ const LIFT = 24 * (S - 1);     // exo.PILOT_LIFT_PX: collo e spalle del pilota a
 const BLOCK = 16 / 0.9375;     // px di modello non scalati per blocco (il giocatore e' reso a 15/16): 17.07
 const MODEL = { geo: 'model/geo/exoframe.geo.json', tex: 'model/textures/entity/exoframe.png',
   glow: 'model/textures/entity/exoframe_glowmask.png', S };
+if (!/^(nudo|[0-3])$/.test(args.state)) { console.error('--state: 0-3 o nudo, non', args.state); process.exit(2); }
+MODEL.state = args.state === 'nudo' ? -1 : Number(args.state);
+if (args.colors) {
+  if (!/^[0-9A-Fa-f]{6},[0-9A-Fa-f]{6}$/.test(args.colors)) { console.error('--colors: RRGGBB,RRGGBB'); process.exit(2); }
+  [MODEL.p1, MODEL.p2] = args.colors.split(',').map(c => parseInt(c, 16));
+}
+const SUFFIX = (args.state === 'nudo' ? '-nudo' : args.state === '0' && !args.colors ? '' : '-s' + args.state)
+  + (args.colors ? '-' + args.colors.replace(',', '-') : '');
 const PILOT = { raise: LIFT, legs: false };
 const half = BLOCK / 2;
 const STANDARD = {
@@ -58,7 +71,7 @@ function standardJobs() {
   const names = args.views ? args.views.split(',') : Object.keys(STANDARD);
   return names.map(name => {
     if (!STANDARD[name]) { console.error('vista sconosciuta:', name, '(viste:', Object.keys(STANDARD).join(', ') + ')'); process.exit(2); }
-    return { name, cfg: { models: [MODEL], pilots: [PILOT], ...STANDARD[name] } };
+    return { name: name + SUFFIX, cfg: { models: [MODEL], pilots: [PILOT], ...STANDARD[name] } };
   });
 }
 

@@ -9,10 +9,10 @@ import java.util.Objects;
  * altri livelli, finche' non hanno una grafica propria, usano gli stessi. Java puro, senza classi di Minecraft.
  */
 public final class TierPalette {
-    /** Rottame, primario: arancio ruggine. */
-    private static final int SCRAP_PRIMARY = 0xB5651D;
-    /** Rottame, secondario: verde rame spento. */
-    private static final int SCRAP_SECONDARY = 0x5F7D7A;
+    /** Rottame, primario: bronzo invecchiato. */
+    private static final int SCRAP_PRIMARY = 0x8A6F52;
+    /** Rottame, secondario: canna di fucile. */
+    private static final int SCRAP_SECONDARY = 0x4A4F55;
 
     private TierPalette() {
     }

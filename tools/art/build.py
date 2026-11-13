@@ -9,8 +9,9 @@ Uso, dalla radice del repository:
     python3 tools/art/build.py --out <dir> --debug-position
                                                atlante di prova: ogni texel ha il colore della sua posizione 3D
 
-Stesso input, stessi byte: semi fissi, nessuna data, ordine stabile, PNG senza metadati. Esce con 1 se il modello
-non passa i controlli (facce complanari, scatole troppo vicine al pilota o fuori dall'ingombro).
+Stesso input, stessi byte: semi fissi, nessuna data, ordine stabile, PNG senza metadati. Esce con 1, senza scrivere
+nulla, se il modello non passa i controlli (facce complanari, scatole troppo vicine al pilota o fuori dall'ingombro)
+o se uno stato visivo di un pezzo non e' piu' scuro del precedente (paint.check_wear).
 """
 import argparse
 import os
@@ -21,7 +22,7 @@ sys.path.insert(0, HERE)
 
 from designs import load_all  # noqa: E402
 from exo import Model, dumps_json, write_png, write_text  # noqa: E402
-from paint import paint_model  # noqa: E402
+from paint import check_wear, paint_model  # noqa: E402
 
 DEFAULT_OUT = os.path.join(HERE, '..', '..', 'src', 'main', 'resources', 'assets', 'redstone_exoframes')
 GEO = os.path.join('geo', 'exoframe.geo.json')
@@ -52,9 +53,15 @@ def main():
             print('FAIL:', p, file=sys.stderr)
         sys.exit(1)
 
+    atlas, glowmask = paint_model(model, debug_position=args.debug_position)
+    problems = [] if args.debug_position else check_wear(model, atlas)
+    if problems:
+        for p in problems:
+            print('FAIL:', p, file=sys.stderr)
+        sys.exit(1)
+
     out = os.path.normpath(args.out)
     write_text(os.path.join(out, GEO), dumps_json(model.to_geo()))
-    atlas, glowmask = paint_model(model, debug_position=args.debug_position)
     write_png(os.path.join(out, TEXTURE), atlas)
     write_png(os.path.join(out, GLOWMASK), glowmask)
     write_text(os.path.join(out, ANIMATION), dumps_json({'format_version': '1.8.0', 'animations': {}}))

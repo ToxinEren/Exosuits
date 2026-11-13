@@ -1,11 +1,22 @@
 package com.toxineren.exoframes.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /** Scala della tuta e sollevamento del pilota (design, par. 4.7). */
 class SuitScaleTest {
+
+    /** Il generatore della grafica, che ha la sua copia della scala. */
+    private static final String ART_GENERATOR = "tools/art/exo.py";
 
     @Test
     void raiseAlignsTheHeadPivots() {
@@ -37,5 +48,30 @@ class SuitScaleTest {
         // Gli stessi numeri che PilotPose usa per portare l'oggetto impugnato nella mano della tuta.
         assertEquals(2f, PilotPose.ARM_SHIFT_X_PX, 1e-4);
         assertEquals(dyDown, PilotPose.ARM_SHIFT_Y_PX, 1e-4);
+    }
+
+    /**
+     * Il generatore della grafica (tools/art/exo.py) controlla le distanze dal pilota con la stessa scala con cui il
+     * gioco disegna la tuta: se una cambia, l'altra deve seguirla.
+     */
+    @Test
+    void matchesTheArtGenerator() throws IOException {
+        String exo = Files.readString(findInRepository(ART_GENERATOR), StandardCharsets.UTF_8);
+        Matcher m = Pattern.compile("(?m)^SUIT_SCALE = ([0-9]+(?:\\.[0-9]+)?)$").matcher(exo);
+        assertTrue(m.find(), "SUIT_SCALE non trovato in " + ART_GENERATOR);
+        assertEquals(Float.parseFloat(m.group(1)), SuitScale.S, 0f);
+    }
+
+    /** Un file del repository, cercato risalendo dalla cartella di lavoro (i test girano in versions/<variante>). */
+    private static Path findInRepository(String relative) {
+        Path dir = Path.of(System.getProperty("user.dir")).toAbsolutePath();
+        while (dir != null) {
+            Path candidate = dir.resolve(relative);
+            if (Files.isRegularFile(candidate)) {
+                return candidate;
+            }
+            dir = dir.getParent();
+        }
+        return fail(relative + " non trovato risalendo da " + System.getProperty("user.dir"));
     }
 }

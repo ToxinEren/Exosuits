@@ -1,15 +1,19 @@
 """Telaio nudo: lo scheletro della tuta, sempre visibile, anche sotto i pezzi, ed e' cio' che sta in piedi nel mondo
-senza pezzi montati. Niente piastre di copertura: le piastre sono i pezzi (un design a parte); qui ci sono i punti
-dove si montano (alette, borchie).
+senza pezzi montati. E' il telaio della quarta passata della prova d'arte, approvata da Luigi il 13 novembre 2026:
+scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe, con petto a botte, testa incassata,
+spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli attuatori,
+pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette, borchie).
 
 Il renderer scala la tuta di exo.SUIT_SCALE (1.4) attorno ai piedi e disegna il pilota a grandezza normale sollevato
 di exo.PILOT_LIFT_PX (24(S-1) = 9.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
 di 1/S attorno a (0,24,0). A S = 1.4: testa y 24..29.71 (x, z +-2.86); busto y 15.43..24 (x +-2.86, z +-1.43);
-braccia x +-2.86..5.71, y 15.43..24; le mani finiscono a y 15.43 sulle impugnature dentro la gabbia
-dell'avambraccio. Le gambe del pilota (x +-2.86, y 6.86..15.43) sono nascoste dentro le cosce chiuse e il sedile del
-bacino. Testa e sedile sono dimensionati per S = 1.4: con un'altra scala vanno ricontrollati.
-Ingombro del telaio nudo: x +-9.5, y 0..30.7, z -7..9 (exo.FRAME_MIN/MAX). Fronte verso -z, lato destro a x
-negativa; sym() scrive il lato destro e aggiunge il sinistro. Nessuna scatola ruotata.
+braccia x +-2.86..5.71, y 15.43..24. Le braccia del pilota entrano nelle gabbie del braccio, le mani sulle
+impugnature; fuori, sul lato esterno, il braccio meccanico con la mano della tuta (fondo a y 6.75). Le gambe del
+pilota (x +-2.86, y 6.86..15.43) sono nascoste nelle prese delle cosce e nel sedile. Testa e sedile sono dimensionati
+per S = 1.4: con un'altra scala vanno ricontrollati.
+Gli attuatori delle spalle stanno nel busto (frameBody), non nelle braccia: per questo gli spallacci sono nel pezzo
+Torso. Ingombro del telaio nudo: x +-12.75, y 0..30.7, z -8..10 (exo.FRAME_MIN/MAX). Fronte verso -z, lato destro a
+x negativa; sym() scrive il lato destro e aggiunge il sinistro. Nessuna scatola ruotata.
 
 Materiali: gun (acciaio brunito), steel (parti lavorate chiare), brass (mozzi), chrome (steli, impugnature,
 borchie), cable (rame), rubber (tubi), vent (griglie calde), cell (cella di redstone), lamp (spie).
@@ -28,140 +32,156 @@ def build(m):
     m.bone('frameLeftLeg', 'armorLeftLeg', 'frame')
     head(m)
     torso(m)
+    shoulders(m)
     back(m)
     arms(m)
     legs(m)
 
 
 def head(m):
-    # testa scheletrica attorno alla testa del pilota (x, z +-3.21 con il margine): calotta, tempie, guance e
-    # mascelle, nuca, cornice della visiera aperta davanti al viso
-    m.box(HEAD, 'crown', (-4.5, 30.25, -4.25), (4.5, 30.5, 4.5), 'gun')
-    m.sym(HEAD, 'temple', (-5, 27.25, -4), (-3.5, 30.25, 4), 'gun')
-    m.sym(HEAD, 'jaw', (-5, 24.25, -4.25), (-3.5, 27.25, 1.75), 'steel')
-    m.sym(HEAD, 'ear_hub', (-5.5, 25, -1.25), (-4.75, 27.5, 1.25), 'brass', hub=True)
-    m.box(HEAD, 'nape', (-3.5, 24.25, 3.5), (3.5, 30.25, 4.5), 'gun')
-    m.box(HEAD, 'brow', (-4.75, 28.75, -4.75), (4.75, 30, -3.5), 'steel')
-    m.box(HEAD, 'chin', (-4.75, 22.75, -4.75), (4.75, 23.75, -3.5), 'gun')
-    m.sym(HEAD, 'visor_post', (-3.5, 23.75, -4.5), (-3, 28.75, -3.5), 'gun')
-    m.sym(HEAD, 'brow_lamp', (-3.25, 29.25, -5), (-2.25, 29.75, -4.75), 'lamp')
-    m.box(HEAD, 'cheek_sensor', (-5.25, 25.5, -3.75), (-5, 26.5, -2.5), 'lamp')
-    # alette per l'elmo
-    m.sym(HEAD, 'helmet_lug', (-5.25, 28.25, 1.5), (-5, 29.5, 2.75), 'chrome')
+    # testa scheletrica stretta (pareti di 1 px attorno alla testa del pilota, x e z +-3.21)
+    m.box(HEAD, 'crown', (-4, 30.25, -3.75), (4, 30.5, 4), 'gun')
+    m.sym(HEAD, 'temple', (-4.25, 27.25, -3.75), (-3.25, 30.25, 3.75), 'gun')
+    m.sym(HEAD, 'jaw', (-4.25, 24.25, -4), (-3.25, 27.25, 1.75), 'steel')
+    m.sym(HEAD, 'ear_hub', (-4.75, 25, -1.25), (-4.25, 27.5, 1.25), 'brass', hub=True)
+    m.box(HEAD, 'nape', (-3.25, 24.25, 3.25), (3.25, 30.25, 4.25), 'gun')
+    m.box(HEAD, 'brow', (-4, 29, -4.5), (4, 30, -3.25), 'steel')
+    m.box(HEAD, 'chin', (-4.25, 22.75, -4.5), (4.25, 23.75, -3.25), 'gun')
+    m.sym(HEAD, 'visor_post', (-3.25, 23.75, -4.25), (-2.75, 29, -3.25), 'gun')
+    m.box(HEAD, 'brow_lamp', (-0.5, 29.25, -4.75), (0.5, 29.75, -4.5), 'lamp')
+    m.sym(HEAD, 'helmet_lug', (-4.5, 28.25, 1.5), (-4.25, 29.5, 2.75), 'chrome')
 
 
 def torso(m):
-    # sedile del bacino: fondo, bordo davanti, schienale; chiude in alto le prese delle cosce
+    # sedile e anello della vita stretto (la vita e' molto piu' stretta del petto)
     m.box(BODY, 'seat', (-3, 12.5, -2.75), (3, 15, 2.75), 'gun')
     m.box(BODY, 'seat_lip', (-3, 15, -3.25), (3, 16.25, -2), 'steel')
     m.box(BODY, 'seat_back', (-3, 15, 2), (3, 18, 3.25), 'gun')
-    m.sym(BODY, 'seat_bolt', (-2.5, 13.25, -3), (-1.5, 14.25, -2.75), 'chrome')
-    # gabbia del petto: montanti, costole; il busto del pilota resta a vista
-    m.sym(BODY, 'cage_strut', (-3.75, 16.25, -3.25), (-2.75, 23.5, -2.25), 'gun')
-    for k, y in enumerate((18, 20.5)):
-        m.box(BODY, f'cage_rib_{k}', (-2.75, y, -3), (2.75, y + 0.75, -2.25), 'gun')
-    # giogo: davanti sopra il petto, sui fianchi, dietro la nuca
-    m.sym(BODY, 'yoke_front', (-7, 23.5, -3.75), (-3.75, 25, -2.25), 'gun')
-    m.sym(BODY, 'yoke_side', (-7, 24.25, -2.25), (-6.25, 25.75, 4.75), 'gun')
-    m.box(BODY, 'yoke_back', (-7, 23, 4.75), (7, 25.75, 6), 'gun')
-    # borchie per il torso
-    m.sym(BODY, 'torso_boss', (-3.5, 21.75, -3.5), (-3, 22.5, -3.25), 'chrome')
-    m.sym(BODY, 'yoke_lug', (-6, 25, -3.5), (-5, 25.75, -2.75), 'steel')
+    m.box(BODY, 'waist_front', (-5.5, 12.5, -5), (5.5, 14.25, -3.25), 'gun')
+    m.sym(BODY, 'waist_side', (-5.75, 12.5, -3.25), (-4.25, 14.25, 3.5), 'gun')
+    m.box(BODY, 'waist_back', (-5.5, 12.5, 3.5), (5.5, 14.25, 5), 'gun')
+    m.sym(BODY, 'hip_bracket', (-6.75, 11.75, -1.5), (-5.5, 14, 1.5), 'steel')
+    # petto a botte: telaio profondo, montanti larghi che si allargano verso le spalle, costole sottili
+    m.sym(BODY, 'chest_strut', (-6, 14.25, -5.75), (-4.25, 21.5, -3.5), 'gun')
+    m.sym(BODY, 'chest_flank', (-9.25, 18.5, -5.75), (-6, 24.5, -4.25), 'gun')
+    for k, y in enumerate((17, 19.75)):
+        m.box(BODY, f'chest_rib_{k}', (-4.25, y, -4.75), (4.25, y + 0.75, -3.75), 'gun')
+    m.box(BODY, 'chest_yoke', (-9, 21.5, -6), (9, 22.75, -4.5), 'steel')
+    m.sym(BODY, 'chest_boss', (-8, 20, -6), (-7, 21, -5.75), 'chrome')
+    m.sym(BODY, 'collar_post', (-6.5, 22.75, -5.5), (-5.25, 25.5, -4), 'gun')
+    # anello del collare attorno alla testa: sale ai lati e dietro, basso davanti
+    m.sym(BODY, 'collar_side', (-7, 24.5, -4), (-5.25, 27.75, 3.75), 'gun')
+    m.box(BODY, 'collar_front', (-5.25, 24.5, -5.5), (5.25, 25.25, -4.5), 'gun')
+    m.sym(BODY, 'collar_lamp', (-6.75, 23.25, -6), (-5.75, 23.75, -5.75), 'lamp')
+
+
+def shoulders(m):
+    # giogo dietro la testa, alto; attuatori delle spalle grandi sotto gli spallacci
+    m.box(BODY, 'yoke_back', (-10, 24, 3.75), (10, 27.75, 6), 'gun')
+    m.sym(BODY, 'actuator', (-12.25, 24, -4), (-7, 28, 3.75), 'gun')
+    m.sym(BODY, 'actuator_bearing', (-12.75, 24.5, -2), (-12.25, 27.5, 2), 'brass', hub=True)
+    m.sym(BODY, 'actuator_front', (-11.5, 24.5, -4.75), (-7.75, 27.25, -4), 'steel')
+    m.sym(BODY, 'actuator_cap', (-11.25, 28, -2.5), (-8, 28.75, 2.5), 'steel')
+    for k, z in enumerate((-1.75, 1)):
+        m.sym(BODY, f'pauldron_lug_{k}', (-10.5, 28.75, z), (-9.25, 29.5, z + 0.75), 'chrome')
+    # pistoni dalla parte alta della schiena alla cima delle spalle
+    m.sym(BODY, 'shoulder_ram_sleeve', (-7.5, 27.75, 4), (-5, 28.75, 5.25), 'steel')
+    m.sym(BODY, 'shoulder_ram_rod', (-9.5, 28, 4.25), (-7.5, 28.5, 5), 'chrome')
+    # pistoni dal bacino alle spalle, dietro le braccia del pilota
+    m.sym(BODY, 'torso_ram_sleeve', (-7.25, 18, 3.25), (-5.75, 24, 4.5), 'steel')
+    m.sym(BODY, 'torso_ram_rod', (-6.75, 14.25, 3.5), (-6.25, 18, 4.25), 'chrome')
 
 
 def back(m):
-    # spina dorsale a vertebre con anima cromata, staffe che reggono la cella
+    # spina a vertebre, staffe, alloggiamento della cella piu' grande, camini, cavi
     m.box(BODY, 'spine_core', (-1, 15.25, 2.5), (1, 23.25, 3.5), 'chrome')
     for k, y in enumerate((18.25, 19.75, 21.25)):
         m.box(BODY, f'vertebra_{k}', (-2, y, 2.25), (2, y + 1, 3.75), 'gun')
-    m.box(BODY, 'spine_top', (-1, 22.5, 3.75), (1, 23.5, 4.75), 'gun')
-    for k, y in enumerate((16, 21)):
-        m.sym(BODY, f'pack_bracket_{k}', (-1.75, y, 3.5), (-1.25, y + 0.75, 6), 'steel')
-    # alloggiamento della cella: due colonne, fondo, cornice, cella incassata, barre di protezione
-    m.sym(BODY, 'pack_column', (-5.25, 14.5, 6), (-2.75, 25, 8.5), 'steel')
-    m.box(BODY, 'pack_top', (-5.5, 25, 5.5), (5.5, 26.25, 8.75), 'gun')
-    m.box(BODY, 'pack_bottom', (-5.5, 13.5, 6), (5.5, 14.5, 8.75), 'gun')
-    m.box(BODY, 'pack_floor', (-2.75, 14.5, 6), (2.75, 25, 7), 'gun')
-    m.box(BODY, 'cell', (-2.25, 15.5, 7), (2.25, 24, 8), 'cell')
-    m.box(BODY, 'cell_frame_top', (-2.75, 24, 7), (2.75, 25, 8.25), 'gun')
-    m.box(BODY, 'cell_frame_bottom', (-2.75, 14.5, 7), (2.75, 15.5, 8.25), 'gun')
+    m.box(BODY, 'spine_top', (-1.5, 22.5, 3.75), (1.5, 24, 4.75), 'gun')
+    for k, y in enumerate((15.75, 20.5)):
+        m.sym(BODY, f'pack_bracket_{k}', (-1.75, y, 3.5), (-1.25, y + 0.75, 6.25), 'steel')
+    m.sym(BODY, 'pack_column', (-6.25, 14.5, 6.25), (-3.25, 26, 9.25), 'steel')
+    m.box(BODY, 'pack_top', (-6.5, 26, 6), (6.5, 27.25, 9.5), 'gun')
+    m.box(BODY, 'pack_bottom', (-6.5, 13.5, 6), (6.5, 14.5, 9.5), 'gun')
+    m.box(BODY, 'pack_floor', (-3.25, 14.5, 6.25), (3.25, 26, 7.5), 'gun')
+    m.box(BODY, 'cell', (-2.75, 15.5, 7.5), (2.75, 25, 8.75), 'cell')
+    m.box(BODY, 'cell_frame_top', (-3.25, 25, 7.5), (3.25, 26, 9), 'gun')
+    m.box(BODY, 'cell_frame_bottom', (-3.25, 14.5, 7.5), (3.25, 15.5, 9), 'gun')
     for k, y in enumerate((17, 19.75, 22.5)):
-        m.box(BODY, f'cell_guard_{k}', (-3.25, y, 8.25), (3.25, y + 0.75, 9), 'gun')
-    m.sym(BODY, 'pack_vent', (-5.5, 16, 6.5), (-5.25, 23, 8.25), 'vent')
-    m.sym(BODY, 'pack_lamp', (-4.75, 25.25, 8.75), (-3.75, 26, 9), 'lamp')
-    # due camini di scarico, fascia d'ottone, bocca calda (la cima resta sotto il box di collisione)
-    m.sym(BODY, 'stack', (-4.75, 26.25, 6.25), (-3.25, 29.75, 7.75), 'gun', heat=True)
-    m.sym(BODY, 'stack_band', (-5, 27.5, 6), (-3, 28.25, 8), 'brass')
-    m.sym(BODY, 'stack_cap', (-5, 29.75, 6), (-3, 30.5, 8), 'vent')
-    # cavi di rame: dalla colonna al giogo; dal fondo della cella al sedile; tubi di gomma al sedile
-    m.sym(BODY, 'cable_a', (-6.5, 24, 6.5), (-5.25, 25, 7.5), 'cable')
-    m.sym(BODY, 'cable_a_fwd', (-6.5, 24, 5.5), (-5.75, 25, 6.5), 'cable')
-    m.sym(BODY, 'cable_b_down', (-4.75, 12.25, 6.5), (-4, 13.5, 7.25), 'cable')
-    m.sym(BODY, 'cable_b_in', (-4.75, 12.25, 2.5), (-4, 13, 6.5), 'cable')
-    m.sym(BODY, 'hose', (-3.5, 12.25, 6.75), (-2.5, 13.5, 7.75), 'rubber')
-    m.sym(BODY, 'hose_fwd', (-3.5, 12.25, 2.5), (-2.5, 13.25, 6.75), 'rubber')
+        m.box(BODY, f'cell_guard_{k}', (-3.75, y, 9), (3.75, y + 0.75, 10), 'gun')
+    m.sym(BODY, 'pack_vent', (-6.5, 16, 6.75), (-6.25, 24.5, 9), 'vent')
+    m.sym(BODY, 'pack_lamp', (-5.75, 26.25, 9.5), (-4.75, 27, 9.75), 'lamp')
+    m.sym(BODY, 'stack', (-5.25, 27.25, 6.75), (-3.75, 29.75, 8.25), 'gun', heat=True)
+    m.sym(BODY, 'stack_band', (-5.5, 28, 6.5), (-3.5, 28.75, 8.5), 'brass')
+    m.sym(BODY, 'stack_cap', (-5.5, 29.75, 6.5), (-3.5, 30.5, 8.5), 'vent')
+    m.sym(BODY, 'cable_a', (-8, 24.75, 7), (-6.25, 25.75, 8), 'cable')
+    m.sym(BODY, 'cable_a_fwd', (-8, 24.75, 6), (-7.25, 25.75, 7), 'cable')
+    m.sym(BODY, 'cable_b', (-5, 12.25, 5.25), (-4.25, 13.5, 7.25), 'cable')
+    m.sym(BODY, 'hose', (-2.75, 12, 6.25), (-1.75, 13.5, 7.25), 'rubber')
+    m.sym(BODY, 'hose_fwd', (-2.75, 12, 5.25), (-1.75, 13, 6.25), 'rubber')
 
 
 def arms(m):
-    # spalla sopra e fuori dalla spalla del pilota: telaio, grande mozzo, alette per lo spallaccio
-    m.sym(RARM, 'shoulder_housing', (-9, 23, -2.5), (-7.25, 27, 2.5), 'gun')
-    m.sym(RARM, 'shoulder_hub', (-9.5, 23.5, -1.75), (-9, 26.5, 1.75), 'brass', hub=True)
-    for k, z in enumerate((-1.75, 0.75)):
-        m.sym(RARM, f'pauldron_lug_{k}', (-8.75, 27, z), (-7.5, 27.75, z + 1), 'steel')
-    # braccio sul lato esterno: trave, pistoni davanti e dietro
-    m.sym(RARM, 'upper_beam', (-8.75, 19.5, -1), (-6.5, 23, 1), 'gun')
-    m.sym(RARM, 'bicep_sleeve', (-8.5, 20.5, -2.5), (-7, 23, -1.25), 'steel')
-    m.sym(RARM, 'bicep_rod', (-8.25, 19.5, -2.25), (-7.25, 20.5, -1.5), 'chrome')
-    m.sym(RARM, 'tricep_sleeve', (-8.5, 20.5, 1.25), (-7, 23, 2.5), 'steel')
-    m.sym(RARM, 'tricep_rod', (-8.25, 19.5, 1.5), (-7.25, 20.5, 2.25), 'chrome')
-    m.sym(RARM, 'arm_cable', (-9.25, 15.75, 1), (-8.75, 23, 1.75), 'cable')
-    # gomito
-    m.sym(RARM, 'elbow_block', (-9, 17.25, -2), (-6.25, 19.5, 2), 'gun')
-    m.sym(RARM, 'elbow_hub', (-9.5, 17.5, -1.25), (-9, 19.25, 0.75), 'brass', hub=True)
-    # avambraccio: trave esterna e gabbia con l'impugnatura sotto la mano del pilota
-    m.sym(RARM, 'forearm_beam', (-9, 14.5, -1), (-6.5, 17.25, 1), 'gun')
-    m.sym(RARM, 'forearm_lamp', (-9.25, 15.5, -0.5), (-9, 16.25, 0.5), 'lamp')
-    m.sym(RARM, 'cage_front', (-6.5, 15.75, -2.75), (-3.75, 16.5, -2), 'steel')
-    m.sym(RARM, 'cage_back', (-6.5, 15.75, 2), (-3.75, 16.5, 2.75), 'steel')
-    m.sym(RARM, 'grip', (-6.5, 14.5, -2.75), (-3.25, 15, 2.75), 'chrome')
-    m.sym(RARM, 'cage_post_front', (-3.75, 15, -2.75), (-3.25, 16.5, -2), 'gun')
-    m.sym(RARM, 'cage_post_back', (-3.75, 15, 2), (-3.25, 16.5, 2.75), 'gun')
-    # mano meccanica: palmo, tre dita in due falangi, pollice
-    m.sym(RARM, 'palm', (-9, 12, -2), (-5.5, 14.5, 2), 'steel')
-    for k, (x0, x1) in enumerate(((-9, -8), (-7.75, -6.75), (-6.5, -5.5))):
-        m.sym(RARM, f'finger{k}', (x0, 10.5, -2), (x1, 12, -0.75), 'gun')
-        m.sym(RARM, f'fingertip{k}', (x0, 9.75, -1.75), (x1, 10.5, -1), 'gun')
-    m.sym(RARM, 'thumb', (-5.5, 11.5, -1.75), (-4.75, 13.5, -0.5), 'gun')
-    m.sym(RARM, 'knuckle_bar', (-9.25, 12, -2.5), (-5.25, 12.75, -2), 'brass')
+    # gabbia del braccio del pilota: parete esterna, archi davanti e dietro, impugnatura sotto la mano
+    m.sym(RARM, 'arm_cage_wall', (-8.5, 16.5, -2.75), (-6.25, 23.25, 2.75), 'gun')
+    m.sym(RARM, 'arm_cage_front', (-6.25, 20.5, -3), (-3.75, 21.5, -2), 'steel')
+    m.sym(RARM, 'arm_cage_back', (-6.25, 20.5, 2), (-3.75, 21.5, 3), 'steel')
+    m.sym(RARM, 'grip', (-6.25, 14.5, -2.75), (-3.25, 15, 2.75), 'chrome')
+    m.sym(RARM, 'grip_post_front', (-3.75, 15, -2.75), (-3.25, 16.25, -2), 'gun')
+    m.sym(RARM, 'grip_post_back', (-3.75, 15, 2), (-3.25, 16.25, 2.75), 'gun')
+    m.sym(RARM, 'grip_bar_front', (-6.25, 15.5, -2.75), (-3.75, 16.25, -2), 'gun')
+    m.sym(RARM, 'grip_bar_back', (-6.25, 15.5, 2), (-3.75, 16.25, 2.75), 'gun')
+    # braccio meccanico: trave, due pistoni, gomito grande
+    m.sym(RARM, 'upper_beam', (-11.75, 18.75, -1.5), (-8.5, 23.5, 1.5), 'gun')
+    m.sym(RARM, 'upper_ram_front', (-11.25, 19.25, -3.25), (-9.25, 23.25, -1.5), 'steel')
+    m.sym(RARM, 'upper_ram_back', (-11.25, 19.25, 1.5), (-9.25, 23.25, 3.25), 'steel')
+    m.sym(RARM, 'elbow_block', (-12.25, 15.25, -3), (-8.5, 18.75, 3), 'gun')
+    m.sym(RARM, 'elbow_hub', (-12.75, 15.5, -2), (-12.25, 18.5, 2), 'brass', hub=True)
+    m.sym(RARM, 'elbow_hub_in', (-8.5, 15.75, -1.5), (-8, 18.25, 1.5), 'brass', hub=True)
+    # avambraccio pesante (5 x 6 px) con pistoni davanti e dietro e griglia esterna
+    m.sym(RARM, 'forearm', (-12.5, 10.75, -3.5), (-7.75, 15.25, 3.5), 'gun')
+    m.sym(RARM, 'forearm_ram_front', (-11.25, 11.25, -4.25), (-9, 15, -3.5), 'steel')
+    m.sym(RARM, 'forearm_rod_front', (-10.5, 10.25, -4), (-9.75, 11.25, -3.75), 'chrome')
+    m.sym(RARM, 'forearm_ram_back', (-11.25, 11.25, 3.5), (-9, 15, 4.25), 'steel')
+    m.sym(RARM, 'forearm_rod_back', (-10.5, 10.25, 3.75), (-9.75, 11.25, 4), 'chrome')
+    m.sym(RARM, 'forearm_vent', (-12.75, 11.5, -2.25), (-12.5, 14.5, 2.25), 'vent')
+    m.sym(RARM, 'forearm_lamp', (-8.75, 13.75, -3.75), (-7.75, 14.5, -3.5), 'lamp')
+    m.sym(RARM, 'arm_cable', (-12.5, 15.5, 2.5), (-11.75, 23.5, 3.25), 'cable')
+    # polso e mano grande: palmo, tre dita, pollice, nocche d'ottone
+    m.sym(RARM, 'wrist', (-11.5, 10.25, -2.25), (-8, 11, 2.25), 'brass')
+    m.sym(RARM, 'palm', (-12.25, 8.5, -3), (-7.25, 10.25, 3), 'steel')
+    for k, (x0, x1) in enumerate(((-12, -10.5), (-10.25, -8.75), (-8.5, -7.25))):
+        m.sym(RARM, f'finger{k}', (x0, 7.25, -2.75), (x1, 8.5, -1), 'gun')
+        m.sym(RARM, f'fingertip{k}', (x0 + 0.25, 6.75, -2.5), (x1 - 0.25, 7.25, -1.25), 'gun')
+    m.sym(RARM, 'thumb', (-7.25, 7.75, -2.25), (-6.5, 10, -0.75), 'gun')
+    m.sym(RARM, 'knuckles', (-12.5, 8.5, -3.5), (-7, 9.25, -3), 'brass')
 
 
 def legs(m):
-    # presa della coscia: manicotto chiuso dove stanno le gambe del pilota, con due fasce e un pistone davanti
-    m.sym(RLEG, 'thigh_socket', (-4, 6.75, -2.25), (0, 14, 2.25), 'gun')
+    # presa della coscia (manicotto chiuso), fasce, pistone davanti, mozzo dell'anca
+    m.sym(RLEG, 'thigh_socket', (-5.5, 6.75, -3), (0, 14, 3), 'gun')
     for k, y in enumerate((8, 11.5)):
-        m.sym(RLEG, f'thigh_band_{k}', (-4.25, y, -2.5), (-0.25, y + 0.75, 2.5), 'steel')
-    m.sym(RLEG, 'hip_hub', (-4.75, 11, -1.5), (-4.25, 13.5, 1.5), 'brass', hub=True)
-    m.sym(RLEG, 'thigh_sleeve', (-3.25, 8.75, -3.25), (-1, 11.25, -2.5), 'steel')
-    m.sym(RLEG, 'thigh_rod', (-2.75, 7.5, -3), (-1.5, 8.75, -2.5), 'chrome')
-    # ginocchio: blocco, mozzo esterno, snodo davanti
-    m.sym(RLEG, 'knee_block', (-4, 5.25, -1.75), (-0.5, 6.75, 1.75), 'gun')
-    m.sym(RLEG, 'knee_hub', (-5, 5, -1.5), (-4, 7.5, 1.5), 'brass', hub=True)
-    m.sym(RLEG, 'knee_cap', (-3.25, 5.5, -2.75), (-1.25, 7.5, -1.75), 'brass', hub=True)
-    # stinco: due montanti, pistone davanti, pistone del polpaccio dietro
-    m.sym(RLEG, 'shin_outer', (-4.5, 2.25, -1), (-3.25, 5.25, 1), 'gun')
-    m.sym(RLEG, 'shin_inner', (-1.75, 2.25, -1), (-0.5, 5.25, 1), 'gun')
-    m.sym(RLEG, 'shin_sleeve', (-3, 3, -2.25), (-1.75, 5.5, -1.25), 'steel')
-    m.sym(RLEG, 'shin_rod', (-2.75, 2.25, -2), (-2, 3, -1.5), 'chrome')
-    m.sym(RLEG, 'calf_sleeve', (-3.25, 3.75, 1.75), (-1.25, 7, 3), 'steel')
-    m.sym(RLEG, 'calf_rod', (-2.75, 2, 2), (-1.75, 3.75, 2.75), 'chrome')
-    # caviglia e piede: blocco, mozzo, suola, punta, calotta, tallone, sperone
-    m.sym(RLEG, 'ankle_block', (-4.25, 1, -1.5), (-0.5, 2.25, 1.5), 'gun')
-    m.sym(RLEG, 'ankle_hub', (-5, 1, -1.25), (-4.25, 2.75, 1.25), 'brass', hub=True)
-    m.sym(RLEG, 'sole', (-5.25, 0, -5.5), (-0.25, 1, 3.75), 'gun')
-    m.sym(RLEG, 'toe', (-5, 1, -5.25), (-0.5, 2, -1.75), 'steel')
-    m.sym(RLEG, 'toe_cap', (-4.5, 2, -4.75), (-1, 2.5, -2), 'gun')
-    m.sym(RLEG, 'heel', (-4.75, 1, 1.75), (-0.5, 2, 3.5), 'steel')
-    m.sym(RLEG, 'heel_spur', (-4.25, 0.25, 3.75), (-1, 1.5, 4.5), 'gun')
-    # borchie per i pezzi delle gambe (sulla faccia esterna del montante dello stinco e della presa della coscia)
-    m.sym(RLEG, 'shin_boss', (-4.75, 3.25, -0.5), (-4.5, 4.25, 0.5), 'chrome')
-    m.sym(RLEG, 'thigh_boss', (-4.25, 9.25, -0.5), (-4, 10.25, 0.5), 'chrome')
+        m.sym(RLEG, f'thigh_band_{k}', (-5.75, y, -3.25), (-0.25, y + 0.75, 3.25), 'steel')
+    m.sym(RLEG, 'hip_hub', (-6.25, 9, -1.75), (-5.75, 11.25, 1.75), 'brass', hub=True)
+    m.sym(RLEG, 'thigh_ram', (-4.25, 8.75, -4), (-1, 11.25, -3.25), 'steel')
+    m.sym(RLEG, 'thigh_rod', (-3, 7.25, -3.75), (-2, 8.75, -3.25), 'chrome')
+    # ginocchio grande
+    m.sym(RLEG, 'knee_block', (-5.25, 4.5, -2.5), (-0.5, 7, 2.5), 'gun')
+    m.sym(RLEG, 'knee_hub', (-6.5, 4, -2.25), (-5.25, 7.5, 2.25), 'brass', hub=True)
+    m.sym(RLEG, 'knee_cap', (-4.25, 4.75, -3.75), (-1.25, 7.25, -2.5), 'brass', hub=True)
+    # stinco spesso: due montanti, pistone davanti, pistone del polpaccio
+    m.sym(RLEG, 'shin_outer', (-6, 2, -1.5), (-4, 4.5, 1.5), 'gun')
+    m.sym(RLEG, 'shin_inner', (-2, 2, -1.75), (-0.5, 4.5, 1.75), 'gun')
+    m.sym(RLEG, 'shin_ram', (-3.5, 2.25, -3), (-2, 4.75, -1.5), 'steel')
+    m.sym(RLEG, 'calf_ram', (-4, 3, 2), (-1.5, 6.5, 3.5), 'steel')
+    m.sym(RLEG, 'calf_rod', (-3.25, 1.75, 2.5), (-2.25, 3, 3.25), 'chrome')
+    # caviglia e piede largo
+    m.sym(RLEG, 'ankle_block', (-5.5, 1, -2.25), (-0.5, 2, 2.25), 'gun')
+    m.sym(RLEG, 'ankle_hub', (-6.75, 0.75, -1.25), (-5.5, 2.75, 1.25), 'brass', hub=True)
+    m.sym(RLEG, 'sole', (-7, 0, -7.5), (-0.25, 1, 5), 'gun')
+    m.sym(RLEG, 'toe', (-6.75, 1, -7.25), (-0.5, 2.25, -2.25), 'steel')
+    m.sym(RLEG, 'toe_cap', (-6.25, 2.25, -6.75), (-1, 2.75, -2.75), 'gun')
+    m.sym(RLEG, 'heel', (-6.5, 1, 2.25), (-0.5, 2.25, 4.75), 'steel')
+    m.sym(RLEG, 'heel_spur', (-6, 0.25, 5), (-1, 1.5, 5.75), 'gun')
+    # borchie per i pezzi delle gambe
+    m.sym(RLEG, 'shin_boss', (-6.25, 2.75, -0.5), (-6, 3.75, 0.5), 'chrome')

@@ -6,10 +6,13 @@
 <script type="module">
 // Scena per le anteprime in scala (servita da shot.js): ?cfg=<json>. Coordinate della scena: quelle di three.js
 // dopo geo.js (x negata rispetto al file, come in GeckoLib): fronte verso -z, destra del pilota a +x.
-// cfg.models: [{geo, tex, glow, S, dx, dz, pose, p1, p2}]
+// cfg.models: [{geo, tex, glow, S, dx, dz, pose, p1, p2, state}]
 //                                  tuta scalata di S attorno ai piedi e spostata di dx, dz; geo/tex/glow sono percorsi
 //                                  serviti da shot.js; glow (maschera luminosa) si usa come emissiva; le ossa _p1/_p2
-//                                  si tingono di p1/p2 come farebbe il renderer
+//                                  si tingono di p1/p2 (predefiniti: i colori del Rottame) come farebbe il renderer;
+//                                  state: stato visivo dei pezzi da mostrare (0-3, predefinito 0; -1 = telaio nudo).
+//                                  Come nel renderer si vedono solo le ossa dei pezzi di quello stato, mai le
+//                                  decalcomanie
 // cfg.pilots: [{dx, dz, raise, legs}]   pilota a grandezza normale (32 px), sollevato di raise px; legs: false non
 //                                  disegna gambe e scarpe (come nel gioco, dentro la tuta)
 // cfg.floor: {block, from, to, zfrom, zto}   pavimento con griglia di quadrati da `block` px
@@ -43,10 +46,12 @@ for (const md of cfg.models || []) {
   const tex = await loadTex('/' + md.tex);
   const baked = bakeGeo(json, md.pose || {});
   // regioni di colore dei pezzi: _p1 e _p2 tinte come farebbe il renderer, il resto bianco
-  const TINT = { p1: new THREE.Color(md.p1 ?? 0xB5651D), p2: new THREE.Color(md.p2 ?? 0x5F7D7A) };
+  const TINT = { p1: new THREE.Color(md.p1 ?? 0x8A6F52), p2: new THREE.Color(md.p2 ?? 0x4A4F55) };
   const WHITE = new THREE.Color(0xffffff);
+  const state = md.state ?? 0;
+  const shown = bone => !bone.startsWith('piece') || new RegExp(`_s${state}_(p1|p2|n)$`).test(bone);
   const pos = [], nor = [], uv = [], col = [];
-  for (const quad of baked.quads) for (const k of [0, 1, 2, 0, 2, 3]) {
+  for (const quad of baked.quads.filter(q => shown(q.bone))) for (const k of [0, 1, 2, 0, 2, 3]) {
     const reg = (quad.bone.match(/_(p1|p2)$/) || [])[1];
     const c = reg ? TINT[reg] : WHITE;
     col.push(c.r, c.g, c.b);
