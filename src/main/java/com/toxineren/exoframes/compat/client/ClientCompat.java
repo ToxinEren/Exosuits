@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat.client;
 
+import com.toxineren.exoframes.compat.impl.client.ClientRenderHooksImpl;
 import com.toxineren.exoframes.compat.impl.client.SuitRendererImpl;
 
 /**
@@ -20,7 +21,16 @@ public final class ClientCompat {
         return SuitRendererHolder.INSTANCE;
     }
 
+    /** Gli agganci ai renderer vanilla per loader (layer sul giocatore); da usare dall'init client. */
+    public static ClientRenderHooks renderHooks() {
+        return RenderHooksHolder.INSTANCE;
+    }
+
     private static final class SuitRendererHolder {
         static final SuitRenderer INSTANCE = new SuitRendererImpl();
+    }
+
+    private static final class RenderHooksHolder {
+        static final ClientRenderHooks INSTANCE = new ClientRenderHooksImpl();
     }
 }
