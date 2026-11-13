@@ -346,3 +346,26 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 - [ ] **Step 3: verificare** — due build identiche; `OK art`; `ExoframeGeometryTest` su `1.21.1-neoforge` e `1.20.1-forge`; build delle quattro varianti; `OK jars`, `OK sources`; nel client vero, su una variante per versione del gioco: tuta armata e telaio nudo, davanti e dietro, con gli scatti allegati.
 - [ ] **Step 4:** documenti; commit `art: piedi e schiena della tuta ridisegnati dal riferimento`.
 
+### Task 14: Piedi uguali a quelli del riferimento
+
+> **Aggiunto (Revisione 6, 13 novembre 2026).** Visto il prima e dopo del Task 13, Luigi: «non hai capito, i piedi devono essere uguali a quelli dell'immagine di riferimento, non mi interessa se sono troppo simili, devono essere identici solo quelli». È una sua decisione esplicita, presa dopo essere stato avvisato del rischio di somiglianza con un design altrui, e vale solo per la parte bassa delle gambe; il resto della tuta resta originale (design §4.7).
+
+**Files:**
+- Modify: `tools/art/designs/frame.py`, `tools/art/designs/scrap.py`, `tools/art/paint.py` (solo se serve), i file di risorse generati, `tools/art/README.md` e `docs/arte/README.md`
+- Create: `docs/arte/anteprime/rottame-v6/`
+
+**Interfaces:**
+- Consumes: generatore e disegno dopo il Task 13 (scala 1,65; pezzi con quattro stati; controllo delle facce complanari; `tools/art/swing.py`); i due ritagli ingranditi dell'immagine di riferimento, fuori dal repo (parte bassa delle gambe, davanti e dietro).
+- Produces, dal ginocchio in giù, per entrambe le gambe (speculari):
+  - **davanti:** piede a trapezio più largo in basso con un'apertura rettangolare ad arco al centro del bordo inferiore; sopra, la fascia della caviglia in due segmenti; lo scudo dello stinco, alto, largo in alto e arrotondato in basso (a gradini), che finisce appena sopra il piede; sullo scudo una piastra interna in rilievo con quattro feritoie orizzontali e, sotto, tre segni verticali corti;
+  - **di lato, all'esterno:** un puntone verticale dal ginocchio alla caviglia, con un cuscinetto arrotondato in alto (due tacche), un anello vicino al fondo e una staffa alla caviglia;
+  - **dietro:** tallone in tre blocchi, uno centrale più alto e due laterali che si allargano verso il basso (a gradini); polpaccio con quattro feritoie orizzontali nella metà alta; nella metà bassa un incavo scuro ad arco con dentro un mozzo e un blocchetto;
+  - ripartizione: struttura del piede, caviglia, puntone e meccanica dell'incavo nello scheletro; scudo dello stinco, piastra del polpaccio e un guscio sottile sul piede nei pezzi delle gambe, così la tuta armata ha il piede color bronzo come nel riferimento e il telaio nudo ha lo stesso piede in acciaio;
+  - tutto il resto della tuta invariato; stessi nomi e perni delle ossa, nessuna scatola ruotata (curve e lati inclinati a gradini), limiti invariati, bordo interno di ogni piede ad almeno 0,25 px dal piano di mezzo, piedi appoggiati a y 0, gambe speculari, quattro stati dei pezzi, texel del telaio indipendenti dai pezzi, `swing.py` senza contatti più precoci di oggi.
+  - anteprime in `docs/arte/anteprime/rottame-v6/` e, fuori dal repo, un confronto affiancato con i ritagli del riferimento (il riferimento non entra nel repository).
+
+- [ ] **Step 1: disegnare** la parte bassa delle gambe guardando i due ritagli; `python3 tools/art/build.py` e `--designs frame` senza segnalazioni; `python3 tools/art/swing.py --all` confrontato con lo stato di partenza.
+- [ ] **Step 2: confrontare** affiancando riferimento e anteprima, davanti e dietro, alla stessa grandezza: ogni elemento dell'elenco deve riconoscersi; correggere finché regge anche alla grandezza di uno screenshot di gioco.
+- [ ] **Step 3: verificare** — due build identiche; `OK art`; `ExoframeGeometryTest` su `1.21.1-neoforge` e `1.20.1-forge`; build delle quattro varianti; `OK jars`, `OK sources`; nel client vero, una variante per versione del gioco: tuta armata e telaio nudo, davanti e dietro.
+- [ ] **Step 4:** documenti; commit `art: parte bassa delle gambe come nel riferimento (decisione di Luigi)`.
+
