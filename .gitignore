@@ -25,3 +25,5 @@ Thumbs.db
 # Python
 __pycache__/
 *.pyc
+# Copie di lavoro temporanee degli agenti
+/.claude/worktrees/
