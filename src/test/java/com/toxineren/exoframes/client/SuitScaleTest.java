@@ -36,9 +36,8 @@ class SuitScaleTest {
     }
 
     @Test
-    void raiseInBlocksUsesThePlayerModelScale() {
+    void raiseIsFifteenPointSixPixels() {
         assertEquals(15.6f, SuitScale.PILOT_RAISE_PX, 1e-4);
-        assertEquals(0.9140625f, SuitScale.pilotRaiseBlocks(), 1e-4);
     }
 
     @Test
@@ -55,9 +54,9 @@ class SuitScaleTest {
         float dyDown = -(suitY - pivotY);
         assertEquals(-3.25f, dx, 1e-4);
         assertEquals(1.3f, dyDown, 1e-4);
-        // Gli stessi numeri che PilotPose usa per portare l'oggetto impugnato nella mano della tuta.
-        assertEquals(-dx, PilotPose.ARM_SHIFT_X_PX, 1e-4);
-        assertEquals(dyDown, PilotPose.ARM_SHIFT_Y_PX, 1e-4);
+        // Gli stessi numeri che PilotPose usa per portare l'oggetto impugnato sul perno del braccio della tuta.
+        assertEquals(dx, PilotPose.handShiftPx(pivotX, 24f - pivotY, 0f).x(), 1e-4);
+        assertEquals(dyDown, PilotPose.handShiftPx(pivotX, 24f - pivotY, 0f).y(), 1e-4);
     }
 
     /**

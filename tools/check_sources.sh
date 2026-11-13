@@ -109,6 +109,19 @@ if [ -n "$bad" ]; then
     fail=1
 fi
 
+# 8. Le classi client di Minecraft e di Blaze3D (net.minecraft.client.*, com.mojang.blaze3d.*) si referenziano (import,
+#    anche static o spento da una direttiva Stonecutter, o nome qualificato, anche in un commento) solo dai file dei
+#    quattro package client e dagli stessi entrypoint client di platform/ ammessi dalla regola 7: un server dedicato
+#    non le ha, e una classe comune che le nomina non si carica li'.
+bad=$(grep -rlE '(net\.minecraft\.client|com\.mojang\.blaze3d)\.' src/main/java src/test/java \
+    | grep -vE '^src/(main|test)/java/com/toxineren/exoframes/(client|compat/client|compat/impl/client|mixin/client)/' \
+    | grep -vxF -f <(printf '%s\n' "${CLIENT_ENTRYPOINTS[@]}") || true)
+if [ -n "$bad" ]; then
+    echo "FAIL: riferimenti a net.minecraft.client o com.mojang.blaze3d fuori da client/, compat/client/, compat/impl/client/, mixin/client/ e dagli entrypoint client di platform/:" >&2
+    echo "$bad" >&2
+    fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
     exit 1
 fi

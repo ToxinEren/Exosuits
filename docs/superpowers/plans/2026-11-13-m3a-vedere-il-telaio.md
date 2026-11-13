@@ -32,7 +32,7 @@
 2. **Stack segnaposto con riassunto visivo assente o malformato** (altri mod, dati vecchi, `/give`): atteso che il layer non disegni nulla e non lanci mai. Test: `SuitSummaryTagsTest` (Task 3) e test in mondo del comando (Task 9).
 3. **Nomi delle ossa nel codice diversi da quelli nella geometria generata**: atteso che un pezzo non sparisca in silenzio. Test: `ExoframeGeometryTest` (Task 5 e 6) che legge il file generato e i nomi usati dal renderer.
 4. **Generatore non deterministico o PNG con metadati**: atteso che due esecuzioni diano file identici e che il controllo di privacy passi. Test: `tools/check_art.sh` nella CI (Task 5).
-5. **Armatura già indossata quando si usa il comando di debug**: atteso che non venga distrutta. Test in mondo nel Task 9 (l'armatura torna nell'inventario e ricompare con `via`).
+5. **Armatura già indossata quando si usa il comando di debug**: atteso che non venga distrutta. Test in mondo nel Task 9 (l'armatura torna nell'inventario e ci resta: `via` toglie solo i segnaposto e non la rimette addosso).
 
 ---
 

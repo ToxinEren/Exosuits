@@ -20,9 +20,4 @@ public final class SuitScale {
 
     private SuitScale() {
     }
-
-    /** Il sollevamento del pilota in blocchi: il modello del giocatore e' reso a 15/16 (0,9375). */
-    public static float pilotRaiseBlocks() {
-        return PILOT_RAISE_PX * 0.9375f / 16f;
-    }
 }

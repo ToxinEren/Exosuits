@@ -22,7 +22,8 @@ import net.minecraft.world.item.ItemStack;
  * ({@link ModItems#EXOFRAME_TORSO}) con un riassunto visivo leggibile, costruisce la {@link SuitView} (colori non
  * verniciati da {@link TierPalette}) e chiama il {@link com.toxineren.exoframes.compat.client.SuitRenderer} con la
  * tuta scalata di {@link SuitScale#S} attorno ai piedi. In ogni altro caso non disegna nulla, e non lancia mai: un
- * errore nel disegno si scrive nel log una volta sola e il fotogramma prosegue senza la tuta.
+ * errore nel disegno si scrive nel log una volta per caricamento dei renderer (vedi il campo failureLogged) e il
+ * fotogramma prosegue senza la tuta.
  * <p>
  * Il riassunto si decodifica una volta per stack, non a ogni fotogramma (vedi {@link #view(LivingEntity)}).
  */
@@ -37,10 +38,16 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
      */
     private static final Map<ItemStack, Decoded> CACHE = new MapMaker().weakKeys().makeMap();
 
+    /**
+     * True dopo il primo errore scritto nel log. Torna false a ogni costruzione del layer, cioe' a ogni ricostruzione
+     * dei renderer delle entita' (avvio e ricarica delle risorse): un primo errore passeggero, per esempio la cache
+     * dei modelli di GeckoLib durante una ricarica, non nasconde per tutta la sessione un errore che resta.
+     */
     private static volatile boolean failureLogged;
 
     public SuitLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent) {
         super(parent);
+        failureLogged = false;
     }
 
     @Override
@@ -73,7 +80,7 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
                     view);
         } catch (RuntimeException | LinkageError e) {
             // Un'eccezione da un layer farebbe chiudere il client, e cosi' un GeckoLib di versione diversa da quella
-            // attesa (LinkageError): si salta la tuta e si avvisa una volta sola.
+            // attesa (LinkageError): si salta la tuta e si avvisa una volta per caricamento dei renderer.
             logFailureOnce(e);
         }
     }
@@ -83,7 +90,7 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
      * Vale per qualunque entita' vivente (anche un supporto per armature), quindi e' piu' ampio di "questo layer la
      * disegnerebbe": il layer sta solo sul renderer del giocatore. L'unico posto che lo decide. Non lancia mai: i
      * mixin del pilota lo chiamano a ogni fotogramma di ogni giocatore, e un errore vale "non la indossa" (scritto
-     * nel log una volta sola).
+     * nel log una volta per caricamento dei renderer).
      */
     public static boolean wearsSuit(LivingEntity entity) {
         return suitView(entity) != null;
@@ -105,7 +112,8 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
     private static void logFailureOnce(Throwable e) {
         if (!failureLogged) {
             failureLogged = true;
-            RedstoneExoframes.LOGGER.error("Suit layer failed; the suit is not drawn (logged once per session)", e);
+            RedstoneExoframes.LOGGER.error("Suit layer failed with {}; the suit is not drawn (logged once until the "
+                    + "entity renderers are reloaded)", e.getClass().getName(), e);
         }
     }
 

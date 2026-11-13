@@ -184,15 +184,19 @@ sys.exit(0 if any(m.get("config") == sys.argv[1] for m in tomllib.load(sys.stdin
     # (f) icona del mod alla radice del jar (referenziata da icon/logoFile).
     echo "$listing" | grep -qx 'icon.png' || err "$name" "manca icon.png alla radice"
 
-    # (f2) texture trasparenti del layer armatura vanilla per il materiale "frame": servono solo su 1.20.1, dove
-    #      vanilla le disegna sempre; su 1.21.1 il materiale non ha layer e non devono esserci.
-    for t in assets/minecraft/textures/models/armor/frame_layer_1.png assets/minecraft/textures/models/armor/frame_layer_2.png; do
+    # (f2) texture trasparenti del layer armatura vanilla per il materiale "redstone_exoframes_frame": servono solo
+    #      su 1.20.1, dove vanilla le disegna sempre; su 1.21.1 il materiale non ha layer e non devono esserci. Il
+    #      vecchio nome generico "frame" non deve tornare.
+    for t in assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png \
+            assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_2.png; do
         if [ "$mc" = 1.20.1 ]; then
             echo "$listing" | grep -qx "$t" || err "$name" "manca $t (texture trasparente del materiale frame su 1.20.1)"
         else
             ! echo "$listing" | grep -qx "$t" || err "$name" "$t presente in un jar $mc (serve solo su 1.20.1)"
         fi
     done
+    ! echo "$listing" | grep -qE '^assets/minecraft/textures/models/armor/frame_layer_[12]\.png$' \
+        || err "$name" "texture con il vecchio nome generico frame_layer_*.png (il materiale e' redstone_exoframes_frame)"
 done
 
 # (g) nessun dato personale nei jar da pubblicare: percorsi locali, e-mail, metadati di immagini e suoni.

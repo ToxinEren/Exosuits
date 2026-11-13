@@ -13,10 +13,11 @@ ROOT = os.path.join(MAIN, "resources")
 ITEM_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "item")
 CELL_PATH = os.path.join(ITEM_DIR, "redstone_cell.png")
 ICON_PATH = os.path.join(ROOT, "icon.png")
-# Texture del layer armatura vanilla di 1.20.1 per il materiale "frame" (nome senza namespace): solo nei jar 1.20.1,
+# Texture del layer armatura vanilla di 1.20.1 per il materiale "redstone_exoframes_frame" (nome senza namespace, con
+# il prefisso del mod perche' non coincida con quello di altre mod o pacchetti di risorse): solo nei jar 1.20.1,
 # dalla cartella di risorse per versione. Completamente trasparenti: il layer vanilla non deve mostrare nulla.
 ARMOR_DIR_1201 = os.path.join(MAIN, "resources-mc1.20.1", "assets", "minecraft", "textures", "models", "armor")
-ARMOR_LAYER_PATHS = [os.path.join(ARMOR_DIR_1201, "frame_layer_%d.png" % n) for n in (1, 2)]
+ARMOR_LAYER_PATHS = [os.path.join(ARMOR_DIR_1201, "redstone_exoframes_frame_layer_%d.png" % n) for n in (1, 2)]
 
 CLEAR = (0, 0, 0, 0)
 

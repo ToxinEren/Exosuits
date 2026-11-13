@@ -30,18 +30,19 @@ import net.minecraft.world.entity.LivingEntity;
  */
 public final class PilotPose {
     /**
-     * Spostamento orizzontale, in pixel del modello, dal perno del braccio classico a riposo del pilota (x = 5 dal
-     * centro) a quello della tuta: 5 * (S - 1), verso l'esterno (3,25 a S = 1,65). Vale {@link #handShiftPx} per quel
-     * perno.
+     * Spostamento dell'oggetto impugnato verso l'esterno, in pixel della tuta non scalata, dal punto d'impugnatura del
+     * gioco base (1 px dentro il perno del braccio) al centro del palmo della mano della tuta (x da 7,25 a 12,25 dal
+     * centro in tools/art/designs/frame.py, quindi 9,75): 9,75 - 6 = 3,75. Provato sulla geometria generata in
+     * {@code PilotPoseTest}.
      */
-    static final float ARM_SHIFT_X_PX = 5f * (SuitScale.S - 1f);
+    static final float HAND_OFFSET_OUT_PX = 3.75f;
 
     /**
-     * Spostamento verticale, in pixel del modello con y verso il basso, dal perno del braccio classico a riposo del
-     * pilota (22 px dai piedi) a quello della tuta: sale di 22 * (S - 1), meno dei 24 * (S - 1) del pilota, quindi
-     * scende di 2 * (S - 1) (14,3 contro 15,6 e 1,3 px a S = 1,65). Vale {@link #handShiftPx} per quel perno.
+     * Spostamento dell'oggetto impugnato lungo il braccio, verso la mano, in pixel della tuta non scalata: il gioco base
+     * impugna a 10 px dal perno (a y 12 nella geometria, perno a 22), la tuta stringe nel pugno, tra il palmo (che
+     * comincia a y 8,5) e la punta delle dita: a y 8, cioe' 4 px piu' in basso.
      */
-    static final float ARM_SHIFT_Y_PX = SuitScale.PILOT_RAISE_PX - 22f * (SuitScale.S - 1f);
+    static final float HAND_OFFSET_DOWN_PX = 4f;
 
     /** Altezza dei piedi nello spazio del modello del giocatore, in pixel (y verso il basso). */
     private static final float FEET_Y_PX = 24f;
@@ -84,8 +85,8 @@ public final class PilotPose {
      * Spostamento dal perno di un braccio del pilota, in (x, y, z) pixel del modello, al perno del braccio della tuta.
      * La tuta e' il modello scalato di S attorno ai piedi (y = 24) e abbassato del sollevamento, e il suo osso del
      * braccio segue la posizione del braccio del modello di base: ((S - 1) x, (S - 1)(y - 24) + sollevamento,
-     * (S - 1) z). A riposo (perno (+-5, 2, 0)) da' (+-3,25, 1,3, 0) a S = 1,65; cambia accovacciati (y = 5,2) e con la skin sottile
-     * (y = 2,5). Java puro.
+     * (S - 1) z). A riposo (perno (+-5, 2, 0)) da' (+-3,25, 1,3, 0) a S = 1,65; cambia accovacciati (y = 5,2) e con
+     * la skin sottile (y = 2,5). Java puro.
      */
     static Shift handShiftPx(float x, float y, float z) {
         float k = SuitScale.S - 1f;
@@ -147,9 +148,24 @@ public final class PilotPose {
         pose.translate(shift.x() / 16f, shift.y() / 16f, shift.z() / 16f);
     }
 
-    /** Dopo {@code translateToHand}: l'oggetto e la sua distanza dal perno crescono come la tuta. */
-    public static void afterHandTransform(PoseStack pose) {
+    /**
+     * Spostamento dal punto d'impugnatura del gioco base a quello della mano della tuta, nel sistema del braccio e in
+     * pixel della tuta non scalata (y verso il basso): verso l'esterno (x negativa per il braccio destro, positiva per
+     * il sinistro) e verso la mano. Java puro.
+     */
+    static Shift handOffsetPx(boolean leftArm) {
+        return new Shift(leftArm ? HAND_OFFSET_OUT_PX : -HAND_OFFSET_OUT_PX, HAND_OFFSET_DOWN_PX, 0f);
+    }
+
+    /**
+     * Dopo {@code translateToHand}: l'oggetto e la sua distanza dal perno crescono come la tuta, e l'oggetto passa
+     * dalla mano del gioco base a quella della tuta ({@link #handOffsetPx}), nel sistema del braccio: segue il braccio
+     * in ogni posa.
+     */
+    public static void afterHandTransform(PoseStack pose, boolean leftArm) {
         pose.scale(SuitScale.S, SuitScale.S, SuitScale.S);
+        Shift offset = handOffsetPx(leftArm);
+        pose.translate(offset.x() / 16f, offset.y() / 16f, offset.z() / 16f);
     }
 
     // --- Punti d'ingresso dei mixin: una chiamata per aggancio. ---
@@ -190,9 +206,9 @@ public final class PilotPose {
     }
 
     /** Subito dopo {@code translateToHand} in {@code ItemInHandLayer.renderArmWithItem}; stesse condizioni di prima. */
-    public static void onAfterHand(LivingEntity entity, EntityModel<?> model, PoseStack pose) {
+    public static void onAfterHand(LivingEntity entity, EntityModel<?> model, PoseStack pose, HumanoidArm arm) {
         if (model instanceof HumanoidModel<?> && entity instanceof AbstractClientPlayer player && applies(player)) {
-            afterHandTransform(pose);
+            afterHandTransform(pose, arm == HumanoidArm.LEFT);
         }
     }
 }

@@ -9,6 +9,10 @@ import net.minecraft.world.entity.LivingEntity;
  * Disegna la tuta (telaio e pezzi) su un'entita' umanoide: l'unica cucitura che conosce GeckoLib. Solo client, da
  * chiamare sul thread di rendering dentro il disegno dell'entita' (per esempio da un {@code RenderLayer}), mai prima
  * che i modelli delle entita' siano caricati.
+ * <p>
+ * Contratto: l'entita' non e' un animabile di GeckoLib ({@code GeoAnimatable}). Solo per queste GeckoLib chiama
+ * l'aggancio da cui l'implementazione applica la visibilita' delle ossa ({@code applyBoneVisibilityBySlot}); per un
+ * animabile di GeckoLib pezzi e stati non si nasconderebbero.
  */
 public interface SuitRenderer {
     /**
@@ -17,7 +21,7 @@ public interface SuitRenderer {
      * {@code view}, non dai flag {@code visible} delle parti di {@code base}. Eventuali scale o spostamenti della
      * tuta rispetto al giocatore li applica il chiamante su {@code pose}.
      *
-     * @param entity l'entita' che indossa la tuta; tiene separate le istanze di animazione tra entita'
+     * @param entity l'entita' che indossa la tuta, non un animabile di GeckoLib
      * @param base il modello umanoide gia' in posa per questo fotogramma
      * @param view pezzi, stati e colori da disegnare; vuota per il telaio nudo
      */

@@ -26,11 +26,13 @@ import net.minecraft.core.registries.Registries;
  * registrata con il DeferredRegister di Architectury; il {@link RegistrySupplier} restituito e' gia' un
  * {@code Holder<ArmorMaterial>} e si risolve solo all'uso, cosi' si puo' passare al costruttore di {@link ArmorItem}
  * (che legge il materiale pigramente) anche prima che la voce sia legata. Su 1.20.1 il materiale e' un enum privato:
- * il nome e' "frame" senza namespace perche' su Fabric il percorso vanilla della texture non ne accetta uno, e il
- * codice e' lo stesso per Fabric e Forge. Il layer armatura vanilla non disegna nulla per i segnaposto: su 1.21.1 il
- * materiale non ha layer; su 1.20.1 vanilla disegna sempre, con {@code minecraft:textures/models/armor/frame_layer_1.png}
- * e {@code frame_layer_2.png}, che i jar 1.20.1 portano completamente trasparenti (src/main/resources-mc1.20.1). Il
- * rendering dei pezzi passa dal layer della mod.
+ * il nome e' "redstone_exoframes_frame" senza namespace perche' su Fabric il percorso vanilla della texture non ne
+ * accetta uno, e il codice e' lo stesso per Fabric e Forge; il prefisso del mod lo tiene diverso dai materiali di
+ * altre mod e dei pacchetti di risorse, che con lo stesso nome condividerebbero le texture. Il layer armatura vanilla
+ * non disegna nulla per i segnaposto: su 1.21.1 il materiale non ha layer; su 1.20.1 vanilla disegna sempre, con
+ * {@code minecraft:textures/models/armor/redstone_exoframes_frame_layer_1.png} e
+ * {@code redstone_exoframes_frame_layer_2.png}, che i jar 1.20.1 portano completamente trasparenti
+ * (src/main/resources-mc1.20.1). Il rendering dei pezzi passa dal layer della mod.
  * <p>
  * Gli item di {@code newPlaceholder} hanno sempre la pila a 1 su entrambe le versioni, e le proprieta' date possono
  * avere o no una durabilita' vanilla. Su 1.21.1 si imposta {@code stacksTo(1)}; su 1.20.1 le proprieta' passano
@@ -120,7 +122,7 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
 
         @Override
         public String getName() {
-            return "frame";
+            return "redstone_exoframes_frame";
         }
 
         @Override

@@ -17,7 +17,8 @@ public final class ModItems {
 
     // Segnaposto dei quattro slot armatura vanilla occupati dal telaio indossato. Non disegnano nulla: il layer
     // armatura vanilla li salta (materiale "frame" senza layer su 1.21.1, texture trasparenti su 1.20.1) e la tuta
-    // la disegna il suo layer di rendering. Fuori dalla scheda creativa: non si ottengono a mano.
+    // la disegna il suo layer di rendering. Fuori dalla scheda creativa; nella parte 3a si ottengono solo con /give o con
+    // il comando di prova (/exoframe debug wear), e il blocco degli slot arriva con la parte 3b.
     public static final RegistrySupplier<Item> EXOFRAME_HELMET = ITEMS.register("exoframe_helmet",
             () -> Compat.armorMaterials().newPlaceholder(ArmorItem.Type.HELMET, new Item.Properties()));
     public static final RegistrySupplier<Item> EXOFRAME_TORSO = ITEMS.register("exoframe_torso",
