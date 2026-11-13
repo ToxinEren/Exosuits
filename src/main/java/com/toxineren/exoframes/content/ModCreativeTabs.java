@@ -9,7 +9,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 
-/** Tab creative del mod. L'icona e' un Supplier: l'item viene risolto solo quando la tab la chiede. */
+/** Tab creative del mod. L'icona e' un Supplier: l'item viene risolto solo quando la tab la chiede; gli item entrano nella tab con append. */
 public final class ModCreativeTabs {
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(RedstoneExoframes.MOD_ID, Registries.CREATIVE_MODE_TAB);
 
@@ -20,7 +20,9 @@ public final class ModCreativeTabs {
     private ModCreativeTabs() {
     }
 
+    @SuppressWarnings("unchecked") // append(DeferredSupplier, T...) con T generico non e' @SafeVarargs in Architectury
     public static void register() {
         TABS.register();
+        CreativeTabRegistry.append(MAIN, ModItems.REDSTONE_CELL);
     }
 }
