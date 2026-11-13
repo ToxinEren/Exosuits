@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.compat.NbtKeys;
@@ -14,6 +15,7 @@ import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -23,6 +25,7 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.StringTag;
+import net.minecraft.nbt.Tag;
 import org.junit.jupiter.api.Test;
 
 /** Registro dei telai del dato salvato: mappe indossati e piazzati, voci non lette, marcatore di schema (solo NBT). */
@@ -238,6 +241,8 @@ class FrameStateSavedDataTest {
         assertNotEquals(data.worn(GOOD).frameId(), data.worn(OTHER).frameId());
         assertEquals(stateTag(), FrameStateCodec.write(data.worn(GOOD).state()));
         assertTrue(data.worn(GOOD).stowed().isEmpty());
+        // le identita' nuove vanno salvate subito, o cambierebbero a ogni caricamento
+        assertTrue(data.isDirty());
 
         CompoundTag written = data.write(new CompoundTag());
         assertEquals(2, written.getInt(NbtKeys.SCHEMA));
@@ -290,6 +295,20 @@ class FrameStateSavedDataTest {
         CompoundTag written = data.write(new CompoundTag());
         assertEquals(duplicatePlaced, written.getCompound(NbtKeys.PLACED).get(FRAME_A.toString()));
 
+        // il telaio indossato esce: il record vivo prende la chiave, il doppione grezzo resta accanto, identico
+        FrameRecord live = data.worn(GOOD);
+        assertEquals(Optional.of(FRAME_A), data.exit(GOOD, NETHER_SPOT));
+        CompoundTag afterExit = data.write(new CompoundTag()).getCompound(NbtKeys.PLACED);
+        assertEquals("minecraft:the_nether", afterExit.getCompound(FRAME_A.toString()).getString(NbtKeys.DIM));
+        assertTrue(containsValue(afterExit, duplicatePlaced));
+        assertEquals(3, afterExit.size());
+        FrameStateSavedData reloaded = roundTrip(data);
+        assertEquals(NETHER_SPOT, reloaded.spot(FRAME_A));
+        assertEquals(FrameStateCodec.write(live.state()), FrameStateCodec.write(reloaded.placed(FRAME_A).state()));
+        CompoundTag afterReload = reloaded.write(new CompoundTag()).getCompound(NbtKeys.PLACED);
+        assertTrue(containsValue(afterReload, duplicatePlaced));
+        assertEquals(afterExit, afterReload);
+
         // due indossati con la stessa identita': uno solo si legge, l'altro resta identico fra i non letti
         CompoundTag twice = new CompoundTag();
         twice.put(GOOD.toString(), wornRecordTag(FRAME_A, stateTag()));
@@ -299,6 +318,8 @@ class FrameStateSavedDataTest {
         root2.put(NbtKeys.WORN, twice);
         FrameStateSavedData data2 = FrameStateSavedData.load(root2, FrameStateCodec::read);
         assertEquals(1, data2.frames().size());
+        // fra due voci della stessa sezione vince la prima in ordine di chiave, non l'ordine della HashMap
+        assertEquals(FRAME_A, data2.worn(GOOD).frameId());
         assertEquals(twice, data2.write(new CompoundTag()).getCompound(NbtKeys.WORN));
     }
 
@@ -355,14 +376,48 @@ class FrameStateSavedDataTest {
     }
 
     @Test
-    void enterRefusedWhileThePlayerHasAnUnreadWornRecord() {
-        FrameStateSavedData data = loadThrowingOnMarked(mixedRoot());
+    void enterKeepsTheUnreadWornRecordOfThePlayer() {
+        CompoundTag root = mixedRoot();
+        Tag corrupt = root.getCompound(NbtKeys.WORN).get(BAD.toString()).copy();
+        FrameStateSavedData data = loadThrowingOnMarked(root);
         FrameRecord placed = new FrameRecord(UUID.randomUUID(), state());
         data.place(placed, OVERWORLD_SPOT);
-        assertFalse(data.enter(BAD, placed.frameId()));
-        assertSame(placed, data.placed(placed.frameId()));
-        data.dropUnread(BAD);
         assertTrue(data.enter(BAD, placed.frameId()));
+        assertSame(placed, data.worn(BAD));
+
+        // il record vivo prende la chiave del giocatore, la voce grezza resta accanto, identica, anche dopo un giro
+        CompoundTag worn = data.write(new CompoundTag()).getCompound(NbtKeys.WORN);
+        assertEquals(placed.frameId(), worn.getCompound(BAD.toString()).getUUID(NbtKeys.ID));
+        assertTrue(containsValue(worn, corrupt));
+        FrameStateSavedData reloaded = loadThrowingOnMarked(data.write(new CompoundTag()));
+        assertEquals(placed.frameId(), reloaded.worn(BAD).frameId());
+        assertEquals(worn, reloaded.write(new CompoundTag()).getCompound(NbtKeys.WORN));
+    }
+
+    @Test
+    void nullSpotsAndNullStowedEntriesAreRejectedAtTheDoor() {
+        FrameStateSavedData data = empty();
+        FrameRecord worn = data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        assertThrows(NullPointerException.class, () -> data.place(new FrameRecord(FRAME_A, state()), null));
+        assertNull(data.placed(FRAME_A));
+        assertThrows(NullPointerException.class, () -> data.exit(GOOD, null));
+        assertSame(worn, data.worn(GOOD));
+        assertThrows(NullPointerException.class, () -> worn.stowed().add(null));
+        worn.stowed().add(stowedEntry("head", "minecraft:iron_helmet"));
+        assertThrows(NullPointerException.class, () -> worn.stowed().set(0, null));
+        assertThrows(NullPointerException.class,
+                () -> new FrameRecord(FRAME_B, state(), Arrays.asList(stowedEntry("feet", "x"), null)));
+        assertEquals(1, roundTrip(data).worn(GOOD).stowed().size());
+    }
+
+    /** Vero se la sezione ha, sotto qualunque chiave, un valore uguale a {@code value}. */
+    private static boolean containsValue(CompoundTag section, Tag value) {
+        for (String key : section.getAllKeys()) {
+            if (value.equals(section.get(key))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Prova ogni punto di modifica del dato e controlla che il salvataggio riproduca l'ingresso. */
@@ -415,6 +470,7 @@ class FrameStateSavedDataTest {
         root.putInt(NbtKeys.SCHEMA, 2);
         FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
         assertFalse(data.readOnly());
+        assertFalse(data.isDirty());
         FrameRecord created = data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
         assertSame(created, data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state));
         assertEquals(Set.of(GOOD), data.frames().keySet());

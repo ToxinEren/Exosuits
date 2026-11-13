@@ -10,8 +10,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
@@ -45,11 +47,18 @@ import net.minecraft.core.HolderLookup;
  * <p>
  * In lettura ogni voce e' isolata: una voce che non si legge (valore non compound, chiave non UUID, campo mancante o
  * del tipo sbagliato, eccezione del lettore dello stato) viene saltata con un avviso che ne nomina la chiave, e le
- * altre restano. Cosi' anche una voce con un'identita' gia' letta in un'altra voce (la prima letta resta, prima gli
- * indossati e poi i piazzati). La voce saltata non si perde: resta come tag grezzo nella sua sezione e {@code save}
- * la riscrive identica; quelle indossate finche' lo stato di quel giocatore non viene creato o sostituito con
- * {@code update()} o rimosso con {@code clear()} ({@link #dropUnread}). Finche' un giocatore ha una voce indossata non
- * letta, {@link #enter} lo rifiuta.
+ * altre restano. Cosi' anche una voce con un'identita' gia' letta in un'altra voce: resta la prima letta, prima gli
+ * indossati e poi i piazzati, e dentro una sezione in ordine di chiave (le chiavi si leggono ordinate, non nell'ordine
+ * della HashMap del tag). La voce saltata non si perde: resta come tag grezzo nella sua sezione e {@code save} la
+ * riscrive identica; quelle indossate finche' lo stato di quel giocatore non viene creato o sostituito con
+ * {@code update()} o rimosso con {@code clear()} ({@link #dropUnread}).
+ * <p>
+ * Una voce grezza non blocca mai il gioco ne' viene coperta: se un record vivo prende la stessa chiave (un giocatore
+ * con una voce indossata non letta entra in un telaio; esce o viene piazzato il telaio di un'identita' che ha anche
+ * una voce piazzata non letta), il record vivo si scrive sotto la chiave e la voce grezza accanto, identica, sotto
+ * {@code <chiave>~unread} (con un numero in coda se anche quella e' presa), con un avviso una volta per chiave. Al
+ * caricamento successivo quella chiave non e' un UUID, quindi la voce resta fra le non lette e si riscrive identica
+ * sotto lo stesso nome; {@link #dropUnread} non la tocca piu'.
  * <p>
  * Accanto alle sezioni c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link #CURRENT_SCHEMA}; assente vale 1). Lo schema 1
  * aveva solo la sezione {@code frames} (uno stato per giocatore): si legge ancora, e ogni stato diventa un record
@@ -60,7 +69,9 @@ import net.minecraft.core.HolderLookup;
  * per intero. Nulla si legge, si cambia o si perde.
  * <p>
  * Solo sul thread del server; i record sono vivi: chi cambia uno stato o un'armatura stivata deve chiamare
- * {@link #setDirty()}, come dopo ogni operazione del registro.
+ * {@link #setDirty()}, come dopo ogni operazione del registro. Un ingresso nullo ({@code place}, {@code exit},
+ * l'armatura stivata) e' rifiutato subito con un'eccezione, cosi' il salvataggio non lancia mai. Le identita' create
+ * leggendo un file di schema 1 segnano il dato come da salvare gia' al caricamento, cosi' restano le stesse.
  */
 final class FrameStateSavedData extends SavedData {
     static final String NAME = "redstone_exoframes_frames";
@@ -71,6 +82,9 @@ final class FrameStateSavedData extends SavedData {
 
     /** Telai indossati, per giocatore. */
     private final Map<UUID, FrameRecord> worn = new LinkedHashMap<>();
+    /** Suffisso della chiave sotto cui si scrive una voce grezza la cui chiave e' presa da un record vivo. */
+    private static final String UNREAD_SUFFIX = "~unread";
+
     /** Telai piazzati, per identita'. */
     private final Map<UUID, Placed> placed = new LinkedHashMap<>();
     /** Voci non lette di ogni sezione, per chiave originale, riscritte identiche in {@link #write}. */
@@ -79,6 +93,8 @@ final class FrameStateSavedData extends SavedData {
     private final Map<String, Tag> unreadFrames = new LinkedHashMap<>();
     /** Il tag letto per intero quando il dato e' in sola lettura (schema piu' recente o non numerico), altrimenti null. */
     private CompoundTag readOnlyRoot;
+    /** Chiavi grezze gia' segnalate come spostate accanto a un record vivo, per avvisare una volta sola. */
+    private final Set<String> movedWarned = new HashSet<>();
     /** Vero dopo il primo ERROR per una modifica rifiutata, per scriverlo una volta sola. */
     private boolean refusalLogged;
 
@@ -133,6 +149,8 @@ final class FrameStateSavedData extends SavedData {
      * l'identita' e' gia' nel registro (indossata o piazzata) o se il dato e' in sola lettura.
      */
     UUID place(FrameRecord record, PlacedSpot spot) {
+        Objects.requireNonNull(record, "record must not be null");
+        Objects.requireNonNull(spot, "spot must not be null");
         if (readOnly() || contains(record.frameId())) {
             return null;
         }
@@ -170,11 +188,11 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Sposta il record piazzato fra gli indossati del giocatore (lo stesso oggetto). False, senza cambiare nulla, se
-     * il record non e' piazzato, se il giocatore ne indossa gia' uno (anche uno non letto) o se il dato e' in sola
-     * lettura.
+     * il record non e' piazzato, se il giocatore ne indossa gia' uno o se il dato e' in sola lettura. Una voce
+     * indossata non letta del giocatore non lo impedisce: resta nel file accanto al record (vedi la classe).
      */
     boolean enter(UUID player, UUID frameId) {
-        if (readOnly() || worn.containsKey(player) || hasUnreadWorn(player) || !placed.containsKey(frameId)) {
+        if (readOnly() || worn.containsKey(player) || !placed.containsKey(frameId)) {
             return false;
         }
         worn.put(player, placed.remove(frameId).record());
@@ -186,6 +204,7 @@ final class FrameStateSavedData extends SavedData {
      * l'identita'; vuoto, senza cambiare nulla, se il giocatore non ne indossa uno o se il dato e' in sola lettura.
      */
     Optional<UUID> exit(UUID player, PlacedSpot spot) {
+        Objects.requireNonNull(spot, "spot must not be null");
         if (readOnly() || !worn.containsKey(player)) {
             return Optional.empty();
         }
@@ -232,7 +251,7 @@ final class FrameStateSavedData extends SavedData {
         }
         ExoframesConfig config = RedstoneExoframes.config();
         Set<UUID> frameIds = new HashSet<>();
-        for (String key : wornTag.getAllKeys()) {
+        for (String key : new TreeSet<>(wornTag.getAllKeys())) {
             UUID player = entryKey(wornTag, key, data.unreadWorn, "worn frame");
             if (player == null) {
                 continue;
@@ -259,7 +278,7 @@ final class FrameStateSavedData extends SavedData {
             }
             data.worn.put(player, record);
         }
-        for (String key : placedTag.getAllKeys()) {
+        for (String key : new TreeSet<>(placedTag.getAllKeys())) {
             UUID frameId = entryKey(placedTag, key, data.unreadPlaced, "placed frame");
             if (frameId == null) {
                 continue;
@@ -280,7 +299,7 @@ final class FrameStateSavedData extends SavedData {
             }
             data.placed.put(frameId, entry);
         }
-        for (String key : framesTag.getAllKeys()) {
+        for (String key : new TreeSet<>(framesTag.getAllKeys())) {
             UUID player = entryKey(framesTag, key, data.unreadFrames, "schema 1 frame state");
             if (player == null) {
                 continue;
@@ -293,6 +312,8 @@ final class FrameStateSavedData extends SavedData {
             try {
                 FrameState state = reader.apply(framesTag.getCompound(key), config);
                 data.worn.put(player, new FrameRecord(UUID.randomUUID(), state));
+                // identita' nuova: va salvata, o cambierebbe a ogni caricamento
+                data.setDirty();
             } catch (RuntimeException e) {
                 skip(data.unreadFrames, framesTag, key, "Skipping corrupt schema 1 frame state of player {}, kept "
                         + "unread: {}", e.toString());
@@ -409,11 +430,6 @@ final class FrameStateSavedData extends SavedData {
         unreadFrames.keySet().removeIf(key -> isPlayerKey(key, player));
     }
 
-    private boolean hasUnreadWorn(UUID player) {
-        return unreadWorn.keySet().stream().anyMatch(key -> isPlayerKey(key, player))
-                || unreadFrames.keySet().stream().anyMatch(key -> isPlayerKey(key, player));
-    }
-
     private static boolean isPlayerKey(String key, UUID player) {
         try {
             return UUID.fromString(key).equals(player);
@@ -435,9 +451,10 @@ final class FrameStateSavedData extends SavedData {
     //?}
 
     /**
-     * Scrive il marcatore di schema e le sezioni: in ognuna prima le voci grezze non lette, identiche, poi quelle
-     * vive; la sezione {@code frames} dello schema 1 solo se ha ancora voci non lette. In sola lettura riscrive il
-     * tag letto per intero.
+     * Scrive il marcatore di schema e le sezioni: in ognuna i record vivi e le voci grezze non lette, identiche (una
+     * voce grezza la cui chiave nomina lo stesso UUID di un record vivo va sotto una chiave libera, vedi la classe); la
+     * sezione {@code frames} dello schema 1 solo se ha ancora voci non lette. In sola lettura riscrive il tag letto
+     * per intero.
      */
     CompoundTag write(CompoundTag tag) {
         if (readOnly()) {
@@ -446,13 +463,14 @@ final class FrameStateSavedData extends SavedData {
             }
             return tag;
         }
-        CompoundTag wornTag = rawSection(unreadWorn);
+        CompoundTag wornTag = new CompoundTag();
         worn.forEach((player, record) -> {
             CompoundTag entry = writeRecord(record);
             entry.put(NbtKeys.ID, NbtUtils.createUUID(record.frameId()));
             wornTag.put(player.toString(), entry);
         });
-        CompoundTag placedTag = rawSection(unreadPlaced);
+        putRaw(wornTag, unreadWorn, worn.keySet());
+        CompoundTag placedTag = new CompoundTag();
         placed.forEach((frameId, entry) -> {
             CompoundTag entryTag = writeRecord(entry.record());
             PlacedSpot spot = entry.spot();
@@ -465,6 +483,7 @@ final class FrameStateSavedData extends SavedData {
             entryTag.putFloat(NbtKeys.YAW, spot.yaw());
             placedTag.put(frameId.toString(), entryTag);
         });
+        putRaw(placedTag, unreadPlaced, placed.keySet());
         tag.putInt(NbtKeys.SCHEMA, CURRENT_SCHEMA);
         tag.put(NbtKeys.WORN, wornTag);
         tag.put(NbtKeys.PLACED, placedTag);
@@ -472,6 +491,40 @@ final class FrameStateSavedData extends SavedData {
             tag.put(FRAMES, rawSection(unreadFrames));
         }
         return tag;
+    }
+
+    /**
+     * Aggiunge alla sezione, che ha gia' i record vivi, le voci grezze: identiche sotto la loro chiave, o sotto una
+     * chiave libera {@code <chiave>~unread[n]} se la loro chiave nomina un UUID di {@code live} (nulla si copre).
+     */
+    private void putRaw(CompoundTag section, Map<String, Tag> unread, Set<UUID> live) {
+        List<String> moved = new ArrayList<>();
+        unread.forEach((key, raw) -> {
+            if (namesLive(key, live)) {
+                moved.add(key);
+            } else {
+                section.put(key, raw.copy());
+            }
+        });
+        for (String key : moved) {
+            String target = key + UNREAD_SUFFIX;
+            for (int n = 2; section.contains(target) || unread.containsKey(target); n++) {
+                target = key + UNREAD_SUFFIX + n;
+            }
+            section.put(target, unread.get(key).copy());
+            if (movedWarned.add(key)) {
+                RedstoneExoframes.LOGGER.warn("Unread frame entry {} shares its key with a live frame, kept unread "
+                        + "as {}", SchemaIds.safeId(key), SchemaIds.safeId(target));
+            }
+        }
+    }
+
+    private static boolean namesLive(String key, Set<UUID> live) {
+        try {
+            return live.contains(UUID.fromString(key));
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     private static CompoundTag rawSection(Map<String, Tag> unread) {
