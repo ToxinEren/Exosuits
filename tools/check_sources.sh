@@ -55,6 +55,14 @@ if [ -z "$bus_line" ] || [ -z "$init_line" ] || [ "$bus_line" -ge "$init_line" ]
     fail=1
 fi
 
+# 4. Le implementazioni di compat/impl si importano solo da compat/ (il resto passa da Compat e dalle interfacce).
+bad=$(grep -rl 'import com.toxineren.exoframes.compat.impl' src/main/java src/test/java | grep -vE "^$JAVA/compat/" || true)
+if [ -n "$bad" ]; then
+    echo "FAIL: import di compat.impl fuori da compat/:" >&2
+    echo "$bad" >&2
+    fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
     exit 1
 fi
