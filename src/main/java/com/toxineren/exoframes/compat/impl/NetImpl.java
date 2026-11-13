@@ -35,18 +35,20 @@ import net.minecraft.network.FriendlyByteBuf;*/
  * ricevitore si registra su entrambi i lati, perche' anche il client ne ha bisogno per poter inviare; il gestore
  * gira solo sul server.
  * <p>
- * Invio S2C: prima di inviare si chiede ad Architectury ({@code NetworkManager.canPlayerReceive}) se il client del
- * giocatore ha registrato il canale; se no, l'invio si salta in silenzio (una riga DEBUG per id). Su NeoForge 1.21.1
- * i payload di Architectury sono opzionali, quindi un client senza la mod supera la negoziazione dei canali, e un
- * invio senza controllo lancerebbe un'eccezione dentro l'evento di ingresso (giocatore disconnesso con un messaggio
- * fuorviante).
+ * Invio S2C: solo su NeoForge 1.21.1 si chiede prima ad Architectury ({@code NetworkManager.canPlayerReceive}, che
+ * li' legge i canali negoziati nella fase di configurazione) se il client del giocatore ha il canale; se no, l'invio
+ * si salta in silenzio (una riga DEBUG per id). Li' i payload di Architectury sono opzionali, quindi un client senza
+ * la mod supera la negoziazione, e un invio senza controllo lancerebbe un'eccezione dentro l'evento di ingresso
+ * (giocatore disconnesso con un messaggio fuorviante). Sugli altri target si invia sempre: un client senza il canale
+ * ignora il pacchetto, e su 1.20.1 i canali del client arrivano al server solo dopo l'evento di ingresso, quindi il
+ * controllo salterebbe a torto il sync di ingresso.
  * <p>
  * Thread: i gestori sono sempre accodati al thread di gioco con {@code PacketContext.queue}. Su 1.20.1 il buffer
  * viene decodificato prima di accodare, perche' viene rilasciato appena il ricevitore ritorna.
  */
 public final class NetImpl implements Net {
     private final Map<ResourceLocation, Channel<?>> channels = new ConcurrentHashMap<>();
-    /** Id S2C per cui un invio e' gia' stato saltato (client senza il canale), per scriverlo una volta sola. */
+    /** Id S2C per cui un invio e' gia' stato saltato (solo NeoForge 1.21.1), per scriverlo una volta sola. */
     private final Set<ResourceLocation> skipped = ConcurrentHashMap.newKeySet();
 
     @Override
@@ -89,20 +91,19 @@ public final class NetImpl implements Net {
     @Override
     public <T> void sendToPlayer(ServerPlayer player, ResourceLocation id, T msg) {
         Channel<T> channel = lookup(id, msg, true);
-        //? if >=1.21 {
-        if (NetworkManager.canPlayerReceive(player, channel.payloadType)) {
-            NetworkManager.sendToPlayer(player, channel.wrap(msg));
+        //? if >=1.21 && neoforge {
+        if (!NetworkManager.canPlayerReceive(player, channel.payloadType)) {
+            if (skipped.add(id)) {
+                RedstoneExoframes.LOGGER.debug("Not sending packet {}: the client has not negotiated the channel", id);
+            }
             return;
         }
-        //?} else {
-        /*if (NetworkManager.canPlayerReceive(player, id)) {
-            NetworkManager.sendToPlayer(player, id, channel.encode(msg));
-            return;
-        }*/
         //?}
-        if (skipped.add(id)) {
-            RedstoneExoframes.LOGGER.debug("Not sending packet {}: the client has not registered the channel", id);
-        }
+        //? if >=1.21 {
+        NetworkManager.sendToPlayer(player, channel.wrap(msg));
+        //?} else {
+        /*NetworkManager.sendToPlayer(player, id, channel.encode(msg));*/
+        //?}
     }
 
     @Override
