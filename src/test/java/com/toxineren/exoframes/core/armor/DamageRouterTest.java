@@ -4,13 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import java.util.EnumMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class DamageRouterTest {
 
-    private final DamageRouter router = new DamageRouter(DamageRouter.DEFAULT_PRIMARY_SHARE);
+    private final DamageRouter router = new DamageRouter(ExoframesConfig.defaults().damage);
 
     private static Map<PieceSlot, Piece> fullSet() {
         Map<PieceSlot, Piece> mounted = new EnumMap<>(PieceSlot.class);

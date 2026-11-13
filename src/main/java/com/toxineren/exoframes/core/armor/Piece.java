@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.core.armor;
 
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import java.util.Objects;
 
 /** Pezzo dell'esoscheletro: mutabile, con durabilita' sempre in [0, maxDurability]. */
@@ -21,6 +22,19 @@ public final class Piece {
         }
         this.maxDurability = maxDurability;
         this.durability = durability;
+    }
+
+    /**
+     * Pezzo nuovo a durabilita' piena, con la durabilita' massima del livello letta da {@code tiers.maxDurability}.
+     *
+     * @throws IllegalArgumentException se la config non ha una durabilita' &gt; 0 per il livello
+     */
+    public static Piece fresh(PieceSlot slot, Tier tier, ExoframesConfig.Tiers tiers) {
+        Integer max = tiers.maxDurability.get(Objects.requireNonNull(tier, "tier"));
+        if (max == null) {
+            throw new IllegalArgumentException("maxDurability mancante per " + tier);
+        }
+        return new Piece(slot, tier, max, max);
     }
 
     public PieceSlot slot() {

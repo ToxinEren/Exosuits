@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.core.armor;
 
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -21,8 +22,6 @@ import java.util.Set;
  */
 public final class DamageRouter {
 
-    public static final double DEFAULT_PRIMARY_SHARE = 0.60;
-
     /** Tolleranza per non perdere un'unita' quando una quota esatta esce come 29.999999999. */
     private static final double EPSILON = 1e-9;
 
@@ -37,6 +36,11 @@ public final class DamageRouter {
     }
 
     private final double primaryShare;
+
+    /** Router con la quota primaria della sezione danno della config ({@code damage.primaryShare}). */
+    public DamageRouter(ExoframesConfig.Damage damage) {
+        this(damage.primaryShare);
+    }
 
     public DamageRouter(double primaryShare) {
         if (!(primaryShare >= 0.0 && primaryShare <= 1.0)) {

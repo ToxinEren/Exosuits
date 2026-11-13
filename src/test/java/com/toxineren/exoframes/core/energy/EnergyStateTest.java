@@ -3,12 +3,13 @@ package com.toxineren.exoframes.core.energy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import org.junit.jupiter.api.Test;
 
 class EnergyStateTest {
 
     private static final double LOW = 0.10;
-    private static final EnergyPenaltyValues CFG = new EnergyPenaltyValues(0.30, 0.50);
+    private static final ExoframesConfig.Energy CFG = ExoframesConfig.defaults().energy;
 
     @Test
     void tenPercentIsNormal() {
