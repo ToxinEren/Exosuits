@@ -8,6 +8,9 @@
 /run/
 /versions/*/run/
 /versions/*/run-gametest/
+# Cartelle di esecuzione di tools/client/client_shot.sh
+/versions/*/run-shot-client/
+/versions/*/run-shot-server/
 /versions/*/logs/
 /logs/
 /run-data/

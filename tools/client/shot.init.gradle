@@ -1,0 +1,28 @@
+// Init script di Gradle usato da tools/client/client_shot.sh (passato con -I sulla riga di comando). Non cambia
+// nessun file del progetto e non aggiunge dipendenze: solo quando c'e' -Pexo.shot.tag=<id> sposta le esecuzioni
+// "client" e "server" di Loom nelle cartelle run-shot-client e run-shot-server della variante (ignorate da git),
+// limita la memoria e, per il client, aggiunge nome del giocatore offline, server da raggiungere e misura della
+// finestra. Il tag finisce tra gli argomenti della JVM: lo script lo usa per trovare e chiudere solo i propri processi.
+allprojects { p ->
+    p.afterEvaluate {
+        def tag = p.findProperty("exo.shot.tag")
+        def loom = p.extensions.findByName("loom")
+        if (tag == null || loom == null) return
+        def user = p.findProperty("exo.shot.user") ?: "Exo"
+        def server = p.findProperty("exo.shot.server") ?: "localhost:25601"
+        def w = p.findProperty("exo.shot.width") ?: "960"
+        def h = p.findProperty("exo.shot.height") ?: "540"
+        loom.runs.findByName("client")?.with {
+            runDir("run-shot-client")
+            vmArg("-Xmx2G")
+            vmArg("-Dexo.shot.tag=" + tag + "-client")
+            programArgs("--username", user.toString(), "--quickPlayMultiplayer", server.toString(),
+                        "--width", w.toString(), "--height", h.toString())
+        }
+        loom.runs.findByName("server")?.with {
+            runDir("run-shot-server")
+            vmArg("-Xmx1G")
+            vmArg("-Dexo.shot.tag=" + tag + "-server")
+        }
+    }
+}

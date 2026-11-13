@@ -1,0 +1,317 @@
+#!/usr/bin/env bash
+# Scatti in terza persona dal client vero di Minecraft, senza schermo. Solo Linux (Xvfb e OpenGL software di Mesa):
+# e' per la sessione cloud e per macchine simili alla CI, non per il PC Windows.
+#
+#   EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> ["comando" ...]
+#
+# Avvia un server dedicato locale in modalita' offline (con RCON) e il client di sviluppo della variante sotto Xvfb,
+# fa entrare il giocatore, lo mette in creativa su un mondo piatto, di giorno, rivolto a sud, esegue i comandi via
+# RCON (senza la barra iniziale; il giocatore si chiama come EXO_SHOT_USER, di default Exo) e salva nella cartella
+# back.png (da dietro), front.png (davanti), quarter.png (da dietro a tre quarti) con l'interfaccia nascosta, piu'
+# i log: gradle-server.log e gradle-client.log (uscita di Gradle e del gioco), server.log e client.log (latest.log
+# delle due cartelle di esecuzione), rcon.log (comandi e risposte), log-check.txt (avvisi ed errori del mod o dei
+# mixin nei due log, vuoto se non ce ne sono). Alla fine chiude server, client e Xvfb, anche dopo un errore o Ctrl-C.
+#
+# Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
+# run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta.
+# Una sola esecuzione per variante alla volta (lucchetto sulla cartella del server); esecuzioni su varianti diverse
+# in parallelo vogliono porte diverse (EXO_SHOT_PORT).
+#
+# EULA: il server di prova parte solo con EXO_ACCEPT_EULA=true, che significa accettare l'EULA di Minecraft
+# (https://aka.ms/MinecraftEULA) per quel server locale; lo script scrive eula=true solo nella propria cartella.
+#
+# Variabili d'ambiente:
+#   EXO_ACCEPT_EULA   true per accettare l'EULA del server di prova (obbligatoria)
+#   EXO_SHOT_PORT     porta del server, default 25601; RCON usa la porta + 10
+#   EXO_SHOT_W        larghezza della finestra, default 960
+#   EXO_SHOT_H        altezza della finestra, default 540
+#   EXO_SHOT_USER     nome del giocatore offline, default Exo
+#   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
+#
+# Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, scatto);
+# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata). Ogni errore stampa una riga
+# "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+set -u
+
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+variants=(1.20.1-forge 1.20.1-fabric 1.21.1-fabric 1.21.1-neoforge)
+
+usage() {
+    echo "Uso: EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> [\"comando\" ...]" >&2
+    echo "Varianti: ${variants[*]}" >&2
+}
+fatal() { echo "ERRORE: $*" >&2; exit 2; }
+
+if [ "$#" -lt 2 ]; then
+    usage
+    exit 2
+fi
+variant=$1
+out=$2
+shift 2
+
+known=0
+for v in "${variants[@]}"; do [ "$v" = "$variant" ] && known=1; done
+if [ "$known" -eq 0 ]; then
+    usage
+    fatal "variante sconosciuta '$variant'"
+fi
+
+# --- ambiente -------------------------------------------------------------------------------------------------------
+[ "$(uname -s)" = Linux ] || fatal "lo strumento funziona solo su Linux (Xvfb); sul PC Windows segui la checklist"
+
+missing=()
+for prog in Xvfb xdotool import identify glxinfo python3 java flock; do
+    command -v "$prog" >/dev/null 2>&1 || missing+=("$prog")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+    fatal "programmi mancanti: ${missing[*]} (su Debian/Ubuntu: apt-get install -y xvfb xdotool imagemagick" \
+          "mesa-utils libgl1-mesa-dri, piu' un JDK 21; vedi tools/client/README.md)"
+fi
+
+if [ "${EXO_ACCEPT_EULA:-}" != true ]; then
+    echo "ERRORE: il server di prova richiede di accettare l'EULA di Minecraft (https://aka.ms/MinecraftEULA)." >&2
+    echo "Impostare EXO_ACCEPT_EULA=true significa accettarla per il server locale che questo script avvia:" >&2
+    echo "lo script scrive allora eula=true in versions/$variant/run-shot-server/eula.txt e in nessun altro posto." >&2
+    exit 2
+fi
+
+user=${EXO_SHOT_USER:-Exo}
+port=${EXO_SHOT_PORT:-25601}
+width=${EXO_SHOT_W:-960}
+height=${EXO_SHOT_H:-540}
+settle=${EXO_SHOT_SETTLE:-8}
+for n in "$port" "$width" "$height" "$settle"; do
+    case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_PORT, EXO_SHOT_W, EXO_SHOT_H ed EXO_SHOT_SETTLE vogliono numeri interi" ;; esac
+done
+case "$user" in '' | *[!A-Za-z0-9_]*) fatal "EXO_SHOT_USER: solo lettere, cifre e _ (nome di giocatore valido)" ;; esac
+rport=$((port + 10))
+rpass=exo-shot
+tag="exoshot$$"
+
+port_busy() { python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(1); sys.exit(0 if s.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0 else 1)' "$1"; }
+for p in "$port" "$rport"; do
+    port_busy "$p" && fatal "la porta $p e' gia' in uso (un altro server?): scegli un'altra EXO_SHOT_PORT"
+done
+
+vdir="$root/versions/$variant"
+sdir="$vdir/run-shot-server"
+cdir="$vdir/run-shot-client"
+mkdir -p "$sdir" "$cdir" "$out" || fatal "non riesco a creare le cartelle"
+out=$(cd "$out" && pwd)
+
+exec 9>"$sdir/.lock"
+flock -n 9 || fatal "un'altra esecuzione di client_shot.sh usa gia' la variante $variant"
+
+rm -f "$out"/back.png "$out"/front.png "$out"/quarter.png "$out"/*.log "$out"/log-check.txt
+
+t0=$(date +%s)
+log() { echo "[$(($(date +%s) - t0))s] $*"; }
+
+# --- cartelle di esecuzione -----------------------------------------------------------------------------------------
+rm -rf "$sdir/world"
+echo "eula=true" >"$sdir/eula.txt"
+cat >"$sdir/server.properties" <<EOF
+online-mode=false
+enforce-secure-profile=false
+level-type=minecraft\:flat
+generate-structures=false
+difficulty=peaceful
+spawn-monsters=false
+spawn-animals=false
+spawn-npcs=false
+spawn-protection=0
+view-distance=4
+simulation-distance=4
+server-port=$port
+enable-rcon=true
+rcon.port=$rport
+rcon.password=$rpass
+broadcast-rcon-to-ops=false
+motd=exo-shot
+EOF
+# options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica leggera per
+# il rendering software, mouse non grezzo (xdotool muove il puntatore per lo scatto a tre quarti).
+cat >"$cdir/options.txt" <<EOF
+onboardAccessibility:false
+narrator:0
+tutorialStep:none
+pauseOnLostFocus:false
+skipMultiplayerWarning:true
+joinedFirstServer:true
+renderDistance:4
+simulationDistance:5
+maxFps:30
+enableVsync:false
+graphicsMode:1
+renderClouds:"false"
+guiScale:2
+fov:0.0
+soundCategory_master:0.0
+rawMouseInput:false
+EOF
+
+# --- chiusura -------------------------------------------------------------------------------------------------------
+xpid=""
+spid=""
+cpid=""
+# shellcheck disable=SC2317 # chiamata dalla trap su EXIT
+cleanup() {
+    local code=$?
+    trap - EXIT INT TERM
+    if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then
+        python3 "$here/rcon.py" --no-check "$rport" "$rpass" stop >/dev/null 2>&1
+    fi
+    pkill -TERM -f -- "-Dexo.shot.tag=$tag-client" 2>/dev/null
+    for _ in $(seq 30); do
+        pgrep -f -- "-Dexo.shot.tag=$tag-" >/dev/null || break
+        sleep 1
+    done
+    if pgrep -f -- "-Dexo.shot.tag=$tag-" >/dev/null; then
+        echo "client o server non si chiudono da soli: li termino" >&2
+        pkill -KILL -f -- "-Dexo.shot.tag=$tag-" 2>/dev/null
+    fi
+    [ -n "$spid" ] && wait "$spid" 2>/dev/null
+    [ -n "$cpid" ] && wait "$cpid" 2>/dev/null
+    [ -n "$xpid" ] && kill "$xpid" 2>/dev/null && wait "$xpid" 2>/dev/null
+    cp "$sdir/logs/latest.log" "$out/server.log" 2>/dev/null
+    cp "$cdir/logs/latest.log" "$out/client.log" 2>/dev/null
+    exit "$code"
+}
+trap cleanup EXIT
+trap 'echo "interrotto" >&2; exit 130' INT TERM
+
+fail() { log "ERRORE: $*"; exit 1; }
+
+# --- schermo virtuale -----------------------------------------------------------------------------------------------
+n=90
+while [ -e "/tmp/.X11-unix/X$n" ] || [ -e "/tmp/.X$n-lock" ]; do n=$((n + 1)); done
+Xvfb ":$n" -screen 0 "${width}x${height}x24" -nolisten tcp >"$out/xvfb.log" 2>&1 &
+xpid=$!
+export DISPLAY=":$n"
+for _ in $(seq 20); do xdotool getdisplaygeometry >/dev/null 2>&1 && break; sleep 0.5; done
+xdotool getdisplaygeometry >/dev/null 2>&1 || fail "Xvfb non parte (vedi $out/xvfb.log)"
+glx=$(glxinfo -B 2>&1)
+core=$(echo "$glx" | sed -n 's/.*Max core profile version: *\([0-9]*\.[0-9]*\).*/\1/p' | head -n 1)
+case "$core" in
+    3.[2-9]* | [4-9].*) ;;
+    *) fail "OpenGL core 3.2 non disponibile sotto Xvfb (serve Mesa con llvmpipe, pacchetto libgl1-mesa-dri);" \
+            "glxinfo dice: $(echo "$glx" | grep -m1 -E 'renderer|Error|error' || echo niente)" ;;
+esac
+log "schermo :$n ${width}x${height}, $(echo "$glx" | sed -n 's/.*OpenGL renderer string: *//p' | head -n 1)"
+
+gradle=(./gradlew --console=plain -I "$here/shot.init.gradle" "-Pexo.shot.tag=$tag" "-Pexo.shot.user=$user"
+        "-Pexo.shot.server=localhost:$port" "-Pexo.shot.width=$width" "-Pexo.shot.height=$height")
+
+# Attende una riga nel log di Gradle; esce con errore se la build fallisce, il processo muore o scade il tempo.
+wait_for() { # log regex secondi pid descrizione
+    for _ in $(seq "$3"); do
+        grep -qE "$2" "$1" 2>/dev/null && return 0
+        if grep -q 'BUILD FAILED' "$1" 2>/dev/null || ! kill -0 "$4" 2>/dev/null; then
+            tail -n 30 "$1" >&2
+            fail "$5: Gradle o il gioco si sono fermati prima (vedi $1)"
+        fi
+        sleep 1
+    done
+    tail -n 30 "$1" >&2
+    fail "$5: nessun segno dopo $3 s (vedi $1)"
+}
+
+# --- server ---------------------------------------------------------------------------------------------------------
+log "avvio del server $variant sulla porta $port"
+(cd "$root" && exec "${gradle[@]}" ":$variant:runServer") >"$out/gradle-server.log" 2>&1 &
+spid=$!
+wait_for "$out/gradle-server.log" 'RCON running' 900 "$spid" "il server non e' partito"
+log "server pronto"
+
+# --- client ---------------------------------------------------------------------------------------------------------
+log "avvio del client"
+(cd "$root" && exec "${gradle[@]}" ":$variant:runClient") >"$out/gradle-client.log" 2>&1 &
+cpid=$!
+joined=0
+for _ in $(seq 900); do
+    if grep -q "$user joined the game" "$out/gradle-server.log"; then joined=1; break; fi
+    if grep -qE "$user lost connection|Disconnecting $user" "$out/gradle-server.log"; then
+        grep -m1 -E "$user lost connection|Disconnecting $user" "$out/gradle-server.log" >&2
+        fail "il giocatore e' stato respinto dal server"
+    fi
+    if grep -q 'BUILD FAILED' "$out/gradle-client.log" || ! kill -0 "$cpid" 2>/dev/null; then
+        grep -m5 -E 'Exception|Error:|FAILED' "$out/gradle-client.log" >&2
+        fail "il client si e' fermato prima di entrare nel mondo (vedi $out/gradle-client.log)"
+    fi
+    kill -0 "$spid" 2>/dev/null || fail "il server si e' fermato (vedi $out/gradle-server.log)"
+    sleep 1
+done
+[ "$joined" -eq 1 ] || fail "il giocatore $user non e' entrato nel mondo entro 900 s (vedi $out/gradle-client.log)"
+log "giocatore entrato"
+
+rc() { python3 "$here/rcon.py" "$rport" "$rpass" "$@" >>"$out/rcon.log"; }
+# Un comando dell'utente si considera riuscito solo se "execute store success" lo registra come riuscito: un errore
+# dentro "execute as ... run" (per esempio un colore non valido di /exoframe) non arriva nella risposta RCON, che
+# resta vuota. Gli errori di sintassi invece arrivano nella risposta e li ferma rcon.py.
+checked() {
+    local reply
+    rc "scoreboard players set #exo exo_shot -1" "execute store success score #exo exo_shot run $1" || return 1
+    reply=$(python3 "$here/rcon.py" "$rport" "$rpass" "scoreboard players get #exo exo_shot") || return 1
+    echo "$reply" >>"$out/rcon.log"
+    case "$reply" in *"#exo has 1 "*) return 0 ;; esac
+    return 1
+}
+# Sud (yaw 0) e' l'orientamento con cui entra un giocatore nuovo: girarlo con /tp gira la testa ma non il corpo, che
+# resterebbe indietro fino a 50 gradi; con lo stesso yaw dell'ingresso corpo e testa coincidono.
+rc "op $user" "gamemode creative $user" "time set 6000" "weather clear" "gamerule doDaylightCycle false" \
+    "gamerule doWeatherCycle false" "tp $user 0.5 -60 0.5 0 15" "scoreboard objectives add exo_shot dummy" \
+    || fail "preparazione del mondo: comando rifiutato (vedi $out/rcon.log)"
+for c in "$@"; do
+    checked "${c#/}" || fail "comando rifiutato o non riuscito: \"$c\" (risposta in $out/rcon.log)"
+    log "comando eseguito: $c"
+done
+sleep "$settle" # i chunk si costruiscono piano col rendering software, e il corpo si gira dietro la testa
+
+# Prima di ogni scatto: il client deve essere ancora vivo e nel mondo (mai uno scatto del menu principale).
+alive() {
+    kill -0 "$cpid" 2>/dev/null || fail "il client si e' chiuso prima dello scatto $1 (vedi $out/gradle-client.log)"
+    if grep -qE "$user lost connection|$user left the game" "$out/gradle-server.log"; then
+        fail "il giocatore ha lasciato il server prima dello scatto $1 (vedi $out/gradle-server.log)"
+    fi
+}
+key() { xdotool key --clearmodifiers "$1"; sleep 1.5; }
+shot() {
+    sleep 2
+    alive "$1"
+    import -window root "$out/$1.png" || fail "import non ha salvato $1.png"
+    local colours
+    colours=$(identify -format '%k' "$out/$1.png" 2>/dev/null || echo 0)
+    [ "$colours" -ge 64 ] || fail "$1.png ha solo $colours colori: schermo vuoto o nero, non uno scatto del mondo"
+    log "salvato $1.png"
+}
+key F1 # nasconde l'interfaccia
+key F5
+shot back # terza persona, da dietro
+key F5
+shot front # terza persona, davanti
+# Tre quarti: /tp gira il corpo con la testa, quindi si gira solo la testa con il mouse (circa 0,15 gradi per
+# pixel); il corpo la segue in ritardo di 15-50 gradi. Non e' una vista laterale vera.
+key F5 # prima persona
+key F5 # di nuovo da dietro
+for _ in $(seq 12); do xdotool mousemove_relative -- 60 0; sleep 0.15; done
+shot quarter
+
+# Log del client e del server: righe WARN/ERROR che nominano il mod o i mixin, eccezioni e tracce che passano dal
+# codice del mod, errori di applicazione dei mixin. Sono da guardare, non fermano lo script. Esclusa una riga nota e
+# innocua dello sviluppo: GeckoLib non trova il proprio refmap ("If this is a development environment you can ignore
+# this message").
+{
+    grep -HE '/(WARN|ERROR)\]' "$out/gradle-client.log" "$out/gradle-server.log" \
+        | grep -iE 'redstone_exoframes|redstone exoframes|exoframes|mixin'
+    grep -HE 'com\.toxineren|InvalidInjectionException|MixinApplyError|Mixin apply .*failed' \
+        "$out/gradle-client.log" "$out/gradle-server.log"
+} | grep -v 'If this is a development environment you can ignore this message' | sort -u >"$out/log-check.txt"
+if [ -s "$out/log-check.txt" ]; then
+    log "ATTENZIONE: $(wc -l <"$out/log-check.txt") righe del mod o dei mixin da guardare nei log: $out/log-check.txt"
+else
+    log "log: nessun avviso o errore del mod o dei mixin"
+fi
+log "fatto in $(($(date +%s) - t0)) s, chiusura"
+exit 0
