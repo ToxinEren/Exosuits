@@ -17,6 +17,27 @@ if [ -d "$JAVA/core" ]; then
     fi
 fi
 
+# 1b. Il core non usa Gson (la serializzazione resta fuori dal core).
+if [ -d "$JAVA/core" ]; then
+    bad=$(grep -rlE '^[[:space:]]*import[[:space:]]+(static[[:space:]]+)?com\.google\.gson[.;]' "$JAVA/core" || true)
+    if [ -n "$bad" ]; then
+        echo "FAIL: import di com.google.gson nel package core:" >&2
+        echo "$bad" >&2
+        fail=1
+    fi
+fi
+
+# 1c. Ogni tipo di core/ (classe, record, enum, interfaccia) e' citato per nome in almeno un file di src/test/java.
+if [ -d "$JAVA/core" ]; then
+    while IFS= read -r f; do
+        type=$(basename "$f" .java)
+        if ! grep -rlw "$type" src/test/java >/dev/null 2>&1; then
+            echo "FAIL: il tipo core $type ($f) non e' citato in nessun test di src/test/java" >&2
+            fail=1
+        fi
+    done < <(find "$JAVA/core" -name '*.java' | sort)
+fi
+
 # 2. Commenti condizionali Stonecutter solo in compat/ e platform/.
 bad=$(grep -rl '//? if' "$JAVA" | grep -vE "^$JAVA/(compat|platform)/" || true)
 if [ -n "$bad" ]; then
