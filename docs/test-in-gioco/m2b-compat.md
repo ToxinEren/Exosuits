@@ -24,7 +24,6 @@ Usa l'istanza client e il server dedicato preparati per la milestone 1.
 - [ ] **Cambio di dimensione.** Entra nel Nether e torna indietro (va bene un portale creato in creativa). Nessun errore.
 - [ ] **Uscita e rientro.** Esci al menu principale e rientra nello stesso mondo. Nessun errore.
 - [ ] **Server dedicato con client.** Avvia il server dedicato con lo stesso jar, collegati dal client, ripeti morte e rinascita, poi scollegati e ricollegati. Né il log del server né quello del client devono mostrare errori del mod, e il client non deve essere espulso all'ingresso.
-- [ ] **Solo 1.21.1.** Nel log del client compare, all'avvio, la registrazione del canale `redstone_exoframes:frame_state_sync`. Se la riga non c'è ma tutto il resto funziona, annotalo senza fermarti.
 
 Cosa NON aspettarsi: nella cartella del mondo non compare ancora il file `data/redstone_exoframes_frames.dat`, perché in questa milestone nessuna funzione di gioco scrive lo stato del telaio. Comparirà con la milestone 3.
 

@@ -179,7 +179,7 @@ Regola trasversale (dal Claude Doc): ogni milestone si compila e si avvia su tut
 - [x] **Provenienza del codice di Mjolnir:** tutto di Luigi (13 novembre).
 - [x] **Scadenze:** nessuna (Luigi, 13 novembre): si procede una milestone alla volta.
 - [ ] Conferma del nome definitivo (vedi §7.1).
-- [ ] Il telaio cambia le dimensioni del giocatore (come Mjolnir con Pehkui) o no? Proposta: no, nessuna dipendenza (§7.13).
+- [x] Il telaio non cambia le dimensioni del giocatore, nessuna dipendenza da Pehkui: nessuna obiezione di Luigi alla fine di M2, si procede così (§7.13).
 - [x] Repo privato; licenza tutti i diritti riservati per codice e asset (Luigi, 13 novembre; §7.2).
 - [x] Repo di destinazione: `ToxinEren/Exosuits`; package Java `com.toxineren.exoframes`.
 - [x] **Dati personali:** nei jar pubblicati non devono esserci dati personali (Luigi, 13 novembre): controllo automatico in `tools/check_jars.sh`, eseguito dalla CI a ogni build.

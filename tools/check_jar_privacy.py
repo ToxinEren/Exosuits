@@ -27,14 +27,24 @@ import sys
 import zipfile
 import zlib
 
+# Un percorso locale comincia all'inizio di una stringa o dopo un separatore: "assets/x/models/root/a.json" e'
+# una cartella delle risorse, non la home di root. Per questo i pattern rifiutano una lettera, una cifra, un punto,
+# un trattino o un trattino basso subito prima.
+NOT_INSIDE_A_NAME = rb'(?<![A-Za-z0-9_.-])'
+# Domini di primo livello abbastanza comuni da coprire gli indirizzi personali senza scambiare per e-mail
+# stringhe come "v1.0@build.ab".
+TLDS = (rb'com|net|org|edu|gov|info|biz|me|io|dev|app|xyz|email|live|pro|cloud|online|eu|it|uk|de|fr|es|pt|nl|be|ch|at|'
+        rb'pl|se|no|dk|fi|ie|gr|cz|ro|hu|ru|ua|us|ca|mx|br|ar|cl|au|nz|jp|cn|kr|in|za|tr|il')
 PATTERNS = {
-    'percorso locale /home/': re.compile(rb'/home/[A-Za-z0-9._-]+'),
-    'percorso locale /Users/': re.compile(rb'/Users/[A-Za-z0-9._ -]+'),
+    'percorso locale /home/': re.compile(NOT_INSIDE_A_NAME + rb'/home/[A-Za-z0-9._-]+'),
+    'percorso locale /Users/': re.compile(NOT_INSIDE_A_NAME + rb'/Users/[A-Za-z0-9._ -]+'),
     'percorso locale Windows': re.compile(rb'[A-Za-z]:[\\/]+Users[\\/]+[^\\/\x00-\x1f"<>|]+', re.I),
-    'percorso locale /root/': re.compile(rb'/root/[A-Za-z0-9._-]+'),
-    'indirizzo e-mail': re.compile(rb'[A-Za-z0-9._%+-]{2,}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'),
+    'percorso locale /root/': re.compile(NOT_INSIDE_A_NAME + rb'/root/[A-Za-z0-9._-]+'),
+    'indirizzo e-mail': re.compile(rb'[A-Za-z0-9._%+-]{2,}@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?:' + TLDS + rb')(?![A-Za-z0-9-])',
+                                   re.I),
 }
 PNG_TEXT_CHUNKS = (b'tEXt', b'iTXt', b'zTXt', b'eXIf')
+GZIP_MAGIC = b'\x1f\x8b'
 NBT_AUTHOR = re.compile(rb'\x08\x00\x06author(..)', re.S)
 
 
@@ -44,9 +54,13 @@ def private_words():
 
 
 def scan_bytes(where, data, findings, words):
-    for label, rx in PATTERNS.items():
-        for match in sorted(set(m.group(0) for m in rx.finditer(data))):
-            findings.append((label, where, match[:80].decode('latin-1')))
+    views = [data]
+    if b'\\/' in data:  # JSON puo' scrivere "/" come "\/"
+        views.append(data.replace(b'\\/', b'/'))
+    for view in views:
+        for label, rx in PATTERNS.items():
+            for match in sorted(set(m.group(0) for m in rx.finditer(view))):
+                findings.append((label, where, match[:80].decode('latin-1')))
     low = data.lower()
     for word in words:
         if word in low:
@@ -77,6 +91,13 @@ def scan_png(where, data, findings):
                     pass
             findings.append(('metadato testuale nel PNG (' + kind.decode() + ')', where,
                              text[:60].replace(b'\x00', b' ').decode('latin-1')))
+        elif kind == b'iCCP' and b'\x00' in body:
+            name, rest = body.split(b'\x00', 1)
+            try:
+                profile = zlib.decompress(rest[1:])
+            except zlib.error:
+                profile = b''
+            scan_bytes(where + ' (profilo colore)', name + b' ' + profile, findings, private_words())
 
 
 def scan_ogg(where, data, findings):
@@ -99,12 +120,20 @@ def scan_ogg(where, data, findings):
         pass
 
 
-def scan_nbt(where, data, findings, words):
+def gunzip(data):
+    """Restituisce i dati decompressi, oppure None se non sono un gzip leggibile."""
+    if data[:2] != GZIP_MAGIC:
+        return None
     try:
-        raw = gzip.decompress(data)
-    except (OSError, EOFError):
+        return gzip.decompress(data)
+    except (OSError, EOFError, zlib.error):
+        return None
+
+
+def scan_nbt(where, data, findings, words):
+    raw = gunzip(data)
+    if raw is None:
         raw = data
-    scan_bytes(where + ' (decompresso)', raw, findings, words)
     for match in NBT_AUTHOR.finditer(raw):
         size = struct.unpack('>H', match.group(1))[0]
         value = raw[match.end():match.end() + size]
@@ -117,20 +146,27 @@ def walk(archive, prefix, findings, words):
         if info.is_dir():
             continue
         where = prefix + info.filename
-        data = archive.read(info)
+        lower = info.filename.lower()
+        try:
+            data = archive.read(info)
+        except (zipfile.BadZipFile, zlib.error, OSError, EOFError) as problem:
+            findings.append(('voce illeggibile', where, str(problem)[:60]))
+            continue
         scan_bytes(where + ' (nome)', info.filename.encode('utf-8', 'replace'), findings, words)
         scan_bytes(where, data, findings, words)
+        unpacked = gunzip(data)
+        if unpacked is not None:  # strutture .nbt, .dat e qualunque altro file compresso con gzip
+            scan_bytes(where + ' (decompresso)', unpacked, findings, words)
+        if lower.endswith('.nbt'):
+            scan_nbt(where, data, findings, words)
         if info.comment:
             scan_bytes(where + ' (commento zip)', info.comment, findings, words)
-        lower = info.filename.lower()
         if lower.endswith('manifest.mf'):
             scan_manifest(where, data, findings)
         elif lower.endswith('.png'):
             scan_png(where, data, findings)
         elif lower.endswith('.ogg'):
             scan_ogg(where, data, findings)
-        elif lower.endswith('.nbt'):
-            scan_nbt(where, data, findings, words)
         elif lower.endswith('.jar'):
             try:
                 walk(zipfile.ZipFile(io.BytesIO(data)), where + '!/', findings, words)
@@ -146,10 +182,13 @@ def main(paths):
     failed = False
     for path in paths:
         findings = []
-        with zipfile.ZipFile(path) as archive:
-            if archive.comment:
-                scan_bytes('(commento del jar)', archive.comment, findings, words)
-            walk(archive, '', findings, words)
+        try:
+            with zipfile.ZipFile(path) as archive:
+                if archive.comment:
+                    scan_bytes('(commento del jar)', archive.comment, findings, words)
+                walk(archive, '', findings, words)
+        except (zipfile.BadZipFile, OSError) as problem:
+            findings.append(('jar illeggibile', '(file)', str(problem)[:60]))
         for label, where, value in sorted(set(findings)):
             print('FAIL: %s: %s in %s: %s' % (os.path.basename(path), label, where, value), file=sys.stderr)
             failed = True

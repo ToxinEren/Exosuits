@@ -89,7 +89,8 @@ for jar in "${jars[@]}"; do
             entries=$(unzip -p "$jar" fabric.mod.json | python3 -c 'import json, sys
 for value in json.load(sys.stdin).get("entrypoints", {}).values():
     for item in (value if isinstance(value, list) else [value]):
-        print(item if isinstance(item, str) else item.get("value", ""))') ;;
+        print(item if isinstance(item, str) else item.get("value", ""))' 2>/dev/null) \
+                || { err "$name" "fabric.mod.json assente o non leggibile"; entries=""; } ;;
         forge) entries=com.toxineren.exoframes.platform.RedstoneExoframesForge ;;
         neoforge) entries=com.toxineren.exoframes.platform.RedstoneExoframesNeoForge ;;
     esac
