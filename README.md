@@ -6,7 +6,7 @@ Target: **1.21.1** (NeoForge + Fabric) e **1.20.1** (Forge + Fabric) da un unico
 
 ## Stato
 
-In sviluppo. Milestone 1 (setup del progetto): completata lato build (le quattro varianti compilano e i jar passano i controlli automatici), in attesa dei test in gioco (vedi la checklist qui sotto). La roadmap e le decisioni sono in `docs/superpowers/specs/`:
+In sviluppo. Completate le milestone 1 (setup del progetto: quattro jar e CI), 2a (core in Java puro, 100 test per variante) e 2b (interfacce `compat/` per 1.20.1 e 1.21.1, vedi `docs/compat.md`). I test in gioco sono ancora da fare (checklist in `docs/test-in-gioco/m1-setup.md`). La prossima è la milestone 3: entità telaio, tier Rottame, modelli GeckoLib. La roadmap e le decisioni sono in `docs/superpowers/specs/`:
 
 - `claude-doc-2026-11-04-redstone-exoframes.md`: il documento di design di gioco (autorità per le meccaniche).
 - `2026-11-12-redstone-exoframes-design.md`: il design operativo (approcci, architettura, decisioni, milestone).
@@ -47,6 +47,7 @@ Jar prodotti: `redstone-exoframes-fabric-0.1.0+mc1.20.1.jar`, `redstone-exoframe
 - Design: `docs/superpowers/specs/`
 - Piani di implementazione (M1, M2a, M2b): `docs/superpowers/plans/`
 - Audit del codice di partenza: `docs/audit/mjolnir-armor-audit.md`
+- Interfacce di compatibilità tra versioni e loader: `docs/compat.md`
 
 ## Licenza
 
