@@ -1,5 +1,6 @@
 package com.toxineren.exoframes;
 
+import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModItems;
 import org.slf4j.Logger;
@@ -15,6 +16,7 @@ public final class RedstoneExoframes {
 
     public static void init() {
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
+        Compat.armorMaterials().register(); // prima degli item: su 1.21.1 i pezzi usano il materiale registrato
         ModItems.register();
         ModCreativeTabs.register();
     }

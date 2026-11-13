@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat;
 
+import com.toxineren.exoframes.compat.impl.ArmorMaterialsImpl;
 import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
 
@@ -19,11 +20,19 @@ public final class Compat {
         return ItemDataHolder.INSTANCE;
     }
 
+    public static ArmorMaterials armorMaterials() {
+        return ArmorMaterialsHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
     }
 
     private static final class ItemDataHolder {
         static final ItemDataAccess INSTANCE = new ItemDataAccessImpl();
+    }
+
+    private static final class ArmorMaterialsHolder {
+        static final ArmorMaterials INSTANCE = new ArmorMaterialsImpl();
     }
 }
