@@ -38,13 +38,6 @@ class EnergyMeterTest {
     }
 
     @Test
-    void jumpCostsFifteen() {
-        EnergyCell cell = EnergyCell.full(10_000);
-        assertEquals(15, new EnergyMeter(EnergyRates.spec()).jump(cell));
-        assertEquals(9_985, cell.stored());
-    }
-
-    @Test
     void multiplierAppliesToActivityAndExtras() {
         EnergyCell cell = EnergyCell.full(10_000);
         run(new EnergyMeter(EnergyRates.spec()), cell, Activity.WALK, 0, 1.25, 20);
@@ -76,7 +69,6 @@ class EnergyMeterTest {
         EnergyCell cell = EnergyCell.empty(10_000);
         EnergyMeter meter = new EnergyMeter(EnergyRates.spec());
         assertEquals(0, run(meter, cell, Activity.SPRINT, 0, 1.0, 20));
-        assertEquals(0, meter.jump(cell));
         assertEquals(0, cell.stored());
     }
 }

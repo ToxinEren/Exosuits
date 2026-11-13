@@ -23,12 +23,10 @@ public final class EnergyMeter {
         return whole > 0 ? cell.drain(whole) : 0;
     }
 
-    /** Toglie il costo del salto; restituisce quanto effettivamente tolto. */
-    public int jump(EnergyCell cell) {
-        return cell.drain(rates.jumpCost());
-    }
-
-    /** Tariffe usate da questo contatore. */
+    /**
+     * Tariffe usate da questo contatore. Il costo del salto di un telaio indossato si toglie con
+     * {@code FrameRules.jump}, che applica anche il moltiplicatore del torso rotto.
+     */
     public EnergyRates rates() {
         return rates;
     }

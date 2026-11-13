@@ -34,7 +34,7 @@ public final class FrameState {
     private final Map<PieceSlot, Piece> pieces = new EnumMap<>(PieceSlot.class);
     private final Map<PieceSlot, List<ModuleType>> modules = new EnumMap<>(PieceSlot.class);
     private final Set<ModuleType> activeToggles = EnumSet.noneOf(ModuleType.class);
-    private final EnumMap<PieceSlot, Integer> damageCarryMilli = new EnumMap<>(PieceSlot.class);
+    private final Map<PieceSlot, Integer> damageCarryMilli = new EnumMap<>(PieceSlot.class);
     private EnergyCell cell;
     private boolean reinforced;
     private UUID owner;
@@ -138,9 +138,9 @@ public final class FrameState {
      * Mappa mutabile del riporto frazionario del danno per slot, in millesimi di punto (uno slot assente vale 0):
      * da passare a {@link com.toxineren.exoframes.core.armor.DamageRouter#route(
      * com.toxineren.exoframes.core.armor.DamageKind, int, Map, Map)}, che la aggiorna. Ogni valore sta in
-     * (-1000, 1000): negativo se il pezzo ha gia' ricevuto in anticipo un punto di usura.
+     * [0, 999]: la frazione di punto di usura non ancora applicata al pezzo.
      */
-    public EnumMap<PieceSlot, Integer> damageCarryMilli() {
+    public Map<PieceSlot, Integer> damageCarryMilli() {
         return damageCarryMilli;
     }
 

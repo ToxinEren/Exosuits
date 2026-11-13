@@ -197,10 +197,10 @@ class FrameRulesTest {
         FrameState s = poweredFrame();
         s.mount(scrap(PieceSlot.TORSO));
         s.damageCarryMilli().put(PieceSlot.TORSO, 700);
-        s.damageCarryMilli().put(PieceSlot.HELMET, -200);
+        s.damageCarryMilli().put(PieceSlot.HELMET, 200);
         s.unmount(PieceSlot.TORSO);
         assertEquals(0, s.damageCarryMilli().getOrDefault(PieceSlot.TORSO, 0));
-        assertEquals(-200, s.damageCarryMilli().get(PieceSlot.HELMET));
+        assertEquals(200, s.damageCarryMilli().get(PieceSlot.HELMET));
 
         // sostituire il pezzo con mount equivale a smontarlo: il nuovo pezzo parte senza riporto
         s.mount(scrap(PieceSlot.HELMET));
