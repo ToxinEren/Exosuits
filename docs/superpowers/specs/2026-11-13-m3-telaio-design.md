@@ -35,7 +35,7 @@ Perché ora: è il pezzo tecnicamente nuovo rispetto a Mjolnir e quello da cui d
 - I mixin si usano solo dove nessun evento copre il bisogno (scelta del costruttore, vedi §4.3 e §4.7). Oggi ce n'è uno, lato client, sul disegno del giocatore; tutto il resto passa da eventi Architectury o da hook per loader in `platform/`.
 - La grafica è generata da script: i file generati sono committati, lo script li rigenera identici e la CI lo verifica.
 - Licenza "tutti i diritti riservati"; il controllo di privacy sui jar resta verde (i PNG generati non hanno metadati).
-- Nel cloud si può provare solo il server dedicato; client e resa grafica si provano sul PC di Luigi.
+- Dal 13 novembre 2026 il client vero gira anche nel cloud, senza schermo (Xvfb e OpenGL software), su tutte e quattro le varianti: uno script avvia client e server locale, esegue comandi e salva screenshot in terza persona. La resa e l'applicazione dei mixin si verificano lì; il PC di Luigi resta per la conferma e per ciò che lo script non copre (vista laterale vera, fluidità, audio, secondo giocatore).
 
 ## 4. Approcci considerati
 
@@ -100,6 +100,10 @@ Luigi, viste le anteprime del primo telaio: «il telaio ci sta ma lo voglio più
 
 **Scala.** S = 1,4, scelta da Luigi il 13 novembre sulle prime tavole (il costruttore proponeva 1,25).
 
+**Forma, come è stata decisa.** Quattro passate di tavole il 13 novembre, ognuna corretta da Luigi: (1) tuta grande e larga: «va bene 1.4 ma manca la testa della power armor, il player deve essere alzato da terra dalle gambe»; (2) testa e gambe meccaniche, ma più stretta: «perché lo hai reso più magro? l'allungamento/supporto oltre alle gambe dev'esserci anche per le braccia e il petto»; (3) stazza ritrovata, avambracci meccanici oltre le mani del pilota, petto grande attorno a lui; (4) dopo un'immagine di riferimento mandata da Luigi («rendilo più simile a questa immagine»): petto a botte e vita stretta, testa piccola incassata nel collare, spallacci a strati, braccia lunghe e grosse, gambe tozze, metallo color bronzo. Luigi: «mi piace l'aspetto dell'armatura rottame nelle ultime tavole». Il riferimento è l'armatura di un film: se ne prendono proporzioni e carattere, non gli elementi che la identificano (nessun disco luminoso tondo sul petto, nessuna copia del volto dell'elmo o delle spalle a cupola forate), come dice l'anti-obiettivo di §2.
+
+**Braccia del pilota.** In una seconda immagine Luigi ha disegnato il pilota dentro l'armatura: coincide con la disposizione scelta (testa nella testa, busto nel petto, gambe nelle cosce con i piedi alle ginocchia) tranne le braccia, che nel suo disegno si allargano dentro i bracci della tuta. Nel gioco pendono, perché l'animazione è quella vanilla; col telaio nudo il pilota tiene due impugnature ai lati del petto e con i pezzi delle braccia montati non si vede. Allargarle richiede un aggancio sulla posa dopo `setupAnim`: proposto a Luigi insieme alle animazioni (M4).
+
 **Grandezza reale o apparente.** Proposta "reale" fatta a Luigi il 13 novembre, senza obiezioni (§8). Riguarda ingombro e visuale, quindi la parte 3b; la 3a disegna soltanto.
 
 ## 5. Il progetto
@@ -108,7 +112,7 @@ Luigi, viste le anteprime del primo telaio: «il telaio ci sta ma lo voglio più
 
 - **Direzione artistica:** scelta da Luigi fra tre anteprime (spike in corso). Qualunque sia, valgono le convenzioni sotto.
 - **Convenzioni della geometria** (dalla ricognizione, obbligatorie per `GeoArmorRenderer`): ossa di primo livello `armorHead`, `armorBody`, `armorRightArm`, `armorLeftArm`, `armorRightLeg`, `armorLeftLeg`, con i perni del modello armatura di GeckoLib (testa e corpo 0,24,0; braccia ∓5,22,0; gambe ∓2,12,0). Sotto ciascuna: `frame<Parte>` (telaio nudo, sempre visibile) e il pezzo, diviso per stato visivo e per regione di colore.
-- **Proporzioni (revisione del 13 novembre, §4.7):** la geometria resta nelle coordinate standard del modello armatura, con i perni invariati, e viene resa in scala S = 1,4 attorno ai piedi. In quelle coordinate il pilota è una figura ridotta di 1/S attorno al punto (0, 24, 0): testa tra y 24 e 29,7, busto tra 15,4 e 24, mani a 15,4; le gambe non si disegnano. Testa della tuta, cosce chiuse, bacino e impugnature dei comandi si disegnano attorno a quella figura. Limiti dell'ingombro: telaio nudo entro x ±9,5, y 0..30,7, z −7..9; con i pezzi entro x ±10,75, y ≤ 31,5, z −8..9,5 (circa 1,56 e 1,76 blocchi di larghezza).
+- **Proporzioni (revisione del 13 novembre, §4.7):** la geometria resta nelle coordinate standard del modello armatura, con i perni invariati, e viene resa in scala S = 1,4 attorno ai piedi. In quelle coordinate il pilota è una figura ridotta di 1/S attorno al punto (0, 24, 0): testa tra y 24 e 29,7, busto tra 15,4 e 24, mani a 15,4; le gambe non si disegnano. Testa della tuta, cosce chiuse, bacino e impugnature dei comandi si disegnano attorno a quella figura. Limiti dell'ingombro del disegno approvato da Luigi (quarta passata della prova d'arte): telaio nudo entro x ±12,75, y 0..30,7, z −8..10; con i pezzi entro x ±13,5, y ≤ 31,5, z −8,75..10,5 (circa 2,1 e 2,2 blocchi di larghezza). Il telaio della seconda passata, più stretto, è stato scartato da Luigi («perché lo hai reso più magro?»).
 - **Densità e resa (revisione del 13 novembre):** due texel per pixel del modello, quindi un atlante più grande; pittura da metallo: spazzolatura, bordi chiari consumati, incavi scuri, bulloni con punto luce.
 - **Stati visivi senza passate multiple (scelta del costruttore):** ogni pezzo ha quattro copie della sua geometria, una per stato (integro, danneggiato, critico, rotto), che puntano a quattro zone diverse dello stesso atlante; il renderer mostra una sola copia. Una sola texture e una sola passata per il telaio intero.
 - **Colori:** dentro ogni copia, tre ossa per regione: primaria, secondaria (texture in toni di grigio, colorate dal renderer) e neutra (metallo, cavi, non colorata). Nomi: `piece<Parte>_s<0-3>_p1`, `_p2`, `_n`.
@@ -220,9 +224,9 @@ Forme esatte delle ricette; valori di ritmo del caricatore e soglie di movimento
 
 ## 9. Rischi
 
-- **Resa in gioco non verificabile nel cloud:** perni del modello, compenetrazioni con la skin, costo del rendering. Mitigazione: 3a esiste apposta per portare presto qualcosa di visibile sul PC.
+- **Resa in gioco:** perni del modello, compenetrazioni con la skin, costo del rendering. Dal 13 novembre si verifica nel cloud con il client senza schermo; il costo del rendering e la fluidità restano da misurare sul PC.
 - **GameTest su quattro varianti:** se una variante non regge, lì restano test JUnit, server dedicato e checklist.
 - **Riallineamento tra registro ed entità:** è la parte più delicata di 3b; un errore lì può creare proprio i doppioni o le perdite che vuole evitare. Mitigazione: test in mondo dedicati prima di costruirci sopra ingresso e uscita.
 - **Movimento deciso dal client** (scatto, nuoto): serve codice sui due lati e prova sul PC.
-- **Mixin client su quattro varianti (§4.7):** nel cloud non si può avviare un client, e un bersaglio sbagliato fa crollare il gioco all'avvio. Mitigazione: firma del metodo verificata sui jar delle due versioni, controllo in `tools/check_jars.sh` che configurazione e refmap del mixin siano nei jar, avvio del client come primo punto della checklist di 3a sul PC.
+- **Mixin client su quattro varianti (§4.7):** un bersaglio sbagliato fa crollare il gioco all'avvio. Mitigazione: firme verificate sui jar vanilla e su quelli patchati dai loader, controllo in `tools/check_jars.sh` che la configurazione dei mixin sia nei jar e che i nomi nelle annotazioni abbiano la forma giusta per ogni loader (questa versione di Loom non produce refmap), avvio del client vero di ogni variante nel cloud; il 13 novembre i due mixin si sono applicati su tutte e quattro.
 - **Qualità della grafica generata:** è sufficiente per un'alpha in stile Minecraft; resta sostituibile da un artista senza toccare il codice, perché i nomi delle ossa e la disposizione sono fissati qui.
