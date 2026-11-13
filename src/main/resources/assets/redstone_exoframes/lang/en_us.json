@@ -9,6 +9,7 @@
   "item.redstone_exoframes.exoframe_legs": "Exoframe Leg Mount",
   "item.redstone_exoframes.exoframe_boots": "Exoframe Boot Mount",
   "item.redstone_exoframes.suit_model": "Exoframe Suit Model",
+  "entity.redstone_exoframes.exoframe": "Exoframe",
   "itemGroup.redstone_exoframes.main": "Redstone Exoframes",
   "commands.redstone_exoframes.debug.wear.bare": "Wearing the bare exoframe",
   "commands.redstone_exoframes.debug.wear.scrap": "Wearing the scrap exoframe",

@@ -13,6 +13,7 @@ import com.toxineren.exoframes.compat.StowedStack;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
 import com.toxineren.exoframes.content.CellItem;
+import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.content.PieceItem;
 import com.toxineren.exoframes.content.PieceKind;
@@ -25,6 +26,7 @@ import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
+import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
@@ -49,7 +51,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ArmorItem;
@@ -113,6 +117,9 @@ public final class ExoframeGameTests {
         add(tests, "pieceItemsKnowTheirKind", ExoframeGameTests::pieceItemsKnowTheirKind);
         add(tests, "pieceItemRoundTripsAPiece", ExoframeGameTests::pieceItemRoundTripsAPiece);
         add(tests, "cellItemCarriesItsCharge", ExoframeGameTests::cellItemCarriesItsCharge);
+        add(tests, "frameEntityKeepsItsIdentityAndSummary", ExoframeGameTests::frameEntityKeepsItsIdentityAndSummary);
+        add(tests, "frameEntityIgnoresDamageAndExplosions", ExoframeGameTests::frameEntityIgnoresDamageAndExplosions);
+        add(tests, "frameEntityHasTheSuitBox", ExoframeGameTests::frameEntityHasTheSuitBox);
         return tests;
     }
 
@@ -725,6 +732,118 @@ public final class ExoframeGameTests {
         helper.assertTrue(full.stored() == capacity && full.capacity() == capacity,
                 "charged() is not full: " + full.stored() + "/" + full.capacity());
         helper.succeed();
+    }
+
+    /**
+     * Un'entita' telaio con l'UUID di un record piazzato, creata un blocco piu' in la' e girata altrove, dopo il primo
+     * tick sul server c'e' ancora, con la stessa identita', e sta nel punto e con l'orientamento del record; il suo
+     * riassunto e' quello dello stato del record, e un riassunto impostato si rilegge uguale.
+     */
+    private static void frameEntityKeepsItsIdentityAndSummary(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        int scrapMax = RedstoneExoframes.config().tiers.maxDurability.get(Tier.SCRAP);
+        FrameState state = new FrameState(RedstoneExoframes.config());
+        state.mount(new Piece(PieceSlot.HELMET, Tier.SCRAP, scrapMax, scrapMax));
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(3, 1, 3)));
+        UUID frameId = frames.place(level, state, spot, 45f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+        ExoframeEntity frame = spawnFrame(level, frameId, spot.add(1.0, 0.0, 0.0), -90f);
+        helper.assertTrue(frame.frameId().equals(frameId), "frameId differs from the UUID: " + frame.frameId());
+
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(!frame.isRemoved(), "entity with a placed record removed itself");
+            helper.assertTrue(level.getEntity(frameId) == frame, "entity not found in the level by its frame id");
+            helper.assertTrue(frame.frameId().equals(frameId), "frame id changed: " + frame.frameId());
+            helper.assertTrue(frame.position().distanceTo(spot) < 1e-6 && frame.getYRot() == 45f,
+                    "entity not moved to the record's spot: " + frame.position() + " yaw " + frame.getYRot()
+                            + ", expected " + spot + " yaw 45");
+            helper.assertTrue(frame.summary().equals(SuitSummary.of(state)),
+                    "summary is not the record's: " + frame.summary());
+
+            Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of());
+            SuitSummary summary = new SuitSummary(Map.of(
+                    PieceSlot.TORSO, new PieceLook(Tier.ARMORED, PieceCondition.DAMAGED, painted),
+                    PieceSlot.LEFT_LEG, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT)));
+            frame.setSummary(summary);
+            helper.assertTrue(frame.summary().equals(summary), "summary changed when read back: " + frame.summary());
+            frame.setSummary(SuitSummary.BARE);
+            helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "bare summary not read back");
+
+            helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+            frame.discard();
+            helper.succeed();
+        });
+    }
+
+    /**
+     * L'entita' telaio non prende danni: {@code hurt} e' falso con danno generico, da uccisione generica e da un
+     * attacco del giocatore; un'esplosione accanto non la toglie, non la sposta e non le da' spinta.
+     */
+    private static void frameEntityIgnoresDamageAndExplosions(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(4, 1, 4)));
+        UUID frameId = frames.place(level, new FrameState(RedstoneExoframes.config()), spot, 0f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+        ExoframeEntity frame = spawnFrame(level, frameId, spot, 0f);
+
+        helper.assertTrue(!frame.hurt(level.damageSources().generic(), 1000f), "hurt by generic damage");
+        helper.assertTrue(!frame.hurt(level.damageSources().genericKill(), Float.MAX_VALUE), "hurt by a generic kill");
+        helper.assertTrue(!frame.hurt(level.damageSources().playerAttack(player), 1000f), "hurt by a player attack");
+        level.explode(null, spot.x + 1.5, spot.y + 1.0, spot.z, 3f, Level.ExplosionInteraction.NONE);
+        helper.assertTrue(frame.isAlive() && !frame.isRemoved(), "entity removed by an explosion");
+        helper.assertTrue(level.getEntity(frameId) == frame, "entity gone from the level after an explosion");
+        helper.assertTrue(frame.position().equals(spot), "explosion moved the entity: " + frame.position());
+        helper.assertTrue(frame.getDeltaMovement().equals(Vec3.ZERO),
+                "explosion pushed the entity: " + frame.getDeltaMovement());
+
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        frame.discard();
+        helper.succeed();
+    }
+
+    /**
+     * Il tipo dell'entita' telaio e' registrato con il suo id, nella categoria MISC, immune al fuoco, con raggio di
+     * tracciamento 10; l'entita' ha il riquadro della tuta in piedi (0,8 x 2,97), il riquadro di culling allargato di
+     * 1 per lato in orizzontale, si clicca, non si spinge e non blocca il movimento.
+     */
+    private static void frameEntityHasTheSuitBox(GameTestHelper helper) {
+        EntityType<ExoframeEntity> type = ModEntities.EXOFRAME.get();
+        helper.assertTrue(type == BuiltInRegistries.ENTITY_TYPE.get(Ids.of("exoframe")),
+                "entity type not registered as exoframe");
+        helper.assertTrue(type.getCategory() == MobCategory.MISC && type.fireImmune()
+                && type.clientTrackingRange() == 10, "wrong entity type properties");
+        helper.assertTrue(near(type.getWidth(), 0.8f) && near(type.getHeight(), 2.97f),
+                "wrong entity type size: " + type.getWidth() + " x " + type.getHeight());
+
+        ExoframeEntity frame = new ExoframeEntity(type, helper.getLevel());
+        Vec3 feet = helper.absoluteVec(new Vec3(2.5, 1.0, 2.5));
+        frame.setPos(feet.x, feet.y, feet.z);
+        helper.assertTrue(near(frame.getBbWidth(), 0.8f) && near(frame.getBbHeight(), 2.97f),
+                "wrong entity size: " + frame.getBbWidth() + " x " + frame.getBbHeight());
+        helper.assertTrue(near(frame.getBoundingBox(), SuitSize.standingBox(feet)),
+                "bounding box is not the suit's: " + frame.getBoundingBox());
+        helper.assertTrue(near(frame.getBoundingBoxForCulling(), frame.getBoundingBox().inflate(1.0, 0.0, 1.0)),
+                "culling box not widened by 1 on the sides: " + frame.getBoundingBoxForCulling());
+        helper.assertTrue(frame.isPickable(), "frame entity not pickable");
+        helper.assertTrue(!frame.isPushable() && !frame.isPushedByFluid(), "frame entity pushable");
+        helper.assertTrue(!frame.canBeCollidedWith(), "frame entity blocks movement");
+        helper.assertTrue(frame.isNoGravity(), "frame entity has gravity");
+        helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "new frame entity not bare: " + frame.summary());
+        helper.succeed();
+    }
+
+    /** Crea l'entita' telaio con l'identita' data nel punto e con l'orientamento dati e la aggiunge al livello. */
+    private static ExoframeEntity spawnFrame(ServerLevel level, UUID frameId, Vec3 feet, float yaw) {
+        ExoframeEntity frame = new ExoframeEntity(ModEntities.EXOFRAME.get(), level);
+        frame.setUUID(frameId);
+        frame.moveTo(feet.x, feet.y, feet.z, yaw, 0f);
+        level.addFreshEntity(frame);
+        return frame;
     }
 
     /** Le identita' dei telai piazzati nel livello. */

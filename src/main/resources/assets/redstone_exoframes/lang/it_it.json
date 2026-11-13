@@ -9,6 +9,7 @@
   "item.redstone_exoframes.exoframe_legs": "Attacco gambe del telaio",
   "item.redstone_exoframes.exoframe_boots": "Attacco stivali del telaio",
   "item.redstone_exoframes.suit_model": "Modello della tuta del telaio",
+  "entity.redstone_exoframes.exoframe": "Telaio",
   "itemGroup.redstone_exoframes.main": "Redstone Exoframes",
   "commands.redstone_exoframes.debug.wear.bare": "Indossi il telaio nudo",
   "commands.redstone_exoframes.debug.wear.scrap": "Indossi il telaio di rottame",
