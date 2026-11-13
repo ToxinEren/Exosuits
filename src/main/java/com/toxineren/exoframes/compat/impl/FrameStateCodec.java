@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat.impl;
 
+import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
@@ -21,10 +22,12 @@ import net.minecraft.nbt.Tag;
 /**
  * Serializzazione di un {@link FrameState} in un CompoundTag con le chiavi di {@link NbtKeys}, usata sia dal dato
  * salvato sia dal pacchetto di sincronizzazione. Nessuna condizione di versione: lo schema e' lo stesso su 1.20.1 e
- * 1.21.1, e i pezzi e l'energia della cella si leggono con lo stesso lettore degli item ({@link PieceTags}).
+ * 1.21.1, e i pezzi e l'energia della cella si leggono (e l'aspetto dei pezzi si scrive) con lo stesso helper degli
+ * item ({@link PieceTags}).
  * <p>
  * Schema: {@link NbtKeys#PIECES} con una voce per slot (id in minuscolo) che contiene {@link NbtKeys#TIER},
- * {@link NbtKeys#DURABILITY}, {@link NbtKeys#MAX_DURABILITY}, {@link NbtKeys#MODULES} e
+ * {@link NbtKeys#DURABILITY}, {@link NbtKeys#MAX_DURABILITY}, {@link NbtKeys#MODULES}, l'aspetto
+ * ({@link NbtKeys#COLOR_PRIMARY}, {@link NbtKeys#COLOR_SECONDARY}, {@link NbtKeys#DECALS}) e
  * {@link NbtKeys#CARRY_MILLI}; {@link NbtKeys#CELL} con {@link NbtKeys#ENERGY} e {@link NbtKeys#CAPACITY} (assente
  * = nessuna cella); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED}; {@link NbtKeys#OWNER} (assente = nessun
  * proprietario); {@link NbtKeys#UNLOCKED}. {@link NbtKeys#STOWED} non e' ancora scritto ne' letto.
@@ -51,6 +54,7 @@ final class FrameStateCodec {
             pieceTag.putInt(NbtKeys.DURABILITY, piece.durability());
             pieceTag.putInt(NbtKeys.MAX_DURABILITY, piece.maxDurability());
             pieceTag.put(NbtKeys.MODULES, idList(modules.getOrDefault(slot, List.of())));
+            PieceTags.writeAppearance(pieceTag, state.appearance(slot));
             pieceTag.putInt(NbtKeys.CARRY_MILLI, state.damageCarryMilli().getOrDefault(slot, 0));
             piecesTag.put(SchemaIds.slotId(slot), pieceTag);
         }
@@ -72,14 +76,15 @@ final class FrameStateCodec {
     }
 
     /**
-     * Ricostruisce lo stato. Ordine: pezzi montati, poi i loro moduli, poi i riporti del danno (montare un pezzo
-     * azzera il riporto e toglie moduli e toggle dello slot), infine i toggle accesi dei moduli toggle installati.
+     * Ricostruisce lo stato. Ordine: pezzi montati, poi i loro moduli, i riporti del danno e gli aspetti (montare un
+     * pezzo azzera riporto e aspetto e toglie moduli e toggle dello slot), infine i toggle accesi dei moduli toggle
+     * installati.
      */
     static FrameState read(CompoundTag root, ExoframesConfig cfg) {
         FrameState state = new FrameState(cfg);
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
         Map<PieceSlot, CompoundTag> mounted = new EnumMap<>(PieceSlot.class);
-        Map<PieceSlot, List<ModuleType>> pieceModules = new EnumMap<>(PieceSlot.class);
+        Map<PieceSlot, PieceData> pieceData = new EnumMap<>(PieceSlot.class);
         for (String key : piecesTag.getAllKeys()) {
             PieceSlot slot = SchemaIds.slotById(key);
             if (slot == null) {
@@ -89,13 +94,14 @@ final class FrameStateCodec {
                 PieceTags.readPiece(pieceTag).ifPresent(data -> {
                     state.mount(new Piece(slot, data.tier(), data.maxDurability(), data.durability()));
                     mounted.put(slot, pieceTag);
-                    pieceModules.put(slot, data.modules());
+                    pieceData.put(slot, data);
                 });
             }
         }
         for (Map.Entry<PieceSlot, CompoundTag> entry : mounted.entrySet()) {
             PieceSlot slot = entry.getKey();
-            for (ModuleType module : pieceModules.get(slot)) {
+            PieceData data = pieceData.get(slot);
+            for (ModuleType module : data.modules()) {
                 ModuleInstaller.Reason reason = state.installModule(slot, module);
                 if (reason != ModuleInstaller.Reason.OK) {
                     SchemaIds.warnOnce("drop module:" + module.id() + ":" + SchemaIds.slotId(slot) + ":" + reason,
@@ -107,6 +113,7 @@ final class FrameStateCodec {
                 // damageCarryMilli() e' la mappa viva dello stato: si scrive direttamente
                 state.damageCarryMilli().put(slot, carry);
             }
+            state.setAppearance(slot, data.appearance());
         }
         if (root.contains(NbtKeys.CELL, Tag.TAG_COMPOUND)) {
             CompoundTag cellTag = root.getCompound(NbtKeys.CELL);

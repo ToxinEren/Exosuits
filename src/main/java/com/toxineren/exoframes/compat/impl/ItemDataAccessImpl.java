@@ -21,7 +21,7 @@ import net.minecraft.world.item.ItemStack;
  * lo schema e' lo stesso su 1.20.1 e 1.21.1.
  * <p>
  * Pezzi ed energia si leggono con il lettore condiviso con lo stato del telaio ({@link PieceTags}), che garantisce
- * gli intervalli dichiarati in {@link ItemDataAccess}.
+ * gli intervalli dichiarati in {@link ItemDataAccess}; l'aspetto del pezzo si scrive con lo stesso helper.
  * <p>
  * Le scritture partono dal tag radice esistente e sovrascrivono solo le chiavi del record, cosi' le altre chiavi
  * (per esempio {@link NbtKeys#STOWED}) restano intatte.
@@ -125,7 +125,6 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
             modules.add(StringTag.valueOf(module.id()));
         }
         tag.put(NbtKeys.MODULES, modules);
-        tag.putInt(NbtKeys.COLOR_PRIMARY, data.colorPrimary());
-        tag.putInt(NbtKeys.COLOR_SECONDARY, data.colorSecondary());
+        PieceTags.writeAppearance(tag, data.appearance());
     }
 }

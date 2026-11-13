@@ -10,7 +10,7 @@ package com.toxineren.exoframes.compat;
  * migrazione esplicita.
  * <p>
  * Lo stato del telaio per giocatore (FrameStateCodec in compat/impl) riusa le stesse chiavi e gli stessi tipi per
- * pezzi, cella, proprietario e flag, cosi' i due codec restano allineati; le chiavi {@link #CAPACITY},
+ * pezzi (aspetto compreso), cella, proprietario e flag, cosi' i due codec restano allineati; le chiavi {@link #CAPACITY},
  * {@link #ACTIVE} e {@link #CARRY_MILLI} esistono solo nello stato del telaio.
  */
 public final class NbtKeys {
@@ -26,10 +26,19 @@ public final class NbtKeys {
     public static final String MAX_DURABILITY = "max_durability";
     /** Moduli installati (lista di string, vedi ModuleType#id). */
     public static final String MODULES = "modules";
-    /** Colore primario (int RGB). */
+    /** Colore primario (int RGB, ridotto a 24 bit in lettura); assente = non dipinto (Appearance#UNPAINTED). */
     public static final String COLOR_PRIMARY = "color_primary";
-    /** Colore secondario (int RGB). */
+    /** Colore secondario (int RGB, ridotto a 24 bit in lettura); assente = non dipinto (Appearance#UNPAINTED). */
     public static final String COLOR_SECONDARY = "color_secondary";
+    /**
+     * Decalcomanie del pezzo (lista di compound con {@link #PATTERN} e {@link #COLOR}, al massimo
+     * Appearance#MAX_DECALS); assente = nessuna.
+     */
+    public static final String DECALS = "decals";
+    /** Motivo di una decalcomania (string non vuota, al massimo 64 caratteri), dentro una voce di {@link #DECALS}. */
+    public static final String PATTERN = "pattern";
+    /** Colore di una decalcomania (string non vuota, al massimo 64 caratteri), dentro una voce di {@link #DECALS}. */
+    public static final String COLOR = "color";
     /** Proprietario del telaio (UUID in forma di int array). */
     public static final String OWNER = "owner";
     /** Telaio sbloccato (boolean). */

@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.compat.NbtKeys;
+import com.toxineren.exoframes.core.armor.Appearance;
+import com.toxineren.exoframes.core.armor.Decal;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
@@ -60,6 +62,9 @@ class FrameStateCodecTest {
         }
         assertEquals(expected.modules(), actual.modules());
         assertEquals(expected.damageCarryMilli(), actual.damageCarryMilli());
+        for (PieceSlot slot : PieceSlot.values()) {
+            assertEquals(expected.appearance(slot), actual.appearance(slot));
+        }
         if (expected.cell() == null) {
             assertNull(actual.cell());
         } else {
@@ -76,6 +81,22 @@ class FrameStateCodecTest {
     void populatedStateRoundTrips() {
         FrameState state = populated();
         assertSameState(state, FrameStateCodec.read(FrameStateCodec.write(state), cfg));
+    }
+
+    @Test
+    void appearanceRoundTripsAfterMount() {
+        FrameState state = populated();
+        Appearance torso = new Appearance(0x112233, Appearance.UNPAINTED,
+                List.of(new Decal("minecraft:stripe_bottom", "red"), new Decal("minecraft:creeper", "black")));
+        state.setAppearance(PieceSlot.TORSO, torso);
+        CompoundTag tag = FrameStateCodec.write(state);
+        CompoundTag torsoTag = tag.getCompound(NbtKeys.PIECES).getCompound("torso");
+        assertEquals(0x112233, torsoTag.getInt(NbtKeys.COLOR_PRIMARY));
+        assertFalse(torsoTag.contains(NbtKeys.COLOR_SECONDARY));
+        FrameState read = FrameStateCodec.read(tag, cfg);
+        assertEquals(torso, read.appearance(PieceSlot.TORSO));
+        assertEquals(Appearance.DEFAULT, read.appearance(PieceSlot.HELMET));
+        assertSameState(state, read);
     }
 
     @Test

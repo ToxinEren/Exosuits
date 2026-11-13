@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat;
 
+import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.module.ModuleType;
@@ -25,7 +26,8 @@ import net.minecraft.world.item.ItemStack;
  * {@code durability} in [0, maxDurability];</li>
  * <li>i moduli di un pezzo sono noti, senza duplicati, nell'ordine in cui sono salvati e al massimo
  * {@code ModuleType.values().length};</li>
- * <li>i colori sono in [0, 0xFFFFFF];</li>
+ * <li>l'aspetto ha colori {@link Appearance#UNPAINTED} (chiave assente) o in [0, 0xFFFFFF] (valore presente ridotto
+ * a 24 bit) e al massimo {@link Appearance#MAX_DECALS} decalcomanie valide (le voci malformate si saltano);</li>
  * <li>l'energia della cella ({@link #cellEnergy} e {@link FrameItemData#cellEnergy}) e' sempre {@code >= 0}; il
  * limite superiore (la capacita' della cella) resta al chiamante.</li>
  * </ul>
@@ -56,14 +58,14 @@ public interface ItemDataAccess {
     boolean hasData(ItemStack stack);
 
     /**
-     * Dati di un pezzo: livello, durabilita', moduli installati e colori (RGB). {@code tier} e {@code modules} non
-     * possono essere null.
+     * Dati di un pezzo: livello, durabilita', moduli installati e aspetto (colori e decalcomanie). {@code tier},
+     * {@code modules} e {@code appearance} non possono essere null.
      */
-    record PieceData(Tier tier, int durability, int maxDurability, List<ModuleType> modules, int colorPrimary,
-            int colorSecondary) {
+    record PieceData(Tier tier, int durability, int maxDurability, List<ModuleType> modules, Appearance appearance) {
         public PieceData {
             Objects.requireNonNull(tier, "tier must not be null");
             Objects.requireNonNull(modules, "modules must not be null");
+            Objects.requireNonNull(appearance, "appearance must not be null");
         }
     }
 

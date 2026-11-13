@@ -1,10 +1,13 @@
 package com.toxineren.exoframes.compat.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.NbtKeys;
+import com.toxineren.exoframes.core.armor.Appearance;
+import com.toxineren.exoframes.core.armor.Decal;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.List;
@@ -40,7 +43,7 @@ class PieceTagsTest {
         tag.putInt(NbtKeys.COLOR_PRIMARY, 0x123456);
         tag.putInt(NbtKeys.COLOR_SECONDARY, 0xABCDEF);
         assertEquals(new PieceData(Tier.ARMORED, 120, 400, List.of(ModuleType.NIGHT_VISION, ModuleType.SCANNER),
-                0x123456, 0xABCDEF), PieceTags.readPiece(tag).orElseThrow());
+                new Appearance(0x123456, 0xABCDEF, List.of())), PieceTags.readPiece(tag).orElseThrow());
     }
 
     @Test
@@ -78,7 +81,7 @@ class PieceTagsTest {
         PieceData read = PieceTags.readPiece(odd).orElseThrow();
         assertEquals(0, read.durability());
         assertEquals(List.of(), read.modules());
-        assertEquals(0, read.colorPrimary());
+        assertEquals(Appearance.UNPAINTED, read.appearance().primary());
 
         CompoundTag modulesAsString = piece(10, 100);
         modulesAsString.putString(NbtKeys.MODULES, "jetpack");
@@ -107,8 +110,86 @@ class PieceTagsTest {
         tag.putInt(NbtKeys.COLOR_PRIMARY, 0xFF123456);
         tag.putInt(NbtKeys.COLOR_SECONDARY, -1);
         PieceData read = PieceTags.readPiece(tag).orElseThrow();
-        assertEquals(0x123456, read.colorPrimary());
-        assertEquals(0xFFFFFF, read.colorSecondary());
+        assertEquals(0x123456, read.appearance().primary());
+        assertEquals(0xFFFFFF, read.appearance().secondary());
+    }
+
+    private static CompoundTag decal(String pattern, String color) {
+        CompoundTag tag = new CompoundTag();
+        tag.putString(NbtKeys.PATTERN, pattern);
+        tag.putString(NbtKeys.COLOR, color);
+        return tag;
+    }
+
+    @Test
+    void missingColorsReadAsUnpainted() {
+        PieceData read = PieceTags.readPiece(piece(10, 100)).orElseThrow();
+        assertEquals(Appearance.DEFAULT, read.appearance());
+
+        CompoundTag tag = piece(10, 100);
+        PieceTags.writeAppearance(tag, new Appearance(0x00AA00, Appearance.UNPAINTED, List.of()));
+        assertTrue(tag.contains(NbtKeys.COLOR_PRIMARY));
+        assertFalse(tag.contains(NbtKeys.COLOR_SECONDARY));
+        assertEquals(new Appearance(0x00AA00, Appearance.UNPAINTED, List.of()),
+                PieceTags.readPiece(tag).orElseThrow().appearance());
+    }
+
+    @Test
+    void decalsRoundTrip() {
+        Appearance appearance = new Appearance(0, 0xFFFFFF,
+                List.of(new Decal("minecraft:stripe_bottom", "red"), new Decal("minecraft:creeper", "black")));
+        CompoundTag tag = piece(10, 100);
+        PieceTags.writeAppearance(tag, appearance);
+        assertEquals(appearance, PieceTags.readAppearance(tag));
+        assertEquals(appearance, PieceTags.readPiece(tag).orElseThrow().appearance());
+
+        // riscrivere l'aspetto predefinito sullo stesso tag toglie colori e decalcomanie
+        PieceTags.writeAppearance(tag, Appearance.DEFAULT);
+        assertFalse(tag.contains(NbtKeys.COLOR_PRIMARY));
+        assertFalse(tag.contains(NbtKeys.DECALS));
+        assertEquals(Appearance.DEFAULT, PieceTags.readAppearance(tag));
+    }
+
+    @Test
+    void malformedDecalsAreSkipped() {
+        ListTag decals = new ListTag();
+        decals.add(decal("minecraft:stripe_bottom", "red"));
+        decals.add(decal("", "red"));
+        decals.add(decal("minecraft:creeper", ""));
+        decals.add(decal("x".repeat(65), "red"));
+        decals.add(decal("minecraft:creeper", "c".repeat(65)));
+        CompoundTag patternAsInt = decal("ignored", "blue");
+        patternAsInt.putInt(NbtKeys.PATTERN, 7);
+        decals.add(patternAsInt);
+        CompoundTag noColor = new CompoundTag();
+        noColor.putString(NbtKeys.PATTERN, "minecraft:cross");
+        decals.add(noColor);
+        decals.add(decal("minecraft:cross", "white"));
+        CompoundTag tag = piece(10, 100);
+        tag.put(NbtKeys.DECALS, decals);
+        assertEquals(List.of(new Decal("minecraft:stripe_bottom", "red"), new Decal("minecraft:cross", "white")),
+                PieceTags.readAppearance(tag).decals());
+
+        CompoundTag stringList = piece(10, 100);
+        stringList.put(NbtKeys.DECALS, ids("minecraft:creeper"));
+        assertEquals(List.of(), PieceTags.readAppearance(stringList).decals());
+        CompoundTag notAList = piece(10, 100);
+        notAList.putString(NbtKeys.DECALS, "minecraft:creeper");
+        assertEquals(List.of(), PieceTags.readAppearance(notAList).decals());
+    }
+
+    @Test
+    void decalsAreCutAtFour() {
+        ListTag decals = new ListTag();
+        for (int i = 0; i < 6; i++) {
+            decals.add(decal("pattern_" + i, "red"));
+        }
+        CompoundTag tag = piece(10, 100);
+        tag.put(NbtKeys.DECALS, decals);
+        List<Decal> read = PieceTags.readAppearance(tag).decals();
+        assertEquals(Appearance.MAX_DECALS, read.size());
+        assertEquals("pattern_0", read.get(0).pattern());
+        assertEquals("pattern_3", read.get(3).pattern());
     }
 
     @Test

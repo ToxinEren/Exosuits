@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.core.frame;
 
+import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
@@ -25,7 +26,8 @@ import java.util.UUID;
  * piattaforma chiama {@link #takeModules(PieceSlot)} prima di {@link #unmount(PieceSlot)}.
  *
  * <p>Il riporto frazionario del danno ({@link #damageCarryMilli()}) e' per slot e appartiene al pezzo montato:
- * smontarlo o sostituirlo lo azzera.
+ * smontarlo o sostituirlo lo azzera. Lo stesso vale per l'aspetto dello slot ({@link #appearance(PieceSlot)}):
+ * montare o smontare un pezzo lo riporta a {@link Appearance#DEFAULT}.
  */
 public final class FrameState {
 
@@ -35,6 +37,7 @@ public final class FrameState {
     private final Map<PieceSlot, List<ModuleType>> modules = new EnumMap<>(PieceSlot.class);
     private final Set<ModuleType> activeToggles = EnumSet.noneOf(ModuleType.class);
     private final Map<PieceSlot, Integer> damageCarryMilli = new EnumMap<>(PieceSlot.class);
+    private final Map<PieceSlot, Appearance> appearances = new EnumMap<>(PieceSlot.class);
     private EnergyCell cell;
     private boolean reinforced;
     private UUID owner;
@@ -73,24 +76,26 @@ public final class FrameState {
 
     /**
      * Monta il pezzo nel suo slot, sostituendo quello eventualmente presente; lo slot riparte senza moduli
-     * (quelli del pezzo sostituito vanno ripresi prima con {@link #takeModules(PieceSlot)}) e con il riporto
-     * del danno azzerato.
+     * (quelli del pezzo sostituito vanno ripresi prima con {@link #takeModules(PieceSlot)}), con il riporto
+     * del danno azzerato e con l'aspetto {@link Appearance#DEFAULT}.
      */
     public void mount(Piece p) {
         Objects.requireNonNull(p, "piece");
         takeModules(p.slot());
         damageCarryMilli.remove(p.slot());
+        appearances.remove(p.slot());
         pieces.put(p.slot(), p);
     }
 
     /**
      * Smonta il pezzo dallo slot e lo restituisce (null se lo slot era vuoto). Toglie anche i moduli dello
      * slot e i loro toggle (chi deve conservarli li riprende prima con {@link #takeModules(PieceSlot)}) e azzera
-     * il riporto del danno dello slot.
+     * il riporto del danno dello slot, il cui aspetto torna {@link Appearance#DEFAULT}.
      */
     public Piece unmount(PieceSlot s) {
         takeModules(Objects.requireNonNull(s, "slot"));
         damageCarryMilli.remove(s);
+        appearances.remove(s);
         return pieces.remove(s);
     }
 
@@ -142,6 +147,28 @@ public final class FrameState {
      */
     public Map<PieceSlot, Integer> damageCarryMilli() {
         return damageCarryMilli;
+    }
+
+    /** Aspetto del pezzo montato nello slot; {@link Appearance#DEFAULT} se non impostato o se lo slot e' vuoto. */
+    public Appearance appearance(PieceSlot slot) {
+        return appearances.getOrDefault(Objects.requireNonNull(slot, "slot"), Appearance.DEFAULT);
+    }
+
+    /**
+     * Imposta l'aspetto del pezzo montato nello slot; vale finche' il pezzo resta montato.
+     *
+     * @throws IllegalStateException se nello slot non c'e' un pezzo montato
+     */
+    public void setAppearance(PieceSlot slot, Appearance appearance) {
+        Objects.requireNonNull(appearance, "appearance");
+        if (!pieces.containsKey(Objects.requireNonNull(slot, "slot"))) {
+            throw new IllegalStateException("no piece mounted in " + slot);
+        }
+        if (appearance.equals(Appearance.DEFAULT)) {
+            appearances.remove(slot);
+        } else {
+            appearances.put(slot, appearance);
+        }
     }
 
     /** Insieme mutabile dei moduli toggle accesi dal giocatore. */
