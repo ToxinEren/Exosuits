@@ -88,13 +88,19 @@ Luigi, viste le anteprime del primo telaio: «il telaio ci sta ma lo voglio più
 - **A. Ingrandire tutto insieme, giocatore e tuta.** È ciò che fa Pehkui e, su 1.21.1, l'attributo `scale`. Il pilota cresce con la tuta: resta una persona più grande in un'imbracatura, non uno scheletro più grande di chi lo pilota.
 - **B. Tuta più massiccia senza scala.** Stessi perni del giocatore, pezzi più spessi, spalle più alte. Le gambe non possono allungarsi, perché i piedi del pilota sono a terra: risulta tozza, non più grande.
 - **C. Tuta in scala attorno al pilota a terra.** La tuta si disegna S volte più grande attorno ai piedi e il pilota resta dov'è. Anche e mani della tuta finiscono più in alto di quelle del pilota, le due paia di gambe ruotano attorno a perni diversi e l'attrezzo impugnato compare sotto il pugno della tuta.
-- **D. Tuta in scala, pilota sollevato (scelto).** Come C, ma il pilota è disegnato più in alto di 12·(S−1) pixel del modello. La linea delle anche e quella delle mani coincidono con quelle della tuta, le gambe ruotano attorno allo stesso perno e i piedi poggiano su pedane dentro gli stinchi. È la disposizione di un'armatura potenziata: si sta agganciati dentro la macchina.
+- **D. Tuta in scala, pilota sollevato (scelto).** Come C, ma il pilota è disegnato più in alto. Di quanto, lo ha deciso la risposta di Luigi alle prime tavole: «va bene 1.4 ma manca la testa della power armor, il player deve essere alzato da terra dalle gambe della power armor». Il pilota è allineato alla tuta a collo e spalle, cioè sollevato di 24·(S−1) pixel del modello: circa 0,56 blocchi con S = 1,4.
+  - Testa, busto e braccia del pilota stanno dentro testa, busto e braccia della tuta e ruotano attorno agli stessi perni (le braccia a meno di un pixel).
+  - Le gambe del pilota entrano nelle cosce della tuta e non vengono disegnate. Sotto, ginocchia, stinchi e piedi sono solo meccanica: sono loro a tenerlo sollevato.
+  - Le mani del pilota arrivano a metà avambraccio, sui comandi. La tuta ha mani proprie, ed è lì che si disegna l'oggetto impugnato, ingrandito come la tuta.
+  - Il telaio ha una testa vera (calotta, guance, mento, visiera aperta); il pezzo "elmo" la chiude.
+  - Gli occhi del pilota finiscono a circa 2,18 blocchi da terra, vicino all'altezza che avrà la visuale con la grandezza reale (1,62 × 1,4 ≈ 2,27).
+  - Prima versione di D, scartata dopo la risposta di Luigi: allineamento alle anche (sollevamento di 12·(S−1) pixel, poco visibile, con la testa del pilota nel collare e pedane sotto i piedi).
 
-**Costo di D.** Per sollevare il pilota e per non disegnare le parti del corpo coperte dai pezzi bisogna intervenire prima che il gioco disegni il giocatore. Forge e NeoForge hanno un evento, Fabric no. Si usa un solo mixin comune, lato client, su `PlayerRenderer.render`, che ha la stessa firma su 1.20.1 e 1.21.1. È la prima eccezione al "niente mixin" di §4.3.
+**Costo di D.** Per sollevare il pilota e per non disegnare le parti del corpo coperte dai pezzi bisogna intervenire prima che il gioco disegni il giocatore. Forge e NeoForge hanno un evento, Fabric no. Si usano due mixin comuni, lato client: uno su `PlayerRenderer.render` (sollevamento e parti nascoste) e uno su `ItemInHandLayer.renderArmWithItem` (oggetto impugnato nella mano della tuta). Le firme sono le stesse su 1.20.1 e 1.21.1. Sono la prima eccezione al "niente mixin" di §4.3.
 
-**Scala.** S = 1,25 è la proposta del costruttore; 1,4 è l'alternativa mostrata nelle anteprime. Sceglie Luigi.
+**Scala.** S = 1,4, scelta da Luigi il 13 novembre sulle prime tavole (il costruttore proponeva 1,25).
 
-**Grandezza reale o apparente.** Domanda aperta per Luigi (§8). Riguarda ingombro e visuale, quindi la parte 3b; la 3a disegna soltanto.
+**Grandezza reale o apparente.** Proposta "reale" fatta a Luigi il 13 novembre, senza obiezioni (§8). Riguarda ingombro e visuale, quindi la parte 3b; la 3a disegna soltanto.
 
 ## 5. Il progetto
 
@@ -102,7 +108,7 @@ Luigi, viste le anteprime del primo telaio: «il telaio ci sta ma lo voglio più
 
 - **Direzione artistica:** scelta da Luigi fra tre anteprime (spike in corso). Qualunque sia, valgono le convenzioni sotto.
 - **Convenzioni della geometria** (dalla ricognizione, obbligatorie per `GeoArmorRenderer`): ossa di primo livello `armorHead`, `armorBody`, `armorRightArm`, `armorLeftArm`, `armorRightLeg`, `armorLeftLeg`, con i perni del modello armatura di GeckoLib (testa e corpo 0,24,0; braccia ∓5,22,0; gambe ∓2,12,0). Sotto ciascuna: `frame<Parte>` (telaio nudo, sempre visibile) e il pezzo, diviso per stato visivo e per regione di colore.
-- **Proporzioni (revisione del 13 novembre, §4.7):** la geometria resta nelle coordinate standard del modello armatura, con i perni invariati, e viene resa in scala S attorno ai piedi. In quelle coordinate il pilota è una figura ridotta di 1/S con la linea delle anche a y = 12: con S = 1,25 i piedi stanno a y 2,4 e la testa tra 21,6 e 28. Pedane, gabbia della testa e guardie delle mani si disegnano attorno a quella figura; i montanti degli arti corrono sul lato esterno.
+- **Proporzioni (revisione del 13 novembre, §4.7):** la geometria resta nelle coordinate standard del modello armatura, con i perni invariati, e viene resa in scala S = 1,4 attorno ai piedi. In quelle coordinate il pilota è una figura ridotta di 1/S attorno al punto (0, 24, 0): testa tra y 24 e 29,7, busto tra 15,4 e 24, mani a 15,4; le gambe non si disegnano. Testa della tuta, cosce chiuse, bacino e impugnature dei comandi si disegnano attorno a quella figura. Limiti dell'ingombro: telaio nudo entro x ±9,5, y 0..30,7, z −7..9; con i pezzi entro x ±10,75, y ≤ 31,5, z −8..9,5 (circa 1,56 e 1,76 blocchi di larghezza).
 - **Densità e resa (revisione del 13 novembre):** due texel per pixel del modello, quindi un atlante più grande; pittura da metallo: spazzolatura, bordi chiari consumati, incavi scuri, bulloni con punto luce.
 - **Stati visivi senza passate multiple (scelta del costruttore):** ogni pezzo ha quattro copie della sua geometria, una per stato (integro, danneggiato, critico, rotto), che puntano a quattro zone diverse dello stesso atlante; il renderer mostra una sola copia. Una sola texture e una sola passata per il telaio intero.
 - **Colori:** dentro ogni copia, tre ossa per regione: primaria, secondaria (texture in toni di grigio, colorate dal renderer) e neutra (metallo, cavi, non colorata). Nomi: `piece<Parte>_s<0-3>_p1`, `_p2`, `_n`.
@@ -120,7 +126,7 @@ Dalla ricognizione, opzione (a): un `RenderLayer` vanilla sul renderer del gioca
 - `compat/impl/client/SuitModelItem`: l'unico `GeoItem`, mai equipaggiato, registrato ma fuori dalla scheda creativa.
 - `client/SuitLayer`: codice comune; costruisce la `SuitView` dal riassunto visivo e chiama `SuitRenderer`.
 - `compat/ClientRenderHooks`: `addPlayerLayer` (Fabric `LivingEntityFeatureRendererRegistrationCallback`; Forge `AddLayers` con le skin per nome; NeoForge `AddLayers` con `PlayerSkin.Model`) e la registrazione del renderer dell'entità (Architectury).
-- **Scala e pilota (revisione del 13 novembre, §4.7):** `client/SuitScale` tiene S e il sollevamento del pilota. `client/SuitLayer` disegna la tuta in scala S attorno ai piedi. Un mixin client su `PlayerRenderer.render`, comune alle quattro varianti, fa due cose per chi indossa il telaio: sposta in alto il disegno del giocatore di 12·(S−1) pixel del modello e, subito dopo `setModelProperties`, toglie dal disegno le parti del corpo coperte da un pezzo montato (testa con l'elmo, busto con il torso, ogni braccio e ogni gamba con il suo pezzo, secondo strato della skin compreso). Con il telaio nudo il pilota si vede intero dentro lo scheletro, ed è voluto. La prima persona non cambia: il braccio resta quello vanilla fino a M4.
+- **Scala e pilota (revisione del 13 novembre, §4.7):** `client/SuitScale` tiene S e il sollevamento del pilota. `client/SuitLayer` disegna la tuta in scala S attorno ai piedi. Per chi indossa il telaio, un mixin client su `PlayerRenderer.render`, comune alle quattro varianti, sposta in alto il disegno del giocatore di 24·(S−1) pixel del modello e, subito dopo `setModelProperties`, toglie dal disegno le gambe (sempre) e le parti coperte da un pezzo montato: testa con l'elmo, busto con il torso, ogni braccio con il suo pezzo, secondo strato della skin compreso. Un secondo mixin su `ItemInHandLayer.renderArmWithItem` porta l'oggetto impugnato nella mano della tuta e lo ingrandisce di S. Con il telaio nudo il pilota si vede dalla vita in su dentro lo scheletro, ed è voluto. La prima persona non cambia: il braccio resta quello vanilla fino a M4.
 - **Segnaposto invisibili:** su 1.21.1 il materiale `frame` passa a `layers = List.of()`; su 1.20.1 si aggiungono due texture trasparenti `frame_layer_1.png` e `frame_layer_2.png` nel namespace `minecraft` (il nome del materiale resta senza namespace).
 - **Comando di debug (3a):** `/exoframe debug wear [rottame|nudo|via]` mette o toglie al giocatore uno stato di prova e i segnaposto, per vedere il risultato sul PC prima che esista l'entità.
 
@@ -202,14 +208,15 @@ Forme esatte delle ricette; valori di ritmo del caricatore e soglie di movimento
 10. L'armatura civile rimasta in un telaio dopo una morte torna al proprietario quando rientra o quando la ritira accovacciandosi a mano vuota; se entra un altro giocatore, cade a terra accanto al telaio.
 11. Chi muore nel vuoto ritrova il telaio nell'ultimo punto sicuro in cui era a terra.
 12. Le parti 3b e 3c non aspettano le prove sul PC: si procede nel cloud e ciò che il PC trova si corregge all'inizio della parte successiva.
-13. La tuta è più grande del pilota, che vi sta agganciato dentro, sollevato su pedane (§4.7). Scala proposta 1,25.
-14. Un mixin lato client sul disegno del giocatore: prima eccezione al "niente mixin".
-15. Le parti del corpo coperte da un pezzo montato non vengono disegnate.
+13. La tuta è più grande del pilota (scala 1,4, scelta di Luigi). Il pilota vi sta dentro allineato a collo e spalle, sollevato di circa mezzo blocco dalle gambe meccaniche della tuta (§4.7).
+14. Due mixin lato client (disegno del giocatore e oggetto impugnato): prima eccezione al "niente mixin".
+15. Le gambe del pilota non si disegnano mai mentre è nella tuta; testa, busto e braccia non si disegnano quando il loro pezzo è montato.
+16. L'oggetto impugnato si disegna nella mano della tuta, ingrandito come la tuta.
 
 ## 8. Domande aperte per Luigi
 
 1. **La direzione artistica dei pezzi Rottame.** Tre anteprime mostrate il 13 novembre sul primo telaio; con il telaio ridisegnato (§4.7) i pezzi si ripropongono sulla nuova forma. Se non risponde, si procede con quella che il costruttore raccomanda, e resta sostituibile.
-2. **Grandezza reale o apparente** (chiesto il 13 novembre). Reale: chi è nella tuta occupa più spazio e vede da più in alto; con S = 1,25 l'ingombro è 0,75 × 2,25 blocchi in piedi e 1,875 di altezza accovacciati, quindi da un'apertura alta due blocchi si passa solo accovacciati. Apparente: ingombro e visuale restano quelli del giocatore, ma testa e spalle della tuta attraversano soffitti bassi e stipiti. Proposta del costruttore, e scelta predefinita se non risponde: reale, con 1,25. Senza dipendenze esterne: su 1.21.1 l'attributo `scale` del gioco, su 1.20.1 l'evento di Forge e due mixin su Fabric (ingombro e altezza degli occhi). Con 1,4 la tuta non passerebbe da una porta nemmeno accovacciata.
+2. **Grandezza reale o apparente** (chiesto il 13 novembre). Reale: chi è nella tuta occupa più spazio e vede da più in alto. Apparente: ingombro e visuale restano quelli del giocatore, ma testa e spalle della tuta attraversano soffitti bassi e stipiti. Proposta del costruttore: reale. Luigi ha scelto la scala 1,4 e non ha obiettato alla proposta, che quindi vale come scelta predefinita. Con S = 1,4 l'ingombro in piedi è 0,84 × 2,52 blocchi e, accovacciati, 2,1: da un'apertura alta due blocchi non si passa nemmeno accovacciati, a meno di dare alla tuta un ingombro da accovacciata più basso. Questo e la larghezza (fino a 0,9) si decidono nel design di 3b. Senza dipendenze esterne: su 1.21.1 l'attributo `scale` del gioco oppure ingombri propri, su 1.20.1 l'evento di Forge e due mixin su Fabric (ingombro e altezza degli occhi).
 
 ## 9. Rischi
 

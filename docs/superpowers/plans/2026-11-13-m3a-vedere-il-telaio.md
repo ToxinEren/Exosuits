@@ -20,7 +20,8 @@
 - Risorse: `assets/redstone_exoframes/geo/exoframe.geo.json`, `textures/entity/exoframe.png`, `animations/exoframe.animation.json`, e `textures/entity/exoframe_glowmask.png` (maschera delle parti luminose: in 3a viene solo generata, il layer che la usa arriva in M4).
 - Chiavi NBT nuove, tutte sotto la radice `exoframes`: `decals` (lista di `{pattern, color}`), `visual` (riassunto visivo: `{pieces:{<slot>:{tier, condition, color_primary?, color_secondary?, decals?}}}`), `condition` (`intact`, `damaged`, `critical`, `broken`).
 - Colori: interi RGB 0..0xFFFFFF; `Appearance.UNPAINTED = -1` significa "colore predefinito del livello".
-- Niente mixin. Nessuna forma, nome o texture riconoscibile di Fallout, Iron Man o Halo; nessun asset di Mjolnir.
+- Mixin: solo i due del Task 12, lato client (design §4.7). Nessuna forma, nome o texture riconoscibile di Fallout, Iron Man o Halo; nessun asset di Mjolnir.
+- Scala della tuta S = 1,4; sollevamento del pilota 24·(S−1) = 9,6 pixel del modello (design §4.7). I due numeri vivono in `client/SuitScale` (codice) e nel generatore (`tools/art`); un test li tiene uguali.
 - I PNG generati non hanno metadati; `tools/check_jars.sh` (privacy compresa) deve stampare `OK jars`.
 - Identificatori e messaggi d'eccezione in inglese; Javadoc e commenti in italiano con apostrofi ASCII; testi di gioco in `en_us` e `it_it`.
 - Ogni task termina con: build delle quattro varianti (`./gradlew --console=plain :1.20.1-forge:build :1.20.1-fabric:build :1.21.1-fabric:build :1.21.1-neoforge:build`), `bash tools/check_sources.sh`, commit sul branch del piano e push.
@@ -32,6 +33,19 @@
 3. **Nomi delle ossa nel codice diversi da quelli nella geometria generata**: atteso che un pezzo non sparisca in silenzio. Test: `ExoframeGeometryTest` (Task 5 e 6) che legge il file generato e i nomi usati dal renderer.
 4. **Generatore non deterministico o PNG con metadati**: atteso che due esecuzioni diano file identici e che il controllo di privacy passi. Test: `tools/check_art.sh` nella CI (Task 5).
 5. **Armatura già indossata quando si usa il comando di debug**: atteso che non venga distrutta. Test in mondo nel Task 9 (l'armatura torna nell'inventario e ricompare con `via`).
+
+---
+
+## Revisione 1 (13 novembre 2026): tuta più grande del pilota
+
+Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del giocatore, più dettagliata e metallica, con una testa propria e con il pilota sollevato dalle gambe della tuta; ha scelto la scala 1,4. Il perché e gli approcci sono nel design, §4.7. Per il piano cambia questo:
+
+- **Ordine di esecuzione:** 1, 2, 3, 4, 5, 9 (fatti), poi 7, 8, 12, 11, 6, 10. Il codice che disegna (7, 8, 12) non aspetta la grafica nuova: lavora sulla geometria committata dal Task 5 e va provato in gioco il prima possibile.
+- **Task 7:** verifica solo i nomi delle ossa di primo livello e del telaio; i nomi dei pezzi li verifica il Task 6, che ora usa `SuitBones`.
+- **Task 8:** aggiunge `client/SuitScale` e disegna la tuta in scala attorno ai piedi.
+- **Task 11 (nuovo):** telaio ridisegnato, portato dalla prova d'arte approvata da Luigi.
+- **Task 12 (nuovo):** pilota sollevato, parti del corpo nascoste e oggetto impugnato nella mano della tuta (due mixin client).
+- **Task 6:** sospeso; si riscrive sul telaio nuovo quando il Task 11 è chiuso.
 
 ---
 
@@ -142,6 +156,8 @@
 
 ### Task 6: Pezzi Rottame con stati visivi e regioni di colore
 
+> **Sospeso (Revisione 1).** Si esegue dopo il Task 11 e va riscritto sul telaio nuovo: i pezzi partono dalla prima idea della prova d'arte (`designs/scrap.py`), i nomi delle ossa nei test si costruiscono con `SuitBones` (Task 7), l'atlante è a densità doppia e il test `piecesCoverThePlayerByAtLeastOnePixel` va sostituito con un controllo sull'ingombro ammesso (design §5.1). Il testo qui sotto è quello originale.
+
 **Files:**
 - Create: `tools/art/designs/scrap.py`
 - Modify: `tools/art/build.py`, `tools/art/paint.py`, i tre file di risorse generati, `ExoframeGeometryTest.java`, `docs/arte/README.md`
@@ -170,17 +186,17 @@
 - Modify: `compat/Compat.java`, `content/ModItems.java`, `tools/check_sources.sh`, `gametest/ExoframeGameTests.java`, `lang/*.json`, `docs/compat.md`
 
 **Interfaces:**
-- Consumes: geometria e nomi delle ossa (Task 5 e 6); ricognizione §3 (chiamate esatte per versione) e "Proposed compat/client seams" punti 1 e 2.
+- Consumes: geometria e nomi delle ossa del telaio (Task 5); i pezzi arrivano dopo, con il Task 6, e fino ad allora nella geometria non ci sono; ricognizione §3 (chiamate esatte per versione) e "Proposed compat/client seams" punti 1 e 2.
 - Produces:
   - `compat/SuitBones` (comune, senza dipendenze client): `static String piece(PieceSlot slot, int state, String region)` con `region` in {`p1`, `p2`, `n`}, `static String frame(String part)`, `static String decal(PieceSlot slot)`, e le costanti dei sei nomi di primo livello. È l'unico posto in cui il codice costruisce nomi di ossa.
   - `record SuitView(Map<PieceSlot, PieceView> pieces)` con `record PieceView(int state, int primaryRgb, int secondaryRgb)` (stato 0..3, colori già risolti, mai -1); mappa vuota significa telaio nudo. `static SuitView of(SuitSummary summary, ToIntFunction<Tier> primaryDefault, ToIntFunction<Tier> secondaryDefault)`: `INTACT` 0, `DAMAGED` 1, `CRITICAL` 2, `BROKEN` 3; un colore `UNPAINTED` prende il valore predefinito del livello.
   - `interface SuitRenderer { void render(LivingEntity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers, int packedLight, float partialTick, SuitView view); }`.
   - `ClientCompat.suitRenderer()` (singleton pigro, come `Compat`).
   - `SuitAssets.newSuitModelItem(Item.Properties)` → `Item` (un `GeoItem` mai equipaggiato) e `Compat.suitAssets()`; `ModItems.SUIT_MODEL` (id `suit_model`, fuori dalla scheda creativa).
-  - Comportamento del renderer: una sola passata; per ogni slot presente mostra solo le tre ossa dello stato dato e nasconde le altre; slot assente: tutte nascoste; `frame*` sempre visibili; `_p1` colorata con `primaryRgb`, `_p2` con `secondaryRgb`, `_n` bianca; ossa `_decal` nascoste. La visibilità non dipende dai flag `visible` del modello vanilla.
+  - Comportamento del renderer: una sola passata; per ogni slot presente mostra solo le tre ossa dello stato dato e nasconde le altre; slot assente: tutte nascoste; `frame*` sempre visibili; `_p1` colorata con `primaryRgb`, `_p2` con `secondaryRgb`, `_n` bianca; ossa `_decal` nascoste. La visibilità non dipende dai flag `visible` del modello vanilla. Un osso che il renderer cerca e che la geometria non ha si salta senza errori, e il suo nome finisce nel log una volta sola per sessione.
   - Regola 7 di `tools/check_sources.sh`: i package `client`, `compat.client` e `compat.impl.client` si referenziano solo da file di quei package e di `platform/`.
 
-- [ ] **Step 1: test** — in mondo: `suitModelItemIsRegistered`; in `ExoframeGeometryTest`: `rendererBoneNamesExistInGeometry` (ogni nome prodotto da `SuitBones` per i sei slot, i quattro stati, le tre regioni, le sei parti del telaio e le due decalcomanie esiste nel file generato); `SuitViewTest` (in `src/test/java/.../compat/client/`): `unpaintedResolvesToTierDefault`, `conditionMapsToState`, `bareSummaryGivesEmptyView`.
+- [ ] **Step 1: test** — in mondo: `suitModelItemIsRegistered`; in `ExoframeGeometryTest`: `rendererFrameBoneNamesExistInGeometry` (i sei nomi di primo livello e i sei nomi del telaio prodotti da `SuitBones` esistono nel file generato; i nomi dei pezzi e delle decalcomanie li verifica il Task 6); `SuitBonesTest` (in `src/test/java/.../compat/`): `pieceNamesFollowTheContract` (per esempio `SuitBones.piece(PieceSlot.LEFT_ARM, 2, "p1")` è `pieceLeftArm_s2_p1`), `rejectsUnknownRegionAndState`; `SuitViewTest` (in `src/test/java/.../compat/client/`): `unpaintedResolvesToTierDefault`, `conditionMapsToState`, `bareSummaryGivesEmptyView`.
 - [ ] **Step 2: Run** — Expected: FAIL.
 - [ ] **Step 3: implementare**; le condizioni di versione stanno solo in `SuitRendererImpl`, `SuitModel` e `SuitModelItem`; provare la regola 7 con un file temporaneo che importa `client` da `content/` (deve fallire), poi cancellarlo.
 - [ ] **Step 4: verificare** — build delle quattro varianti; test PASS; `javap` di `SuitRendererImpl` sulle quattro varianti: classe base `DyeableGeoArmorRenderer` del package giusto per versione; server dedicato che parte su `1.20.1-fabric` e `1.21.1-neoforge` (l'item `GeoItem` si carica sul server senza classi client); `OK sources`.
@@ -189,7 +205,7 @@
 ### Task 8: Layer sul giocatore e avvio del client
 
 **Files:**
-- Create: `client/RedstoneExoframesClient.java`, `client/SuitLayer.java`, `client/TierPalette.java`, `compat/client/ClientRenderHooks.java`, `compat/impl/client/ClientRenderHooksImpl.java`
+- Create: `client/RedstoneExoframesClient.java`, `client/SuitLayer.java`, `client/SuitScale.java`, `client/TierPalette.java`, `compat/client/ClientRenderHooks.java`, `compat/impl/client/ClientRenderHooksImpl.java`
 - Modify: `compat/client/ClientCompat.java`, `platform/RedstoneExoframesFabricClient.java`, `platform/RedstoneExoframesForge.java`, `platform/RedstoneExoframesNeoForge.java`, `docs/compat.md`
 
 **Interfaces:**
@@ -197,10 +213,11 @@
 - Produces:
   - `RedstoneExoframesClient.init()`: chiama `Compat.frameState().registerClient()` e `ClientCompat.renderHooks().addPlayerLayer(SuitLayer::new)`; i tre entrypoint client chiamano solo questo metodo.
   - `interface ClientRenderHooks { void addPlayerLayer(Function<RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>>, RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>>> factory); }`, applicato a entrambi i modelli di skin (normale e sottile) su ogni loader.
-  - `SuitLayer`: se lo stack nello slot del torso è `EXOFRAME_TORSO` e ha un riassunto visivo, costruisce la `SuitView` (colore `UNPAINTED` risolto con `TierPalette`) e chiama il renderer; in ogni altro caso non disegna nulla e non lancia.
+  - `SuitScale` (Java puro, nessun import di Minecraft): `S = 1.4f`; `PILOT_RAISE_PX = 24f * (S - 1f)`; `static float pilotRaiseBlocks()` = `PILOT_RAISE_PX * 0.9375f / 16f` (il modello del giocatore è reso a 15/16).
+  - `SuitLayer`: se lo stack nello slot del torso è `EXOFRAME_TORSO` e ha un riassunto visivo, costruisce la `SuitView` (colore `UNPAINTED` risolto con `TierPalette`) e chiama il renderer dentro una coppia push/pop in cui la tuta è scalata di `S` attorno ai piedi (`translate(0, 1.501, 0)`, `scale(S, S, S)`, `translate(0, -1.501, 0)`: nello spazio del modello i piedi stanno a y = 1,501); in ogni altro caso non disegna nulla e non lancia. `static boolean wearsSuit(LivingEntity)` è l'unico posto che decide se un'entità indossa la tuta (lo riusa il Task 12). Il riassunto letto dallo stack si tiene in cache per stack (nota del Task 3: `suitSummary` copia il tag a ogni lettura).
   - `TierPalette.primary(Tier)` e `secondary(Tier)`: per `SCRAP` i due colori del Task 6; per gli altri livelli, per ora, gli stessi.
 
-- [ ] **Step 1: test** — `TierPaletteTest` (in `src/test/java/.../client/`; `TierPalette` non importa classi di Minecraft): `scrapDefaultsMatchTheArtNotes` (i due colori scritti in `docs/arte/README.md`), `everyTierHasDefaults`.
+- [ ] **Step 1: test** — `TierPaletteTest` (in `src/test/java/.../client/`; `TierPalette` non importa classi di Minecraft): `scrapDefaultsMatchTheArtNotes` (i due colori scritti in `docs/arte/README.md`), `everyTierHasDefaults`; `SuitScaleTest`: `raiseAlignsTheHeadPivots` (`24 + PILOT_RAISE_PX` uguale a `24 * S` entro 1e-4), `raiseInBlocksUsesThePlayerModelScale` (9,6 px danno 0,5625 blocchi).
 - [ ] **Step 2: Run** — Expected: FAIL.
 - [ ] **Step 3: implementare**; su Forge e NeoForge il listener `AddLayers` si registra sul bus del mod durante la costruzione del mod, dentro il ramo client.
 - [ ] **Step 4: verificare** — build; test PASS; `javap` di `ClientRenderHooksImpl` per loader (callback Fabric; `AddLayers` con le skin per nome su Forge e con `PlayerSkin.Model` su NeoForge); server dedicato che parte sulle quattro varianti; `OK sources`.
@@ -230,6 +247,52 @@
 - Create: `docs/test-in-gioco/m3a-vedere-il-telaio.md`
 - Modify: `README.md`, `docs/compat.md`, `tools/check_jars.sh` (se servono controlli sulle nuove risorse)
 
+- [ ] **Step 0 (Revisione 1):** la checklist comincia dall'avvio del client su ogni variante (un mixin sbagliato lo fa crollare lì) e chiede anche: tuta più grande del giocatore e piedi della tuta a terra; pilota visibile dalla vita in su nel telaio nudo, mai le gambe; con i pezzi montati nessuna parte della skin che spunta; oggetto impugnato nella mano della tuta, per entrambe le mani; inventario (anteprima del giocatore) coerente. Se la prova del client senza schermo nel cloud ha funzionato, le stesse verifiche si fanno prima nel cloud con gli screenshot e la checklist lo dice.
 - [ ] **Step 1:** checklist per il PC: per ogni variante, in un mondo in creativa, `/exoframe debug wear rottame` e guardarsi in terza persona da fronte, lato e retro; provare `nudo`, gli stati 1, 2, 3 e due colori; accovacciarsi, correre, nuotare, elitre se disponibili; skin normale e sottile; un secondo giocatore su server dedicato che guarda il primo; cosa fotografare e cosa riportare (pezzi sospesi o sfalsati rispetto al corpo, sfarfallii, parti della skin che spuntano, cali di fluidità).
 - [ ] **Step 2: verifica completa** — build delle quattro varianti con `collectJar`; test JUnit e in mondo; `OK sources`, `OK jars`, `OK art`; server dedicato che parte e si ferma sulle quattro varianti; CI verde.
 - [ ] **Step 3:** README (stato, comando di debug, come rigenerare la grafica) e `docs/compat.md` allineati; commit `docs: checklist in gioco della parte 3a` e push.
+
+### Task 11: Telaio ridisegnato (scheletro grande con testa e gambe meccaniche)
+
+> **Da dettagliare (Revisione 1)** quando Luigi approva le tavole della seconda passata della prova d'arte e l'elenco delle modifiche al generatore (`PORTING.md` della prova) è pronto. Fin qui è deciso questo.
+
+**Files:**
+- Modify: `tools/art/exo.py`, `tools/art/paint.py`, `tools/art/build.py`, `tools/art/designs/frame.py`, `tools/art/preview/*`, `tools/art/README.md`, `tools/check_art.sh`, i file di risorse generati, `ExoframeGeometryTest.java`, `docs/arte/README.md`, `docs/arte/anteprime/`
+- Create: `textures/entity/exoframe_glowmask.png` (generata)
+
+**Interfaces:**
+- Consumes: generatore del Task 5 (con `HashRng`); disegno e pittura della prova d'arte approvata; design §4.7 e §5.1.
+- Produces:
+  - telaio nudo come solo scheletro, con punti di aggancio per i pezzi: testa vera (calotta, guance, mento, visiera aperta), busto a gabbia, cella sulla schiena, bacino a secchio e cosce chiuse che nascondono il volume delle gambe del pilota, ginocchia, stinchi e piedi meccanici, avambracci con impugnature dei comandi e mani meccaniche;
+  - stessi nomi e perni delle ossa di oggi (Global Constraints); nessuna scatola ruotata, salvo decisione scritta nel rapporto;
+  - ingombro: x ±9,5, y 0..30,7, z −7..9 in pixel del modello;
+  - densità di due texel per pixel e atlante più grande, con le regioni dei pezzi riservate;
+  - nel generatore la costante della scala (1,4) e la figura del pilota ridotta di 1/S attorno a (0, 24, 0), senza gambe, usata dal controllo delle distanze e dalle anteprime;
+  - anteprime nuove in `docs/arte/anteprime/` e `docs/arte/README.md` aggiornato.
+
+### Task 12: Pilota dentro la tuta (due mixin client)
+
+**Files:**
+- Create: `mixin/client/PlayerRendererMixin.java`, `mixin/client/ItemInHandLayerMixin.java`, `client/PilotPose.java`, `src/main/resources-mc1.20.1/redstone_exoframes.mixins.json`, `src/main/resources-mc1.21.1/redstone_exoframes.mixins.json`
+- Modify: `client/SuitLayer.java`, i metadati dei tre loader (`fabric.mod.json`, configurazione Forge del mixin in `build.gradle.kts`, `neoforge.mods.toml`), `build.gradle.kts`, `tools/check_sources.sh`, `tools/check_jars.sh`, `docs/compat.md`
+
+**Interfaces:**
+- Consumes: `SuitLayer.wearsSuit`, `SuitScale` (Task 8); `SuitView` (Task 7); design §4.7 e §5.2; ricognizione, "When to hide skin parts" (`PlayerRenderer.render` chiama `setModelProperties`, che azzera la visibilità a ogni fotogramma).
+- Produces:
+  - `client/PilotPose` (nessuna annotazione di mixin, tutta la logica sta qui):
+    - `static Set<BodyPart> hiddenParts(SuitView view)` con `enum BodyPart { HEAD, BODY, LEFT_ARM, RIGHT_ARM, LEGS }`: `LEGS` sempre; `HEAD` con l'elmo montato, `BODY` con il torso, ogni braccio con il suo pezzo;
+    - `static void raise(PoseStack pose)`: `translate(0, SuitScale.pilotRaiseBlocks(), 0)`, nello spazio del mondo;
+    - `static void hide(PlayerModel<?> model, Set<BodyPart> parts)`: spegne `visible` della parte e del suo secondo strato (`hat`, `jacket`, `leftSleeve`, `rightSleeve`, `leftPants`, `rightPants`);
+    - `static void beforeHandTransform(PoseStack pose, HumanoidArm arm)`: sposta di (±2, +0,8, 0) pixel del modello, cioè dal perno del braccio del pilota a quello del braccio della tuta; `static void afterHandTransform(PoseStack pose)`: `scale(S, S, S)`.
+  - `PlayerRendererMixin` su `net.minecraft.client.renderer.entity.player.PlayerRenderer`, metodo `render(AbstractClientPlayer, float, float, PoseStack, MultiBufferSource, int)`, senza stato: in testa, se `wearsSuit`, `pushPose` e `PilotPose.raise`; subito dopo la chiamata a `setModelProperties`, `PilotPose.hide`; a ogni uscita, se `wearsSuit`, `popPose`.
+  - `ItemInHandLayerMixin` su `net.minecraft.client.renderer.entity.layers.ItemInHandLayer`, metodo `renderArmWithItem`: prima della chiamata a `translateToHand`, `beforeHandTransform`; subito dopo, `afterHandTransform`; solo se l'entità è un giocatore che indossa la tuta.
+  - `SuitLayer`: prima della scala annulla il sollevamento (`translate(0, PILOT_RAISE_PX / 16f, 0)`: nello spazio del modello y cresce verso il basso), così i piedi della tuta restano a terra.
+  - Configurazione dei mixin per versione (`compatibilityLevel` `JAVA_17` su 1.20.1, `JAVA_21` su 1.21.1), sezione `client`, `defaultRequire` 1; dichiarata nei metadati di ogni loader.
+  - Regola 7 di `check_sources.sh` estesa: `mixin.client` è un package solo client. `check_jars.sh`: ogni jar contiene la configurazione, le due classi che elenca, il refmap dove il loader lo richiede, e il riferimento alla configurazione nei metadati del loader.
+
+- [ ] **Step 1: test** — `PilotPoseTest` (in `src/test/java/.../client/`): `legsAreAlwaysHidden`, `bareFrameHidesOnlyTheLegs`, `eachMountedPieceHidesItsPart`, `brokenPieceStillHidesItsPart`; in `SuitScaleTest`: `suitArmPivotOffsetMatchesTheScale` (il perno del braccio della tuta, scalato attorno ai piedi e abbassato del sollevamento, dista (2, 0,8) px da quello del pilota).
+- [ ] **Step 2: Run** — Expected: FAIL.
+- [ ] **Step 3: implementare**; prima verificare con `javap` sulle due versioni del gioco le firme di `PlayerRenderer.render`, `setModelProperties`, `ItemInHandLayer.renderArmWithItem` e il proprietario della chiamata a `translateToHand`, e scriverle nel rapporto.
+- [ ] **Step 4: verificare** — build delle quattro varianti; test PASS; test in mondo sulle quattro varianti (il server dedicato parte con i mixin client dichiarati); `OK sources`, `OK jars` con una prova negativa (configurazione tolta da un jar: deve fallire); se esiste lo script del client senza schermo (`docs/` o rapporto della prova), avviare il client di ogni variante e allegare gli screenshot di fronte, retro e lato con `/exoframe debug wear nudo` e con `rottame`.
+- [ ] **Step 5:** `docs/compat.md` (i due mixin, perché esistono, dove sta la logica); commit `client: pilota sollevato dentro la tuta, parti coperte nascoste, oggetto nella mano della tuta`.
+
