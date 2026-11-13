@@ -43,7 +43,12 @@ public final class NbtKeys {
     public static final String CELL = "cell";
     /** Pezzi montati sul telaio (tag con una voce per id di PieceSlot in minuscolo). */
     public static final String PIECES = "pieces";
-    /** Item riposti (lista di tag di item). */
+    /**
+     * Item riposti (lista di tag di item). Definita ma non ancora scritta ne' letta: arriva con la Milestone 3
+     * (ingresso e uscita dal telaio). Gli stack staranno accanto al FrameState nella voce del giocatore del dato
+     * salvato, salvati con il provider su 1.21.1, letti e scritti con due metodi di FrameStateAccess e non inviati al
+     * client (vedi docs/compat.md, "Limiti noti e rinvii").
+     */
     public static final String STOWED = "stowed";
     /**
      * Capacita' della cella (int), dentro il tag {@link #CELL} dello stato del telaio per giocatore: serve a

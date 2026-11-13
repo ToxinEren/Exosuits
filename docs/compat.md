@@ -5,8 +5,8 @@ Il package [`com.toxineren.exoframes.compat`](../src/main/java/com/toxineren/exo
 Regole di struttura (Milestone 2b):
 
 - ogni interfaccia ha una sola implementazione `...Impl` in [`compat/impl/`](../src/main/java/com/toxineren/exoframes/compat/impl/), creata pigramente da `Compat` (idioma del holder);
-- le condizioni Stonecutter (`//? if >=1.21`, `//? if fabric`, `//? if forge`) stanno solo nelle classi di `compat/impl/`, negli entrypoint di [`platform/`](../src/main/java/com/toxineren/exoframes/platform/) e nell'unica eccezione [`compat/Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java); le interfacce non hanno condizioni;
-- `compat.impl` si importa solo da dentro `compat/`.
+- le direttive Stonecutter (condizioni come `//? if >=1.21`, `//? if fabric`, `//? if forge`, e qualunque altra direttiva `//?`, `//$`, `//~`, anche in un commento a blocco) stanno solo nelle classi di `compat/impl/`, negli entrypoint di [`platform/`](../src/main/java/com/toxineren/exoframes/platform/) e nell'unica eccezione [`compat/Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java); le interfacce non hanno condizioni e i test non hanno direttive;
+- `compat.impl` si referenzia (import o nome qualificato) solo da dentro `compat/`.
 
 Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (vedi in fondo).
 
@@ -70,7 +70,7 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 
 ### Fuori dalle interfacce: `Ids`
 
-[`Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java) costruisce i `ResourceLocation` (`Ids.of(path)`, `Ids.of(namespace, path)`): `new ResourceLocation(ns, path)` su 1.20.1, `ResourceLocation.fromNamespaceAndPath` su 1.21.1. È una classe statica usata direttamente dal codice dei contenuti, ed è l'unico file di `compat/` fuori da `impl/` ammesso a contenere `//? if`.
+[`Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java) costruisce i `ResourceLocation` (`Ids.of(path)`, `Ids.of(namespace, path)`): `new ResourceLocation(ns, path)` su 1.20.1, `ResourceLocation.fromNamespaceAndPath` su 1.21.1. È una classe statica usata direttamente dal codice dei contenuti, ed è l'unico file di `compat/` fuori da `impl/` ammesso a contenere direttive Stonecutter.
 
 ## Tabella API vanilla/loader → interfaccia
 
@@ -80,7 +80,7 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 |---|---|
 | `new ResourceLocation(ns, path)` → `ResourceLocation.fromNamespaceAndPath` | `Ids` |
 | NBT sull'ItemStack (`getTag`, `getOrCreateTag`) → data components (`custom_data`) | `ItemDataAccess` (`ItemPayload`) |
-| `ItemStack.save(CompoundTag)` / `ItemStack.of` → `save(HolderLookup.Provider)` / `parseOptional` | Rinviata (M3/M4): serve agli item riposti, chiave `stowed` definita in `NbtKeys` ma non ancora scritta né letta |
+| `ItemStack.save(CompoundTag)` / `ItemStack.of` → `save(HolderLookup.Provider)` / `parseOptional` | Rinviata alla Milestone 3 (ingresso e uscita dal telaio, che stiva l'armatura civile): chiave `stowed` definita in `NbtKeys` ma non ancora scritta né letta; vedi "Limiti noti e rinvii" |
 | `Item.Properties.durability(-1)` non va usato (su 1.21.1 l'item risulta già al limite); su 1.20.1 `stacksTo` lancia se c'è già una durabilità | `ArmorMaterials`: `newPlaceholder` dà sempre una pila da 1 e accetta proprietà con o senza durabilità vanilla; l'usura dei pezzi vive in `core/` e in `ItemDataAccess` |
 | `ItemStack.isDamageableItem` (maxDamage vs presenza dei componenti) | `ItemDataAccess` (`durability`/`max_durability`); lo stato rotto vive in `core/` |
 | `ArmorMaterial` enum → record registrato `Holder<ArmorMaterial>` con layer; `ArmorItem(Holder, Type, Properties)` | `ArmorMaterials` |
@@ -125,13 +125,24 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 | `unlocked`, `reinforced` | boolean | telaio |
 | `cell` | compound con `energy` (e `capacity` nello stato) | telaio (assente = nessuna cella) |
 | `pieces` | compound, una voce per `PieceSlot` in minuscolo | telaio |
-| `stowed` | lista di tag item | definita, non ancora usata (rinviata) |
+| `stowed` | lista di tag item | definita, non ancora usata (rinviata alla Milestone 3, vedi "Limiti noti e rinvii") |
 | `capacity` | int | solo stato del telaio, dentro `cell` (Task 8) |
 | `active` | lista di string (`ModuleType#id`) | solo stato del telaio: toggle accesi (Task 8) |
 | `carry_milli` | int in [0, 999] | solo stato del telaio, voce di `pieces`: riporto del danno in millesimi (Task 8) |
 | `schema` | int (assente = 1) | solo radice del dato salvato degli stati, accanto a `frames`; nessun marcatore sugli item |
 
 Il `SavedData` salva gli stati sotto la chiave `frames`, una voce per UUID del giocatore in forma testuale, e accanto il marcatore `schema` (oggi 1). In lettura ogni voce è isolata: una voce che non si legge (valore non compound, chiave non UUID, eccezione del lettore) viene saltata con un avviso nel log che ne nomina la chiave, resta in memoria come tag grezzo e viene riscritta identica a ogni salvataggio; si toglie solo quando lo stato di quel giocatore viene creato o sostituito con `update()` o rimosso con `clear()`. Le altre voci si leggono normalmente, invece di far ricreare vuoto l'intero dato. Se `schema` è maggiore di quello noto (un mondo aperto con una versione della mod più vecchia di quella che l'ha salvato), un solo ERROR nel log e tutte le voci restano grezze: nessuna viene letta, nessuna si perde, e il salvataggio conserva il marcatore letto.
+
+## Limiti noti e rinvii
+
+Cose che la Milestone 2b lascia volutamente aperte; ciascuna ha la milestone che la chiude e la direzione prevista. Vanno copiate nel piano della milestone quando viene scritto.
+
+- **Item riposti (`stowed`) — Milestone 3 (ingresso e uscita dal telaio).** L'armatura che il giocatore indossava prima di entrare viene stivata nello stato del telaio e rimessa addosso all'uscita. Direzione: gli stack stanno accanto al `FrameState` nella voce del giocatore nel `SavedData` (per esempio un piccolo record con `FrameState` e `List<ItemStack>`), salvati con `stack.save(new CompoundTag())` / `ItemStack.of` su 1.20.1 e con `stack.save(provider)` / `ItemStack.parseOptional(provider, tag)` su 1.21.1, usando il provider che `save` e il deserializzatore della `Factory` ricevono già; due metodi su `FrameStateAccess` per leggerli e scriverli; non vengono inviati al client. Su un mondo aggiornato da 1.20.1 servirà una migrazione esplicita degli stack (vanilla non li converte).
+- **Ripristino dei moduli e config di chi legge — Milestone 3/4.** `FrameStateCodec.read` reinstalla i moduli con `FrameState.installModule`, che dipende dalla config di chi legge (capienza degli slot): con una config diversa un modulo può essere scartato. Direzione: un percorso di ripristino grezzo nel core (senza i controlli di installazione), insieme al caricamento della config.
+- **Pezzo con livello sconosciuto — Milestone 3/4.** Un pezzo con un `tier` sconosciuto viene scartato in lettura e poi perso quando `setFrame` riscrive `pieces`. Direzione: fondere le voci ignote invece di sostituire l'intero `pieces`.
+- **Colori solo sugli item, capacità della cella solo nello stato — Milestone 3/4.** Gli item portano `color_primary`/`color_secondary` e la cella senza `capacity`; lo stato del telaio porta `carry_milli` e `capacity` ma nessun colore, e il `Piece` del core non ha colori: i due schemi non si convertono l'uno nell'altro senza perdita (e "non dipinto" e "nero" valgono entrambi 0). Direzione: colori su `Piece` (o una mappa parallela per slot in `FrameState`) più due chiavi nella voce del pezzo di `FrameStateCodec`, con un valore per "non dipinto"; per la cella, capacità anche sull'item o presa sempre da `energy.cellCapacity`.
+- **Sincronizzazione solo del proprio stato — Milestone 3.** Ogni client riceve solo il proprio stato, quindi `get()` e `clientView()` per un altro giocatore sono sempre vuoti sul client. Per disegnare i telai altrui serve scegliere tra una sincronizzazione al tracking (inizio del tracciamento dell'entità, eventi per loader) e dati visivi negli stack segnaposto.
+- **Scritture a ogni tick — Milestone 3.** Il consumo di energia a ogni tick passa da `mutate` (segna il dato come da salvare, nessun pacchetto) e la sincronizzazione con `syncTo` a bassa frequenza (al massimo 4-5 volte al secondo), non da `update`, che invia lo stato intero a ogni chiamata.
 
 ## Regole di [`tools/check_sources.sh`](../tools/check_sources.sh)
 
@@ -140,8 +151,8 @@ Lo script gira dalla radice del repository (`bash tools/check_sources.sh`), stam
 1. `core/` non importa `net.minecraft`, `net.fabricmc`, `net.minecraftforge`, `net.neoforged`, `dev.architectury` (anche con `import static`).
    - **1b.** `core/` non importa `com.google.gson`.
    - **1c.** Ogni tipo di `core/` è citato per nome in almeno un file di `src/test/java`.
-2. Le condizioni Stonecutter (`//? if`) stanno solo in `compat/` e `platform/`.
+2. Le direttive Stonecutter stanno solo in `compat/` e `platform/` di `src/main/java`, mai nei test. Si riconosce il marcatore, non la parola `if`: `grep -rlE '(//|/\*)[?$~]'` su `src/main/java` e `src/test/java` (quindi anche `//?if` senza spazio, condizioni senza `if`, direttive di scambio `//$` e di sostituzione `//~`, e le stesse in un commento a blocco).
 3. Forge: `RedstoneExoframesForge` chiama `EventBuses.registerModEventBus` prima di `RedstoneExoframes.init()`.
-4. `com.toxineren.exoframes.compat.impl` si importa (anche con `import static`) solo da file di `compat/`, in `src/main/java` e `src/test/java`.
-5. Ogni file che chiama `registerC2S(` (tranne `Net` e `NetImpl`) referenzia `Compat.frameState()`: i gestori lato server validano le richieste sullo stato del telaio del giocatore.
-6. Regola finale, più stretta della 2: `//? if` è ammesso solo in `compat/impl/`, in `platform/` e in `compat/Ids.java`.
+4. Qualunque riferimento a `com.toxineren.exoframes.compat.impl.` (import, anche `import static`, o nome qualificato nel codice) compare solo in file sotto `compat/`, in `src/main/java` e `src/test/java` (cioè `src/(main|test)/java/com/toxineren/exoframes/compat/`).
+5. Ogni file che chiama `registerC2S(` (tranne `Net` e `NetImpl`) referenzia `Compat.frameState()` in una riga che non è un commento: i gestori lato server validano le richieste sullo stato del telaio del giocatore. La regola guarda solo il file che registra, quindi la registrazione e i suoi gestori devono stare nello stesso file.
+6. Regola finale, più stretta della 2, con lo stesso riconoscimento del marcatore: le direttive Stonecutter sono ammesse solo in `compat/impl/`, in `platform/` e in `compat/Ids.java`.
