@@ -18,8 +18,11 @@ import net.minecraft.world.entity.player.Player;
  * <p>
  * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare; {@link #update} e
  * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. {@link #update} e {@link #clear} tolgono le
- * voci grezze non lette del giocatore (vedi {@link FrameStateSavedData}). Il
- * riferimento a {@link ClientPlayerEvent} sta solo nel corpo di {@link #registerClient()}, chiamato solo dagli
+ * voci grezze non lette del giocatore (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola lettura
+ * (schema piu' recente), le tre scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync, un solo
+ * ERROR nel log; {@link #get} resta vuoto.
+ * <p>
+ * Il riferimento a {@link ClientPlayerEvent} sta solo nel corpo di {@link #registerClient()}, chiamato solo dagli
  * entrypoint client: un server dedicato non carica mai classi del client.
  */
 public final class FrameStateAccessImpl implements FrameStateAccess {
@@ -37,8 +40,11 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     @Override
     public void update(ServerPlayer p, Consumer<FrameState> change) {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
-        FrameState state = data.frames().computeIfAbsent(p.getUUID(),
-                uuid -> new FrameState(RedstoneExoframes.config()));
+        if (data.readOnly()) {
+            data.logRefusedChange();
+            return;
+        }
+        FrameState state = data.getOrCreate(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()));
         data.dropUnread(p.getUUID());
         try {
             change.accept(state);
@@ -52,6 +58,10 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     @Override
     public boolean mutate(ServerPlayer p, Consumer<FrameState> change) {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
+        if (data.readOnly()) {
+            data.logRefusedChange();
+            return false;
+        }
         FrameState state = data.frames().get(p.getUUID());
         if (state == null) {
             return false;
@@ -68,7 +78,11 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     @Override
     public void clear(ServerPlayer p) {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
-        data.frames().remove(p.getUUID());
+        if (data.readOnly()) {
+            data.logRefusedChange();
+            return;
+        }
+        data.remove(p.getUUID());
         data.dropUnread(p.getUUID());
         data.setDirty();
         syncTo(p);

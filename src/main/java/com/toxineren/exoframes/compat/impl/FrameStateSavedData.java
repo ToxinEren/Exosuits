@@ -4,11 +4,13 @@ import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
@@ -34,10 +36,14 @@ import net.minecraft.core.HolderLookup;
  * sostituito con {@code update()} o rimosso con {@code clear()} ({@link #dropUnread}).
  * <p>
  * Accanto a {@code frames} c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link #CURRENT_SCHEMA}; assente vale 1). Se il
- * file viene da uno schema piu' recente di quello noto, si scrive un solo ERROR nel log e tutte le voci restano
- * grezze: nessuna viene letta e nessuna si perde, e alla scrittura si conserva il marcatore letto.
+ * marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa versione
+ * della mod ({@link #readOnly()}): un solo ERROR al caricamento, nessuna voce viene letta, e i punti di modifica
+ * ({@link #getOrCreate}, {@link #remove}, {@link #dropUnread}) non cambiano nulla; il dato non risulta mai da salvare,
+ * e se viene salvato lo stesso riproduce il tag letto (stesso marcatore, voci identiche). Nulla si legge, si cambia o
+ * si perde.
  * <p>
- * Solo sul thread del server; chi modifica una voce deve chiamare {@link #setDirty()}.
+ * Solo sul thread del server; la mappa di {@link #frames()} e' in sola lettura: si crea e si rimuove con
+ * {@link #getOrCreate} e {@link #remove}, e chi modifica uno stato deve chiamare {@link #setDirty()}.
  */
 final class FrameStateSavedData extends SavedData {
     static final String NAME = "redstone_exoframes_frames";
@@ -49,8 +55,10 @@ final class FrameStateSavedData extends SavedData {
     private final Map<UUID, FrameState> frames = new HashMap<>();
     /** Voci non lette, per chiave originale, riscritte identiche in {@link #write}. */
     private final Map<String, Tag> unread = new LinkedHashMap<>();
-    /** Il marcatore da scrivere: quello corrente, o quello piu' recente letto dal file. */
-    private int schema = CURRENT_SCHEMA;
+    /** Il marcatore letto dal file quando il dato e' in sola lettura (piu' recente o non numerico), altrimenti null. */
+    private Tag readOnlyMarker;
+    /** Vero dopo il primo ERROR per una modifica rifiutata, per scriverlo una volta sola. */
+    private boolean refusalLogged;
 
     private FrameStateSavedData() {
     }
@@ -66,9 +74,9 @@ final class FrameStateSavedData extends SavedData {
         //?}
     }
 
-    /** La mappa viva UUID -> stato: dopo una modifica va chiamato {@link #setDirty()}. */
+    /** Vista in sola lettura UUID -> stato (gli stati sono vivi: dopo una loro modifica va chiamato setDirty). */
     Map<UUID, FrameState> frames() {
-        return frames;
+        return Collections.unmodifiableMap(frames);
     }
 
     private static FrameStateSavedData load(CompoundTag tag) {
@@ -84,11 +92,13 @@ final class FrameStateSavedData extends SavedData {
     static FrameStateSavedData load(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader) {
         FrameStateSavedData data = new FrameStateSavedData();
         CompoundTag framesTag = tag.getCompound(FRAMES);
-        int schema = tag.contains(NbtKeys.SCHEMA, Tag.TAG_ANY_NUMERIC) ? tag.getInt(NbtKeys.SCHEMA) : CURRENT_SCHEMA;
-        if (schema > CURRENT_SCHEMA) {
-            RedstoneExoframes.LOGGER.error("Frame states saved with schema {} (known: {}): keeping {} entries "
-                    + "unread and unchanged", schema, CURRENT_SCHEMA, framesTag.size());
-            data.schema = schema;
+        Tag marker = tag.get(NbtKeys.SCHEMA);
+        boolean numeric = tag.contains(NbtKeys.SCHEMA, Tag.TAG_ANY_NUMERIC);
+        if (marker != null && (!numeric || tag.getInt(NbtKeys.SCHEMA) > CURRENT_SCHEMA)) {
+            RedstoneExoframes.LOGGER.error("Frame states saved with schema {} (known: {}): read-only, keeping {} "
+                    + "entries unread and unchanged", SchemaIds.safeId(marker.toString()), CURRENT_SCHEMA,
+                    framesTag.size());
+            data.readOnlyMarker = marker.copy();
             for (String key : framesTag.getAllKeys()) {
                 data.unread.put(key, framesTag.get(key).copy());
             }
@@ -122,12 +132,51 @@ final class FrameStateSavedData extends SavedData {
     }
 
     /**
+     * Vero se il file e' stato salvato con uno schema piu' recente di {@link #CURRENT_SCHEMA} o con un marcatore non
+     * numerico: questa versione della mod non deve cambiare ne' riscrivere il dato.
+     */
+    boolean readOnly() {
+        return readOnlyMarker != null;
+    }
+
+    /**
+     * Scrive nel log, una sola volta per questo dato, che una modifica e' stata rifiutata perche' il dato e' in sola
+     * lettura.
+     */
+    void logRefusedChange() {
+        if (readOnly() && !refusalLogged) {
+            refusalLogged = true;
+            RedstoneExoframes.LOGGER.error("Frame states were saved by a newer version of the mod with schema {}: "
+                    + "changes are not applied; update the mod", SchemaIds.safeId(readOnlyMarker.toString()));
+        }
+    }
+
+    /** Lo stato del giocatore, creato con {@code factory} se assente; null, senza cambiare nulla, in sola lettura. */
+    FrameState getOrCreate(UUID player, Supplier<FrameState> factory) {
+        if (readOnly()) {
+            return null;
+        }
+        return frames.computeIfAbsent(player, k -> factory.get());
+    }
+
+    /** Rimuove lo stato del giocatore; false se non c'era o se il dato e' in sola lettura. */
+    boolean remove(UUID player) {
+        return !readOnly() && frames.remove(player) != null;
+    }
+
+    /** In sola lettura il dato non risulta mai da salvare: questa versione non riscrive il file. */
+    @Override
+    public boolean isDirty() {
+        return !readOnly() && super.isDirty();
+    }
+
+    /**
      * Dimentica le voci grezze non lette del giocatore (chiamato quando il suo stato viene creato o sostituito con
      * {@code update()} o rimosso con {@code clear()}): la chiave e' confrontata come UUID, cosi' vale anche per una
      * chiave scritta in forma non canonica.
      */
     void dropUnread(UUID player) {
-        if (unread.isEmpty()) {
+        if (readOnly() || unread.isEmpty()) {
             return;
         }
         unread.keySet().removeIf(key -> {
@@ -151,12 +200,19 @@ final class FrameStateSavedData extends SavedData {
     }*/
     //?}
 
-    /** Scrive il marcatore di schema e le voci: prima quelle grezze non lette, identiche, poi quelle vive. */
+    /**
+     * Scrive il marcatore di schema (quello letto, se in sola lettura) e le voci: prima quelle grezze non lette,
+     * identiche, poi quelle vive.
+     */
     CompoundTag write(CompoundTag tag) {
         CompoundTag framesTag = new CompoundTag();
         unread.forEach((key, raw) -> framesTag.put(key, raw.copy()));
         frames.forEach((player, state) -> framesTag.put(player.toString(), FrameStateCodec.write(state)));
-        tag.putInt(NbtKeys.SCHEMA, schema);
+        if (readOnly()) {
+            tag.put(NbtKeys.SCHEMA, readOnlyMarker.copy());
+        } else {
+            tag.putInt(NbtKeys.SCHEMA, CURRENT_SCHEMA);
+        }
         tag.put(FRAMES, framesTag);
         return tag;
     }

@@ -2,6 +2,8 @@ package com.toxineren.exoframes.compat.impl;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.compat.NbtKeys;
@@ -107,5 +109,55 @@ class FrameStateSavedDataTest {
         CompoundTag written = data.write(new CompoundTag());
         assertEquals(original, written.getCompound("frames"));
         assertEquals(2, written.getInt(NbtKeys.SCHEMA));
+    }
+
+    /** Prova ogni punto di modifica del dato e controlla che il salvataggio riproduca l'ingresso. */
+    private static void assertReadOnlyAndUnchanged(CompoundTag root) {
+        CompoundTag original = root.copy();
+        FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+        assertTrue(data.readOnly());
+        assertTrue(data.frames().isEmpty());
+
+        assertNull(data.getOrCreate(GOOD, () -> new FrameState(ExoframesConfig.defaults())));
+        assertNull(data.getOrCreate(UUID.randomUUID(), () -> new FrameState(ExoframesConfig.defaults())));
+        assertFalse(data.remove(GOOD));
+        data.dropUnread(BAD);
+        data.dropUnread(GOOD);
+        data.setDirty();
+        assertFalse(data.isDirty());
+        assertTrue(data.frames().isEmpty());
+
+        assertEquals(original, data.write(new CompoundTag()));
+    }
+
+    @Test
+    void futureSchemaIsReadOnly() {
+        CompoundTag root = mixedRoot();
+        root.putInt(NbtKeys.SCHEMA, 2);
+        assertReadOnlyAndUnchanged(root);
+    }
+
+    @Test
+    void nonNumericSchemaIsReadOnly() {
+        CompoundTag root = mixedRoot();
+        root.putString(NbtKeys.SCHEMA, "2");
+        assertReadOnlyAndUnchanged(root);
+    }
+
+    @Test
+    void currentSchemaIsWritable() {
+        CompoundTag root = new CompoundTag();
+        root.put("frames", new CompoundTag());
+        root.putInt(NbtKeys.SCHEMA, 1);
+        FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+        assertFalse(data.readOnly());
+        FrameState created = data.getOrCreate(GOOD, () -> new FrameState(ExoframesConfig.defaults()));
+        assertSame(created, data.getOrCreate(GOOD, () -> new FrameState(ExoframesConfig.defaults())));
+        assertEquals(Set.of(GOOD), data.frames().keySet());
+        data.setDirty();
+        assertTrue(data.isDirty());
+        assertTrue(data.remove(GOOD));
+        assertFalse(data.remove(GOOD));
+        assertTrue(data.frames().isEmpty());
     }
 }
