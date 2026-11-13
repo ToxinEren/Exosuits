@@ -98,7 +98,9 @@ redstone-exoframes/
 | Fabric API | 0.92.12+1.20.1 | 0.116.18+1.21.1 |
 | Architectury API | 9.2.14 | 13.0.11 |
 | GeckoLib | 4.8.4 (`geckolib-forge-1.20.1`, `geckolib-fabric-1.20.1`, maven Cloudsmith) | 4.9.3 (`geckolib-neoforge-1.21.1`, `geckolib-fabric-1.21.1`) |
-| Toolchain | Architectury Loom 1.17.493 (plugin `dev.architectury.loom`), architectury-plugin 3.5.170, Stonecutter 0.10, Gradle 8.14.3 (wrapper scaricato da GitHub releases) | idem |
+| Toolchain | Architectury Loom 1.17.493 (plugin `dev.architectury.loom`), Stonecutter **0.9.8** (la 0.10 richiede JVM 25 per eseguire Gradle), Gradle 9.9.0 wrapper eseguito con JDK 21 | idem |
+
+Verificato il 13 novembre 2026 con un progetto usa-e-getta: le quattro varianti compilano una classe che usa `net.minecraft.world.item.Item` con mappature Mojang (`BUILD SUCCESSFUL`), quindi l'approccio B (§4) regge e la decisione aperta n. 3 del Claude Doc è chiusa. Lezioni per il build, già nel piano di M1: dal proxy della sessione cloud Maven Central risponde 429 a intermittenza; i Maven di NeoForged e Forge sono proxy completi di Central e vanno usati al suo posto (ripuntando il `mavenCentral()` registrato da Loom); LWJGL va preso dal Maven di Mojang ripuntando il repository esclusivo `MavenCentralLWJGL` di Loom; mai `exclusiveContent` su `net.neoforged`/`net.minecraftforge`/`net.fabricmc` perché Loom usa gruppi sintetici locali per le dipendenze trasformate.
 | Mappature | Mojang ufficiali su tutti i target (Forge: SRG solo a runtime via reobf) | Mojang ufficiali |
 
 Se una combinazione non risolve (per esempio Loom 1.17 con Forge 1.20.1), si scende di versione di Loom, non di loader.
