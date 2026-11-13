@@ -12,12 +12,17 @@ import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
+import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.PieceItem;
+import com.toxineren.exoframes.content.PieceKind;
 import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Decal;
+import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
 import com.toxineren.exoframes.frame.DebugWear;
@@ -103,6 +108,9 @@ public final class ExoframeGameTests {
         add(tests, "stowedArmorSurvivesEnterAndExit", ExoframeGameTests::stowedArmorSurvivesEnterAndExit);
         add(tests, "stowedStackFromOlderVersionIsRead", ExoframeGameTests::stowedStackFromOlderVersionIsRead);
         add(tests, "summaryTagRoundTrips", ExoframeGameTests::summaryTagRoundTrips);
+        add(tests, "pieceItemsKnowTheirKind", ExoframeGameTests::pieceItemsKnowTheirKind);
+        add(tests, "pieceItemRoundTripsAPiece", ExoframeGameTests::pieceItemRoundTripsAPiece);
+        add(tests, "cellItemCarriesItsCharge", ExoframeGameTests::cellItemCarriesItsCharge);
         return tests;
     }
 
@@ -578,6 +586,106 @@ public final class ExoframeGameTests {
         helper.assertTrue(Optional.of(SuitSummary.BARE).equals(
                 frames.readSummaryTag(frames.writeSummaryTag(SuitSummary.BARE))), "bare summary changed on round trip");
         helper.assertTrue(frames.readSummaryTag(new CompoundTag()).isEmpty(), "summary read from an empty tag");
+        helper.succeed();
+    }
+
+    /**
+     * I quattro pezzi Rottame sono nel registro con il loro id, sono {@link PieceItem} del tipo e del livello attesi,
+     * coincidono con i campi di ModItems e hanno la pila a 1; braccio e gamba valgono per i due lati.
+     */
+    private static void pieceItemsKnowTheirKind(GameTestHelper helper) {
+        Map<String, PieceKind> expected = Map.of(
+                "scrap_helmet", PieceKind.HELMET,
+                "scrap_torso", PieceKind.TORSO,
+                "scrap_arm", PieceKind.ARM,
+                "scrap_leg", PieceKind.LEG);
+        Map<String, Item> fields = Map.of(
+                "scrap_helmet", ModItems.SCRAP_HELMET.get(),
+                "scrap_torso", ModItems.SCRAP_TORSO.get(),
+                "scrap_arm", ModItems.SCRAP_ARM.get(),
+                "scrap_leg", ModItems.SCRAP_LEG.get());
+        expected.forEach((path, kind) -> {
+            ResourceLocation id = Ids.of(path);
+            helper.assertTrue(BuiltInRegistries.ITEM.containsKey(id), "item not registered: " + id);
+            Item item = BuiltInRegistries.ITEM.get(id);
+            helper.assertTrue(item == fields.get(path), "registry entry " + id + " is not the ModItems field");
+            helper.assertTrue(item instanceof PieceItem, "item is not a PieceItem: " + id);
+            PieceItem piece = (PieceItem) item;
+            helper.assertTrue(piece.kind() == kind, "wrong kind for " + id + ": " + piece.kind());
+            helper.assertTrue(piece.tier() == Tier.SCRAP, "wrong tier for " + id + ": " + piece.tier());
+            int max = new ItemStack(item).getMaxStackSize();
+            helper.assertTrue(max == 1, "max stack size of " + id + " is " + max + ", expected 1");
+        });
+        helper.assertTrue(PieceKind.ARM.slots().equals(List.of(PieceSlot.LEFT_ARM, PieceSlot.RIGHT_ARM)),
+                "arm slots: " + PieceKind.ARM.slots());
+        helper.assertTrue(PieceKind.LEG.slots().equals(List.of(PieceSlot.LEFT_LEG, PieceSlot.RIGHT_LEG)),
+                "leg slots: " + PieceKind.LEG.slots());
+        helper.succeed();
+    }
+
+    /**
+     * Un pezzo danneggiato diventa lo stack dell'oggetto giusto e torna pezzo con la stessa durabilita' (anche
+     * montato sull'altro lato), con moduli e aspetto nei dati dello stack; uno stack senza dati e' un pezzo nuovo;
+     * dati di un altro livello prendono il livello dell'oggetto, con la durabilita' ridotta al nuovo massimo.
+     */
+    private static void pieceItemRoundTripsAPiece(GameTestHelper helper) {
+        int scrapMax = RedstoneExoframes.config().tiers.maxDurability.get(Tier.SCRAP);
+        Piece damaged = new Piece(PieceSlot.LEFT_ARM, Tier.SCRAP, scrapMax, scrapMax);
+        damaged.damage(37);
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of(new Decal("minecraft:creeper", "red")));
+        ItemStack stack = PieceItem.fromPiece(damaged, List.of(ModuleType.NIGHT_VISION), painted);
+        helper.assertTrue(stack.getItem() == ModItems.SCRAP_ARM.get(), "wrong item for an arm: " + stack.getItem());
+        helper.assertTrue(stack.getCount() == 1, "stack count " + stack.getCount());
+        PieceData data = Compat.itemData().piece(stack).orElse(null);
+        helper.assertTrue(data != null && data.modules().equals(List.of(ModuleType.NIGHT_VISION))
+                && data.appearance().equals(painted), "modules or appearance not on the stack: " + data);
+
+        PieceItem arm = ModItems.SCRAP_ARM.get();
+        Piece back = arm.toPiece(stack, PieceSlot.RIGHT_ARM);
+        helper.assertTrue(back.slot() == PieceSlot.RIGHT_ARM && back.tier() == Tier.SCRAP
+                        && back.durability() == damaged.durability() && back.maxDurability() == scrapMax,
+                "piece changed on round trip: " + back.slot() + " " + back.tier() + " " + back.durability() + "/"
+                        + back.maxDurability());
+
+        PieceItem helmet = ModItems.SCRAP_HELMET.get();
+        Piece fresh = helmet.toPiece(new ItemStack(helmet), PieceSlot.HELMET);
+        helper.assertTrue(fresh.tier() == Tier.SCRAP && fresh.durability() == scrapMax
+                        && fresh.maxDurability() == scrapMax,
+                "bare stack is not a fresh piece: " + fresh.durability() + "/" + fresh.maxDurability());
+
+        ItemStack foreign = new ItemStack(ModItems.SCRAP_LEG.get());
+        Compat.itemData().setPiece(foreign,
+                new PieceData(Tier.ARMORED, scrapMax + 50, scrapMax + 100, List.of(), Appearance.DEFAULT));
+        Piece clamped = ModItems.SCRAP_LEG.get().toPiece(foreign, PieceSlot.LEFT_LEG);
+        helper.assertTrue(clamped.tier() == Tier.SCRAP && clamped.durability() == scrapMax
+                        && clamped.maxDurability() == scrapMax,
+                "foreign tier not clamped: " + clamped.tier() + " " + clamped.durability() + "/"
+                        + clamped.maxDurability());
+        helper.succeed();
+    }
+
+    /**
+     * Una cella da 4.000 diventa lo stack della cella e torna cella da 4.000 con la capacita' della config; uno
+     * stack senza dati e' una cella vuota; {@link CellItem#charged()} e' piena alla capacita' della config.
+     */
+    private static void cellItemCarriesItsCharge(GameTestHelper helper) {
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        CellItem item = ModItems.REDSTONE_CELL.get();
+        ItemStack stack = CellItem.fromCell(new EnergyCell(capacity, 4_000));
+        helper.assertTrue(stack.getItem() == item, "wrong item for a cell: " + stack.getItem());
+        EnergyCell back = item.toCell(stack);
+        helper.assertTrue(back.stored() == 4_000 && back.capacity() == capacity,
+                "cell changed on round trip: " + back.stored() + "/" + back.capacity());
+
+        EnergyCell empty = item.toCell(new ItemStack(item));
+        helper.assertTrue(empty.stored() == 0 && empty.capacity() == capacity,
+                "bare cell stack is not empty: " + empty.stored() + "/" + empty.capacity());
+
+        ItemStack charged = CellItem.charged();
+        helper.assertTrue(charged.getItem() == item, "charged() is not a cell: " + charged.getItem());
+        EnergyCell full = item.toCell(charged);
+        helper.assertTrue(full.stored() == capacity && full.capacity() == capacity,
+                "charged() is not full: " + full.stored() + "/" + full.capacity());
         helper.succeed();
     }
 

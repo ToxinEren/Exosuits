@@ -1,5 +1,9 @@
 {
   "item.redstone_exoframes.redstone_cell": "Cella di redstone",
+  "item.redstone_exoframes.scrap_helmet": "Elmo Rottame",
+  "item.redstone_exoframes.scrap_torso": "Torso Rottame",
+  "item.redstone_exoframes.scrap_arm": "Braccio Rottame",
+  "item.redstone_exoframes.scrap_leg": "Gamba Rottame",
   "item.redstone_exoframes.exoframe_helmet": "Attacco elmo del telaio",
   "item.redstone_exoframes.exoframe_torso": "Attacco torso del telaio",
   "item.redstone_exoframes.exoframe_legs": "Attacco gambe del telaio",

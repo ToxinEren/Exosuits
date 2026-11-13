@@ -209,6 +209,110 @@ PIECE_ICONS = (("exoframe_helmet", draw_helmet), ("exoframe_torso", draw_torso),
                ("exoframe_legs", draw_legs), ("exoframe_boots", draw_boots))
 
 
+# Pezzi Rottame da montare sul telaio (parte 3b): sagome originali in bronzo e acciaio, disegnate come griglie di
+# caratteri 16x16 (una riga per stringa), poi contornate. Legenda in SPRITE_COLORS; "." e' trasparente.
+BRONZE = (176, 128, 64, 255)
+BRONZE_LIGHT = (214, 164, 92, 255)
+BRONZE_DARK = (122, 84, 44, 255)
+STEEL = (138, 146, 156, 255)
+STEEL_LIGHT = (184, 192, 202, 255)
+STEEL_DARK = (86, 92, 104, 255)
+SPRITE_COLORS = {"B": BRONZE, "b": BRONZE_LIGHT, "d": BRONZE_DARK,
+                 "S": STEEL, "s": STEEL_LIGHT, "k": STEEL_DARK, "R": REDSTONE}
+
+SCRAP_HELMET = (
+    "................",
+    "......bbbb......",
+    "....bbBBBBbb....",
+    "...bBBBBBBBBd...",
+    "...bBBBBBBBBd...",
+    "..sSSSSSSSSSSk..",
+    "..sSkkkkkkkkSk..",
+    "..sSkRRRRRRkSk..",
+    "..sSkkkkkkkkSk..",
+    "..bBBBBBBBBBBd..",
+    "..bBBd....bBBd..",
+    "..bBBd....bBBd..",
+    "..sSSk....sSSk..",
+    "................",
+    "................",
+    "................",
+)
+
+SCRAP_TORSO = (
+    "................",
+    "..sss......sss..",
+    ".sSSSbbbbbbSSSk.",
+    ".sSSkBBBBBBkSSk.",
+    ".kkkbBBBBBBdkkk.",
+    "....bBBkkBBd....",
+    "....bBkRRkBd....",
+    "....bBkRRkBd....",
+    "....bBBkkBBd....",
+    "....sSSSSSSk....",
+    "....bBBBBBBd....",
+    "....bBBBBBBd....",
+    "....kkkkkkkk....",
+    "................",
+    "................",
+    "................",
+)
+
+SCRAP_ARM = (
+    "................",
+    ".....sssss......",
+    "....sSSSSSSk....",
+    "....sSSSSSSk....",
+    ".....bBBBBd.....",
+    ".....bBBBBd.....",
+    ".....kSSSSk.....",
+    ".....bBRBBd.....",
+    ".....bBBBBd.....",
+    ".....bBBBBd.....",
+    ".....sSSSSk.....",
+    "....sSSSSSSk....",
+    "....kSkSkSkk....",
+    "................",
+    "................",
+    "................",
+)
+
+SCRAP_LEG = (
+    "................",
+    "......bbbbb.....",
+    "......bBBBBd....",
+    "......bBBBBd....",
+    "......bBBBBd....",
+    "......sSSSSk....",
+    "......kSRSkk....",
+    "......bBBBBd....",
+    "......bBBBBd....",
+    "......bBBBBd....",
+    "......bBBBBd....",
+    "......sSSSSk....",
+    "......sSSSSSSk..",
+    "......kkkkkkkk..",
+    "................",
+    "................",
+)
+
+
+def draw_sprite(rows):
+    """Disegna una griglia di caratteri 16x16 con SPRITE_COLORS e la contorna."""
+    if len(rows) != 16 or any(len(row) != 16 for row in rows):
+        raise ValueError("sprite must be 16x16")
+    px = canvas(16, 16)
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch != ".":
+                px[y][x] = SPRITE_COLORS[ch]
+    return outline(px)
+
+
+SCRAP_ICONS = (("scrap_helmet", SCRAP_HELMET), ("scrap_torso", SCRAP_TORSO),
+               ("scrap_arm", SCRAP_ARM), ("scrap_leg", SCRAP_LEG))
+
+
 def main():
     written = [CELL_PATH, ICON_PATH]
     write_png(CELL_PATH, 16, 16, draw_cell())
@@ -216,6 +320,10 @@ def main():
     for name, draw in PIECE_ICONS:
         path = os.path.join(ITEM_DIR, name + ".png")
         write_png(path, 16, 16, draw())
+        written.append(path)
+    for name, rows in SCRAP_ICONS:
+        path = os.path.join(ITEM_DIR, name + ".png")
+        write_png(path, 16, 16, draw_sprite(rows))
         written.append(path)
     for path in ARMOR_LAYER_PATHS:
         write_png(path, 64, 32, canvas(64, 32))

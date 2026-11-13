@@ -1,5 +1,9 @@
 {
   "item.redstone_exoframes.redstone_cell": "Redstone Cell",
+  "item.redstone_exoframes.scrap_helmet": "Scrap Helmet",
+  "item.redstone_exoframes.scrap_torso": "Scrap Torso",
+  "item.redstone_exoframes.scrap_arm": "Scrap Arm",
+  "item.redstone_exoframes.scrap_leg": "Scrap Leg",
   "item.redstone_exoframes.exoframe_helmet": "Exoframe Helmet Mount",
   "item.redstone_exoframes.exoframe_torso": "Exoframe Torso Mount",
   "item.redstone_exoframes.exoframe_legs": "Exoframe Leg Mount",
