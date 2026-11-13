@@ -1,5 +1,7 @@
 package com.toxineren.exoframes;
 
+import com.toxineren.exoframes.content.ModCreativeTabs;
+import com.toxineren.exoframes.content.ModItems;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,5 +15,7 @@ public final class RedstoneExoframes {
 
     public static void init() {
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
+        ModItems.register();
+        ModCreativeTabs.register();
     }
 }
