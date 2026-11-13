@@ -6,12 +6,14 @@ package com.toxineren.exoframes.compat;
  * E' l'unica fonte delle chiavi: 1.20.1 (tag dello stack) e 1.21.1 (componente vanilla custom_data) leggono e
  * scrivono lo stesso CompoundTag con queste chiavi, cosi' un mondo 1.20.1 aggiornato a 1.21.1 (il DFU di vanilla
  * copia il tag dello stack in custom_data cosi' com'e') conserva energia, durabilita' e il resto dei dati primitivi.
- * Gli stack annidati (gli item riposti di {@link #STOWED}) non vengono convertiti da vanilla e avranno bisogno di una
- * migrazione esplicita.
+ * Gli stack annidati (l'armatura stivata di {@link #STOWED}, nel dato salvato) non vengono convertiti da vanilla:
+ * portano accanto {@link #DATA_VERSION} per passare dal correttore di dati in lettura.
  * <p>
  * Lo stato del telaio per giocatore (FrameStateCodec in compat/impl) riusa le stesse chiavi e gli stessi tipi per
  * pezzi (aspetto compreso), cella, proprietario e flag, cosi' i due codec restano allineati; le chiavi {@link #CAPACITY},
- * {@link #ACTIVE} e {@link #CARRY_MILLI} esistono solo nello stato del telaio.
+ * {@link #ACTIVE} e {@link #CARRY_MILLI} esistono solo nello stato del telaio. Il registro dei telai del dato salvato
+ * (FrameStateSavedData) ha le sue chiavi, dalla radice del file: {@link #SCHEMA}, {@link #WORN}, {@link #PLACED} e
+ * quelle dei record.
  */
 public final class NbtKeys {
     /** Tag radice che contiene tutti i dati della mod sullo stack. */
@@ -53,12 +55,39 @@ public final class NbtKeys {
     /** Pezzi montati sul telaio (tag con una voce per id di PieceSlot in minuscolo). */
     public static final String PIECES = "pieces";
     /**
-     * Item riposti (lista di tag di item). Definita ma non ancora scritta ne' letta: arriva con la Milestone 3
-     * (ingresso e uscita dal telaio). Gli stack staranno accanto al FrameState nella voce del giocatore del dato
-     * salvato, salvati con il provider su 1.21.1, letti e scritti con due metodi di FrameStateAccess e non inviati al
-     * client (vedi docs/compat.md, "Limiti noti e rinvii").
+     * Armatura stivata di un telaio (lista di compound con {@link #SLOT}, {@link #DATA_VERSION} e {@link #ITEM}),
+     * dentro ogni record del registro dei telai del dato salvato (voci di {@link #WORN} e di {@link #PLACED}), accanto
+     * a {@link #STATE}; assente vale vuota. Mai inviata al client. Il dato salvato la conserva come tag opachi; gli
+     * stack si scrivono e si leggono (con il provider su 1.21.1 e il correttore di dati vanilla per le voci di una
+     * versione piu' vecchia) nel livello che li trasforma in ItemStack.
      */
     public static final String STOWED = "stowed";
+    /** Slot di provenienza di una voce di {@link #STOWED} (string: il nome dell'EquipmentSlot in minuscolo). */
+    public static final String SLOT = "slot";
+    /** Versione dei dati di Minecraft (int) con cui e' stato scritto lo stack di una voce di {@link #STOWED}. */
+    public static final String DATA_VERSION = "data_version";
+    /** Lo stack di una voce di {@link #STOWED} (compound nel formato degli stack della versione che l'ha scritto). */
+    public static final String ITEM = "item";
+    /**
+     * Telai indossati nel dato salvato (compound con una voce per giocatore, chiave = UUID in forma testuale; ogni
+     * voce ha {@link #ID}, {@link #STATE} e {@link #STOWED}).
+     */
+    public static final String WORN = "worn";
+    /**
+     * Telai piazzati nel mondo nel dato salvato (compound con una voce per identita' del telaio, chiave = UUID in
+     * forma testuale; ogni voce ha {@link #STATE}, {@link #STOWED}, {@link #DIM}, {@link #POS} e {@link #YAW}).
+     */
+    public static final String PLACED = "placed";
+    /** Identita' del telaio (UUID in forma di int array), in una voce di {@link #WORN}. */
+    public static final String ID = "id";
+    /** Stato del telaio (compound con le chiavi dello stato del telaio), in un record del registro dei telai. */
+    public static final String STATE = "state";
+    /** Dimensione di un telaio piazzato (string: id della dimensione, es. {@code minecraft:overworld}). */
+    public static final String DIM = "dim";
+    /** Posizione di un telaio piazzato (lista di tre double: x, y, z). */
+    public static final String POS = "pos";
+    /** Orientamento di un telaio piazzato (float, gradi). */
+    public static final String YAW = "yaw";
     /**
      * Capacita' della cella (int), dentro il tag {@link #CELL} dello stato del telaio per giocatore: serve a
      * ricostruire la cella con capacita' e carica.
@@ -86,8 +115,9 @@ public final class NbtKeys {
     public static final String CONDITION = "condition";
 
     /**
-     * Versione dello schema delle voci (int), accanto a {@code frames} nel dato salvato degli stati del telaio;
-     * assente vale 1. Non c'e' marcatore sugli item.
+     * Versione dello schema del dato salvato del registro dei telai (int), accanto a {@link #WORN} e {@link #PLACED}
+     * (schema 2; lo schema 1 aveva solo {@code frames}, uno stato per giocatore); assente vale 1. Non c'e' marcatore
+     * sugli item.
      */
     public static final String SCHEMA = "schema";
 

@@ -31,7 +31,8 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         if (!p.level().isClientSide()) {
             // sul server logico un Player che non e' un ServerPlayer non ha stato: mai la copia del client
             return p instanceof ServerPlayer serverPlayer
-                    ? Optional.ofNullable(FrameStateSavedData.get(serverPlayer.server).frames().get(p.getUUID()))
+                    ? Optional.ofNullable(FrameStateSavedData.get(serverPlayer.server).worn(p.getUUID()))
+                            .map(FrameRecord::state)
                     : Optional.empty();
         }
         return clientView(p);
@@ -44,7 +45,8 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return;
         }
-        FrameState state = data.getOrCreate(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()));
+        FrameState state = data.getOrCreateWorn(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()))
+                .state();
         data.dropUnread(p.getUUID());
         try {
             change.accept(state);
@@ -62,12 +64,12 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return false;
         }
-        FrameState state = data.frames().get(p.getUUID());
-        if (state == null) {
+        FrameRecord record = data.worn(p.getUUID());
+        if (record == null) {
             return false;
         }
         try {
-            change.accept(state);
+            change.accept(record.state());
         } finally {
             // anche se la modifica lancia a meta': il disco resta allineato alla memoria (nessuna sincronizzazione)
             data.setDirty();
@@ -82,7 +84,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return;
         }
-        data.remove(p.getUUID());
+        data.removeWorn(p.getUUID());
         data.dropUnread(p.getUUID());
         data.setDirty();
         syncTo(p);
@@ -95,8 +97,8 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
 
     @Override
     public void syncTo(ServerPlayer p) {
-        FrameState state = FrameStateSavedData.get(p.server).frames().get(p.getUUID());
-        Optional<CompoundTag> tag = Optional.ofNullable(state).map(FrameStateCodec::write);
+        FrameRecord record = FrameStateSavedData.get(p.server).worn(p.getUUID());
+        Optional<CompoundTag> tag = Optional.ofNullable(record).map(worn -> FrameStateCodec.write(worn.state()));
         Compat.net().sendToPlayer(p, FrameStateSyncPacket.ID, new FrameStateSyncPacket(p.getUUID(), tag));
     }
 
