@@ -149,14 +149,19 @@ def walk(archive, prefix, findings, words):
         lower = info.filename.lower()
         try:
             data = archive.read(info)
-        except (zipfile.BadZipFile, zlib.error, OSError, EOFError) as problem:
+        except (zipfile.BadZipFile, zlib.error, OSError, EOFError, RuntimeError, NotImplementedError) as problem:
+            # RuntimeError: voce cifrata; NotImplementedError: metodo di compressione non supportato.
             findings.append(('voce illeggibile', where, str(problem)[:60]))
             continue
         scan_bytes(where + ' (nome)', info.filename.encode('utf-8', 'replace'), findings, words)
         scan_bytes(where, data, findings, words)
-        unpacked = gunzip(data)
-        if unpacked is not None:  # strutture .nbt, .dat e qualunque altro file compresso con gzip
-            scan_bytes(where + ' (decompresso)', unpacked, findings, words)
+        if data[:2] == GZIP_MAGIC:  # strutture .nbt, .dat e qualunque altro file compresso con gzip
+            unpacked = gunzip(data)
+            if unpacked is None:
+                # Un gzip che non si apre non si puo' controllare: meglio fermarsi che lasciarlo passare.
+                findings.append(('file gzip illeggibile', where, ''))
+            else:
+                scan_bytes(where + ' (decompresso)', unpacked, findings, words)
         if lower.endswith('.nbt'):
             scan_nbt(where, data, findings, words)
         if info.comment:
