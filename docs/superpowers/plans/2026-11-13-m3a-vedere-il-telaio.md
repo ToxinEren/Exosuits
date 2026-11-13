@@ -247,16 +247,29 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 - [ ] **Step 4: Run** i test in mondo sulle varianti attive — PASS; build; `OK sources`.
 - [ ] **Step 5:** commit `debug: comando per vestire il telaio di prova`.
 
-### Task 10: Verifica trasversale, checklist per il PC, documenti
+### Task 10: Client senza schermo nel repo, verifica trasversale, checklist per il PC, documenti
+
+> **Riscritto (Revisione 4, 13 novembre 2026).** Dal 13 novembre il client vero gira nel cloud senza schermo (prova fuori dal repo: script, init script di Gradle, client RCON e rapporto). Questo task porta lo strumento nel repo, lo usa per la verifica finale della parte 3a sulle quattro varianti e scrive la checklist per il PC, che ora serve a confermare e a coprire ciò che lo script non vede.
 
 **Files:**
-- Create: `docs/test-in-gioco/m3a-vedere-il-telaio.md`
-- Modify: `README.md`, `docs/compat.md`, `tools/check_jars.sh` (se servono controlli sulle nuove risorse)
+- Create: `tools/client/client_shot.sh`, `tools/client/shot.init.gradle`, `tools/client/rcon.py`, `tools/client/m3a_shots.sh`, `tools/client/README.md`, `docs/test-in-gioco/m3a-vedere-il-telaio.md`, `docs/test-in-gioco/m3a-screenshot/`
+- Modify: `README.md`, `docs/compat.md`, `.gitignore`
 
-- [ ] **Step 0 (Revisione 1):** la checklist comincia dall'avvio del client su ogni variante (un mixin sbagliato lo fa crollare lì) e chiede anche: tuta più grande del giocatore e piedi della tuta a terra; pilota visibile dalla vita in su nel telaio nudo, mai le gambe; con i pezzi montati nessuna parte della skin che spunta; oggetto impugnato nella mano della tuta, per entrambe le mani; inventario (anteprima del giocatore) coerente. Se la prova del client senza schermo nel cloud ha funzionato, le stesse verifiche si fanno prima nel cloud con gli screenshot e la checklist lo dice.
-- [ ] **Step 1:** checklist per il PC: per ogni variante, in un mondo in creativa, `/exoframe debug wear rottame` e guardarsi in terza persona da fronte, lato e retro; provare `nudo`, gli stati 1, 2, 3 e due colori; accovacciarsi, correre, nuotare, elitre se disponibili; skin normale e sottile; un secondo giocatore su server dedicato che guarda il primo; cosa fotografare e cosa riportare (pezzi sospesi o sfalsati rispetto al corpo, sfarfallii, parti della skin che spuntano, cali di fluidità).
-- [ ] **Step 2: verifica completa** — build delle quattro varianti con `collectJar`; test JUnit e in mondo; `OK sources`, `OK jars`, `OK art`; server dedicato che parte e si ferma sulle quattro varianti; CI verde.
-- [ ] **Step 3:** README (stato, comando di debug, come rigenerare la grafica) e `docs/compat.md` allineati; commit `docs: checklist in gioco della parte 3a` e push.
+**Interfaces:**
+- Consumes: la prova del client senza schermo, fuori dal repo (`client_shot.sh`, `spike.init.gradle`, `rcon.py`, `REPORT.md`); il comando `/exoframe debug wear` (Task 9); tutto ciò che la parte 3a ha costruito.
+- Produces:
+  - `tools/client/client_shot.sh <variante> <cartella> ["comando" ...]`: avvia sotto Xvfb un server dedicato locale in modalità offline e il client di sviluppo della variante, fa entrare il giocatore, esegue i comandi via RCON e salva `back.png`, `front.png`, `quarter.png` più i log; chiude tutto alla fine. Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (`versions/<variante>/run-shot-client` e `run-shot-server`, ignorate da git), senza toccare `run/` e `run-gametest/`. Porta, dimensione della finestra e nome del giocatore da variabili d'ambiente.
+  - L'EULA di Minecraft non si accetta in silenzio: lo script parte solo con `EXO_ACCEPT_EULA=true` e, senza, si ferma spiegando che impostarla significa accettare l'EULA per quel server di prova.
+  - `tools/client/m3a_shots.sh <variante> <cartella>`: l'insieme standard della parte 3a (telaio nudo; Rottame negli stati 0, 1, 2, 3; Rottame con due colori di prova; un oggetto in ogni mano; posa sdraiata forzata con i comandi), una cartella per scatto.
+  - `tools/client/README.md`: cosa serve (Xvfb, xdotool, ImageMagick, Mesa software, JDK 21), come si usa, quanto dura, cosa non copre (vista laterale vera, audio, fluidità, secondo giocatore), i messaggi d'errore innocui nel log.
+  - `docs/test-in-gioco/m3a-screenshot/`: una selezione degli scatti finali sulle quattro varianti (PNG senza metadati, ognuno sotto i 200 KB), citati dalla checklist come riferimento di ciò che si deve vedere.
+  - `docs/test-in-gioco/m3a-vedere-il-telaio.md`: checklist per il PC.
+
+- [ ] **Step 1: portare lo strumento** nel repo dalla prova, ripulito: niente percorsi dello scratchpad, niente rimedio per mclib (il progetto lo ha già nel classpath di sviluppo di Forge), messaggi in italiano come gli altri script, uscita diversa da zero se il client o il server non partono o se il giocatore non entra.
+- [ ] **Step 2: eseguire** `m3a_shots.sh` sulle quattro varianti; guardare ogni scatto. Deve vedersi: tuta alta circa tre blocchi con i piedi a terra; pilota visibile dalla vita in su nel telaio nudo, mai le gambe; con i pezzi montati nessuna parte della skin; i quattro stati in ordine; i colori di prova solo sulle piastre verniciabili; l'oggetto nella mano della tuta, per entrambe le mani; da sdraiati tuta e pilota a terra; nei log nessun avviso del mod e nessun errore di mixin. Ciò che non torna è un rilievo da riportare, non da spiegare.
+- [ ] **Step 3: checklist per il PC**: avvio del client di ogni variante dai jar di produzione (i jar di `collectJar`, non l'ambiente di sviluppo: è la prova che i mixin si applicano fuori dallo sviluppo); gli stessi controlli dello Step 2 con gli scatti di riferimento accanto; in più ciò che il cloud non copre: vista laterale, accovacciarsi, correre, nuotare, anteprima del giocatore nell'inventario, skin normale e sottile, mantello, un secondo giocatore su server dedicato che guarda il primo, fluidità; cosa fotografare e cosa riportare.
+- [ ] **Step 4: verifica completa** — build delle quattro varianti con `collectJar`; test JUnit e in mondo; `OK sources`, `OK jars`, `OK art`; CI verde sull'ultimo push.
+- [ ] **Step 5:** README (stato della parte 3a, comando di debug, come rigenerare la grafica, come fare gli scatti) e `docs/compat.md` allineati; commit `test: client senza schermo nel repo, scatti e checklist della parte 3a`.
 
 ### Task 11: Telaio ridisegnato (scheletro grande con testa e gambe meccaniche)
 
