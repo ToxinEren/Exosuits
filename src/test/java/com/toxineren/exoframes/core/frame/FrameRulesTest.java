@@ -15,6 +15,7 @@ import com.toxineren.exoframes.core.energy.EnergyRates;
 import com.toxineren.exoframes.core.energy.EnergyState;
 import com.toxineren.exoframes.core.module.ModuleInstaller;
 import com.toxineren.exoframes.core.module.ModuleType;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class FrameRulesTest {
@@ -143,6 +144,34 @@ class FrameRulesTest {
         assertFalse(rules.moduleOperational(s, ModuleType.SHOCKWAVE));
         // evento all'atterraggio: mai abilitato per tick, quindi nessun costo continuo
         assertFalse(rules.evaluate(s).enabledModules().contains(ModuleType.SHOCKWAVE));
+    }
+
+    @Test
+    void swappingPieceDropsItsModules() {
+        FrameState s = poweredFrame();
+        s.mount(Piece.fresh(PieceSlot.TORSO, Tier.ARMORED, cfg.tiers));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.TORSO, ModuleType.ENERGY_SHIELD));
+        s.activeToggles().add(ModuleType.ENERGY_SHIELD);
+        assertTrue(rules.evaluate(s).enabledModules().contains(ModuleType.ENERGY_SHIELD));
+
+        s.unmount(PieceSlot.TORSO);
+        s.mount(scrap(PieceSlot.TORSO));
+
+        assertFalse(rules.evaluate(s).enabledModules().contains(ModuleType.ENERGY_SHIELD));
+        assertTrue(s.modules().getOrDefault(PieceSlot.TORSO, List.of()).isEmpty());
+        assertFalse(s.activeToggles().contains(ModuleType.ENERGY_SHIELD));
+    }
+
+    @Test
+    void takeModulesHandsBackTheSlotModules() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.HELMET));
+        s.installModule(PieceSlot.HELMET, ModuleType.NIGHT_VISION);
+        s.activeToggles().add(ModuleType.NIGHT_VISION);
+        assertEquals(List.of(ModuleType.NIGHT_VISION), s.takeModules(PieceSlot.HELMET));
+        assertTrue(s.modules().getOrDefault(PieceSlot.HELMET, List.of()).isEmpty());
+        assertFalse(s.activeToggles().contains(ModuleType.NIGHT_VISION));
+        assertEquals(List.of(), s.takeModules(PieceSlot.HELMET));
     }
 
     @Test

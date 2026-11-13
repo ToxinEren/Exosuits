@@ -20,8 +20,9 @@ import java.util.UUID;
  * Stato mutabile di un telaio: cella, pezzi montati, moduli installati per slot, toggle accesi,
  * rinforzo e proprietario. Gli effetti si calcolano con {@link FrameRules}.
  *
- * <p>I moduli restano associati allo slot anche se il pezzo viene smontato: funzionano solo con un pezzo
- * integro montato in quello slot (vedi {@link FrameRules#moduleOperational(FrameState, ModuleType)}).
+ * <p>I moduli appartengono al pezzo montato nel loro slot: smontare o sostituire il pezzo toglie dal telaio
+ * i moduli di quello slot (e i loro toggle accesi). Per riportarli sull'oggetto del pezzo, il livello di
+ * piattaforma chiama {@link #takeModules(PieceSlot)} prima di {@link #unmount(PieceSlot)}.
  */
 public final class FrameState {
 
@@ -62,15 +63,36 @@ public final class FrameState {
         return Collections.unmodifiableMap(pieces);
     }
 
-    /** Monta il pezzo nel suo slot, sostituendo quello eventualmente presente. */
+    /**
+     * Monta il pezzo nel suo slot, sostituendo quello eventualmente presente; lo slot riparte senza moduli
+     * (quelli del pezzo sostituito vanno ripresi prima con {@link #takeModules(PieceSlot)}).
+     */
     public void mount(Piece p) {
         Objects.requireNonNull(p, "piece");
+        takeModules(p.slot());
         pieces.put(p.slot(), p);
     }
 
-    /** Smonta il pezzo dallo slot e lo restituisce (null se lo slot era vuoto). */
+    /**
+     * Smonta il pezzo dallo slot e lo restituisce (null se lo slot era vuoto). Toglie anche i moduli dello
+     * slot e i loro toggle: chi deve conservarli li riprende prima con {@link #takeModules(PieceSlot)}.
+     */
     public Piece unmount(PieceSlot s) {
-        return pieces.remove(Objects.requireNonNull(s, "slot"));
+        takeModules(Objects.requireNonNull(s, "slot"));
+        return pieces.remove(s);
+    }
+
+    /**
+     * Toglie e restituisce i moduli installati nello slot (lista vuota se nessuno), spegnendo i loro toggle.
+     * Il pezzo resta montato.
+     */
+    public List<ModuleType> takeModules(PieceSlot slot) {
+        List<ModuleType> removed = modules.remove(Objects.requireNonNull(slot, "slot"));
+        if (removed == null) {
+            return List.of();
+        }
+        removed.forEach(activeToggles::remove);
+        return List.copyOf(removed);
     }
 
     /** Vista in sola lettura dei moduli installati per slot. */
