@@ -29,8 +29,9 @@ import java.util.Set;
  *   <li>per ogni slot l'usura cumulata e' floor(somma delle quote in millesimi di ogni colpo / 1000), dove la
  *       quota in millesimi di un colpo e' arrotondata con i resti maggiori: la garanzia vale rispetto a queste
  *       quote intere in millesimi, non rispetto alla quota reale;</li>
- *   <li>l'usura totale cumulata e' in (danno totale - 6, danno totale]: il telaio non si usura mai piu' del danno
- *       ricevuto e la parte in sospeso e' al massimo 999 millesimi per slot;</li>
+ *   <li>l'usura totale cumulata non supera mai il danno assorbito; ne resta sotto di meno di 6 punti (al massimo
+ *       999 millesimi in sospeso per slot) piu' i millesimi scartati quando un pezzo viene smontato o sostituito
+ *       ({@code FrameState} azzera il riporto dello slot);</li>
  *   <li>l'usura di un singolo colpo puo' differire dal suo danno, perche' le frazioni in sospeso si realizzano o
  *       si rimandano, ma non vengono mai inventate.</li>
  * </ul>

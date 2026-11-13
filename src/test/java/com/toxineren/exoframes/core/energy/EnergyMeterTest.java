@@ -42,6 +42,10 @@ class EnergyMeterTest {
         EnergyCell cell = EnergyCell.full(10_000);
         run(new EnergyMeter(EnergyRates.spec()), cell, Activity.WALK, 0, 1.25, 20);
         assertEquals(9_990, cell.stored());
+        // (100 + 150) milliRE x 1.25 = 312.5 -> 313 per tick: 6 RE in 20 tick (5 se il moltiplicatore saltasse gli extra)
+        EnergyCell withExtra = EnergyCell.full(10_000);
+        run(new EnergyMeter(EnergyRates.spec()), withExtra, Activity.IDLE, 150, 1.25, 20);
+        assertEquals(9_994, withExtra.stored());
     }
 
     @Test

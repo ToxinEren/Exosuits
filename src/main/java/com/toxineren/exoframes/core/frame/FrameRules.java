@@ -19,7 +19,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Regole che trasformano uno {@link FrameState} negli {@link FrameEffects} sul portatore. Ogni valore viene dalla config. */
+/**
+ * Regole che trasformano uno {@link FrameState} negli {@link FrameEffects} sul portatore. I valori vengono dalla
+ * config, tranne le tariffe per attivita' (fermo, camminata, corsa) e il costo del salto, che vengono dalle
+ * {@link EnergyRates} dell'{@link EnergyMeter} passato a {@link #tick} e {@link #jump}: il contatore va costruito con
+ * {@code new EnergyMeter(EnergyRates.from(config.energy))} e ricostruito quando la config cambia.
+ * <p>
+ * Il moltiplicatore del torso rotto ({@code damage.brokenTorsoConsumptionMultiplier}) vale per ogni consumo:
+ * attivita', moduli per tick, salto e costi a uso.
+ */
 public final class FrameRules {
 
     /** Punti armatura di un set completo di ferro vanilla: la protezione di riferimento del livello SCRAP. */
@@ -117,14 +125,15 @@ public final class FrameRules {
 
     /**
      * True se il modulo puo' essere attivato ora: e' operativo, lo stato energetico e' NORMAL e, per i moduli a
-     * singolo uso, la cella contiene almeno {@code modules.costPerUse}.
+     * singolo uso, la cella contiene almeno il costo a uso ({@code modules.costPerUse} per il moltiplicatore del
+     * torso rotto).
      */
     public boolean canActivate(FrameState s, ModuleType m) {
         Objects.requireNonNull(m, "module");
         if (!moduleOperational(s, m) || energyState(s) != EnergyState.NORMAL) {
             return false;
         }
-        int perUse = cfg.modules.costPerUse.getOrDefault(m, 0);
+        int perUse = perUseCost(s, m);
         return perUse <= 0 || s.cell().stored() >= perUse;
     }
 
@@ -156,7 +165,8 @@ public final class FrameRules {
 
     /**
      * Usa un modulo a evento ({@code ON_LANDING} o {@code ON_ATTACK}): se {@link #canActivate} lo consente toglie
-     * {@code modules.costPerUse} dalla cella e restituisce true, altrimenti restituisce false senza toccare la cella.
+     * dalla cella il costo a uso, {@code Math.round(modules.costPerUse x moltiplicatore di consumo)}, e restituisce
+     * true, altrimenti restituisce false senza toccare la cella.
      *
      * @throws IllegalArgumentException se il modulo non e' a singolo uso
      */
@@ -168,7 +178,7 @@ public final class FrameRules {
         if (!canActivate(s, m)) {
             return false;
         }
-        s.cell().drain(cfg.modules.costPerUse.getOrDefault(m, 0));
+        s.cell().drain(perUseCost(s, m));
         return true;
     }
 
@@ -187,6 +197,11 @@ public final class FrameRules {
     /** Punti armatura di un set completo del livello: round(IRON_ARMOR_POINTS x moltiplicatore del livello). */
     public int protectionPointsFor(Tier t) {
         return (int) Math.round(IRON_ARMOR_POINTS * multiplier(t));
+    }
+
+    /** Costo a uso del modulo con il moltiplicatore del torso rotto: round(costPerUse x moltiplicatore). */
+    private int perUseCost(FrameState s, ModuleType m) {
+        return (int) Math.round(cfg.modules.costPerUse.getOrDefault(m, 0) * consumptionMultiplier(s));
     }
 
     private int milliRePerTick(ModuleType m) {

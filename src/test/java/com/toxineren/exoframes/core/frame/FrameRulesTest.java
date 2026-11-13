@@ -348,6 +348,113 @@ class FrameRulesTest {
     }
 
     @Test
+    void brokenTorsoRaisesPerUseCost() {
+        FrameState s = shockwaveFrame();
+        s.mount(scrap(PieceSlot.TORSO));
+        breakPiece(s, PieceSlot.TORSO);
+        assertTrue(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(cfg.energy.cellCapacity - 250, s.cell().stored());
+
+        // 240 RE su 1 000: stato NORMAL, bastano per i 200 di base ma non per i 250 con il torso rotto
+        s.insertCell(new EnergyCell(1_000, 240));
+        assertFalse(rules.canActivate(s, ModuleType.SHOCKWAVE));
+        assertFalse(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(240, s.cell().stored());
+    }
+
+    @Test
+    void heldModuleCostFollowsBrokenTorso() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.TORSO));
+        breakPiece(s, PieceSlot.TORSO);
+        s.mount(Piece.fresh(PieceSlot.RIGHT_ARM, Tier.ARMORED, cfg.tiers));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.RIGHT_ARM, ModuleType.DRILL));
+        EnergyMeter meter = meter();
+        // (100 + 1 250) milliRE x 1.25 = 1 687.5 -> 1 688 per tick: 33 RE in 20 tick, 760 di riporto
+        assertEquals(33, run(rules, s, Activity.IDLE, meter, FrameContext.NONE, Set.of(ModuleType.DRILL), 20));
+        assertEquals(760, meter.carryMilliRe());
+    }
+
+    @Test
+    void perUseCostEqualToChargeIsAllowed() {
+        FrameState s = shockwaveFrame();
+        s.insertCell(new EnergyCell(1_000, 200));
+        assertTrue(rules.canActivate(s, ModuleType.SHOCKWAVE));
+        assertTrue(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(0, s.cell().stored());
+    }
+
+    @Test
+    void bladeUseDrainsItsCost() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.RIGHT_ARM));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.RIGHT_ARM, ModuleType.HYDRAULIC_BLADE));
+        assertTrue(rules.use(s, ModuleType.HYDRAULIC_BLADE));
+        assertEquals(cfg.energy.cellCapacity - 10, s.cell().stored());
+    }
+
+    @Test
+    void brokenTorsoJumpCostIsRounded() {
+        ExoframesConfig custom = ExoframesConfig.defaults();
+        custom.energy.jumpCost = 17;
+        FrameRules customRules = new FrameRules(custom);
+        FrameState s = new FrameState(custom);
+        s.insertCell(EnergyCell.full(custom.energy.cellCapacity));
+        s.mount(Piece.fresh(PieceSlot.TORSO, Tier.SCRAP, custom.tiers));
+        breakPiece(s, PieceSlot.TORSO);
+        // 17 x 1.25 = 21.25: arrotondato a 21
+        assertEquals(21, customRules.jump(s, new EnergyMeter(EnergyRates.from(custom.energy))));
+    }
+
+    @Test
+    void rulesFollowTheConfig() {
+        ExoframesConfig custom = ExoframesConfig.defaults();
+        custom.modules.costPerSecond.put(ModuleType.REBREATHER, 10);
+        custom.modules.costPerSecond.put(ModuleType.JETPACK, 20);
+        custom.modules.costPerUse.put(ModuleType.SHOCKWAVE, 50);
+        custom.energy.jumpCost = 30;
+        custom.energy.lowThreshold = 0.5;
+        custom.damage.brokenTorsoConsumptionMultiplier = 2.0;
+        FrameRules customRules = new FrameRules(custom);
+
+        FrameState s = new FrameState(custom);
+        s.insertCell(EnergyCell.full(custom.energy.cellCapacity));
+        for (PieceSlot slot : PieceSlot.values()) {
+            s.mount(Piece.fresh(slot, Tier.SCRAP, custom.tiers));
+        }
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.HELMET, ModuleType.REBREATHER));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.TORSO, ModuleType.JETPACK));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.LEFT_LEG, ModuleType.SHOCKWAVE));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.RIGHT_LEG, ModuleType.SHOCKWAVE));
+        EnergyRates rates = EnergyRates.from(custom.energy);
+
+        // respiratore sott'acqua: 2 + 10 RE/s
+        assertEquals(12, run(customRules, s, Activity.IDLE, new EnergyMeter(rates), new FrameContext(true), Set.of(),
+                20));
+        // jetpack tenuto: 2 + 20 RE/s
+        assertEquals(22, run(customRules, s, Activity.IDLE, new EnergyMeter(rates), FrameContext.NONE,
+                Set.of(ModuleType.JETPACK), 20));
+        assertEquals(30, customRules.jump(s, new EnergyMeter(rates)));
+        int before = s.cell().stored();
+        assertTrue(customRules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(before - 50, s.cell().stored());
+
+        // soglia LOW al 50 %: 4 000 su 10 000 non basta per attivare
+        s.insertCell(new EnergyCell(custom.energy.cellCapacity, 4_000));
+        assertFalse(customRules.canActivate(s, ModuleType.SHOCKWAVE));
+        s.insertCell(EnergyCell.full(custom.energy.cellCapacity));
+
+        // torso rotto: moltiplicatore 2.0 su attivita', moduli, salto e costi a uso
+        breakPiece(s, PieceSlot.TORSO);
+        assertEquals(2.0, customRules.evaluate(s).consumptionMultiplier(), EPS);
+        assertEquals(16, run(customRules, s, Activity.WALK, new EnergyMeter(rates), 20));
+        assertEquals(60, customRules.jump(s, new EnergyMeter(rates)));
+        before = s.cell().stored();
+        assertTrue(customRules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(before - 100, s.cell().stored());
+    }
+
+    @Test
     void shockwaveOnLeftLegOnlyIsNotOperational() {
         FrameState s = poweredFrame();
         s.mount(scrap(PieceSlot.LEFT_LEG));
