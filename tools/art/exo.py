@@ -236,6 +236,9 @@ class Model:
         for name, (rx, ry, rw, rh) in ATLAS_REGIONS:
             x = y = shelf = 0
             for th, tw, _, b, f in sorted(rects[name], key=lambda r: (-r[0], -r[1], r[2])):
+                if tw > rw:
+                    raise ValueError(f'regione {name}: la faccia {f} di {b.name} e\' larga {tw} texel, '
+                                     f'la regione {rw}')
                 if x + tw > rw:
                     y += shelf
                     x = shelf = 0

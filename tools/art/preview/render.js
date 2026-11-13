@@ -9,7 +9,14 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+let chromium;
+try {
+  ({ chromium } = require('playwright'));
+} catch (e) {
+  console.error('Playwright non trovato: serve per le anteprime. Fuori dalla sessione cloud installarlo con\n'
+    + '  npm install playwright && npx playwright install chromium\n(in tools/art/preview). Dettaglio: ' + e.message);
+  process.exit(1);
+}
 
 const HERE = __dirname;
 const ASSETS = path.join(HERE, '..', '..', '..', 'src', 'main', 'resources', 'assets', 'redstone_exoframes');

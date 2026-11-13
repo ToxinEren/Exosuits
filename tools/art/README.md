@@ -5,7 +5,8 @@ Genera da script la grafica del telaio: geometria GeckoLib, atlante e animazioni
 
 ## Comandi
 
-Dalla radice del repository (serve Python 3 con numpy; la CI installa anche Pillow):
+Dalla radice del repository (serve Python 3 con numpy, versione in `tools/art/requirements.txt`:
+`python3 -m pip install -r tools/art/requirements.txt`; Pillow serve solo per ridimensionare le anteprime):
 
     python3 tools/art/build.py                 rigenera i tre file in src/main/resources/assets/redstone_exoframes/
     python3 tools/art/build.py --out <dir>     li scrive in <dir>/geo, <dir>/textures/entity, <dir>/animations
@@ -19,8 +20,11 @@ File generati (uguali sulle quattro varianti):
 
 Stesso input, stessi byte: semi ricavati dai nomi delle scatole, nessuna data, ordine stabile di ossa, scatole e
 rettangoli, JSON con chiavi in ordine fisso e numeri interi quando possibile, PNG compresse con lo zlib di Python
-(livello 9). Se un giorno `check_art.sh` fallisse in CI con i soli PNG diversi, la prima cosa da sospettare e' una
-versione di zlib diversa da quella locale.
+(livello 9). La pittura usa solo aritmetica intera per le scelte casuali (`paint.HashRng`, niente generatore di
+numpy, il cui flusso puo' cambiare tra versioni); numpy resta comunque fissato in `requirements.txt`.
+`check_art.sh` confronta byte per byte i due JSON; per l'atlante confronta l'elenco dei blocchi (solo IHDR, IDAT,
+IEND), IHDR e i pixel decompressi (`tools/art/compare_png.py`), perche' i byte compressi cambiano con la build di
+zlib (per esempio zlib-ng) anche a pixel identici.
 
 `build.py` si ferma (uscita 1) se il modello non passa i controlli di `exo.Model.check()`:
 
@@ -98,6 +102,8 @@ del file, `west` quella a x massima (lo spike le aveva al contrario). Per ogni f
 cade l'angolo in alto a sinistra del rettangolo e in che direzione crescono u e v; e' ricavato da `VertexSet` e
 `GeoQuad.build` di GeckoLib 4.x e confermato dal visore. Le rotazioni (non usate dal telaio) seguono la stessa
 lettura: GeckoLib usa (-rx, -ry, rz) attorno al perno con x negata, applicate in ordine Z, Y, X.
+Le facce `down` si scrivono con `uv_size` positivo, a differenza di Blockbench (e dell'esempio di GeckoLib) che usa
+una v negativa: per GeckoLib e' giusto, ma importato in Blockbench e riesportato il sotto apparira' capovolto.
 
 ## Anteprime (solo locali, non nella CI)
 
@@ -109,7 +115,10 @@ scrive `tools/art/preview/out/exoframe_front.png`, `_back.png`, `_side.png` (ign
 `--views front,back,side,left,front_flat,back_flat,top,bottom`, `--mannequin 0|1` (giocatore di riferimento,
 predefinito 1), `--pose 'armorRightArm:-45,0,0;armorHead:0,30,0'` (rotazioni aggiunte, in gradi, come le darebbe
 un'animazione), `--fit suit|model`, `--geo <file> --texture <file>` per un altro modello, `--name <prefisso>`.
-Serve Playwright con il suo Chromium (WebGL via SwiftShader); `three` viene da npm.
+Serve Playwright con il suo Chromium (WebGL via SwiftShader); `three` viene da npm. Nella sessione cloud
+Playwright e' gia' installato globalmente con il suo browser (per questo non e' in `package.json`: una seconda copia
+non troverebbe quel browser); altrove: `npm install playwright && npx playwright install chromium` in
+`tools/art/preview`. Senza Playwright `render.js` esce con un messaggio che lo dice.
 
 Il visore (`preview/geo.js` + `index.html`) legge direttamente il `.geo.json` e l'atlante, senza file intermedi, e
 li costruisce con la matematica di GeckoLib riportata riga per riga (x negata, perni, rotazioni Z-Y-X, UV per

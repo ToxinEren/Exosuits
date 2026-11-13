@@ -31,7 +31,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Dipendenze del generatore della grafica
-        run: python3 -m pip install pillow numpy
+        run: python3 -m pip install -r tools/art/requirements.txt
       - name: Controllo della grafica generata
         run: bash tools/check_art.sh
       - name: Controlli sui jar

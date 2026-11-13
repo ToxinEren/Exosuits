@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Controllo della grafica generata (dalla radice del repository): bash tools/check_art.sh
-# Rigenera geometria, atlante e animazioni in una cartella temporanea e li confronta byte per byte con i file
-# committati in src/main/resources/assets/redstone_exoframes. Servono python3, Pillow e numpy.
+# Rigenera geometria, atlante e animazioni in una cartella temporanea e li confronta con i file committati in
+# src/main/resources/assets/redstone_exoframes: byte per byte i JSON; per l'atlante blocchi, IHDR e pixel
+# decompressi (tools/art/compare_png.py), perche' i byte compressi dipendono dalla build di zlib.
+# Servono python3 e numpy (tools/art/requirements.txt).
 set -eu
 
 cd "$(dirname "$0")/.."
@@ -23,6 +25,12 @@ for f in "${files[@]}"; do
     if [ ! -f "$assets/$f" ]; then
         echo "FAIL: manca $assets/$f (rigenerare con python3 tools/art/build.py)" >&2
         fail=1
+    elif [ "${f##*.}" = png ]; then
+        # PNG: blocchi, IHDR e pixel decompressi, non i byte compressi (dipendono dalla build di zlib)
+        if ! python3 tools/art/compare_png.py "$tmp/$f" "$assets/$f"; then
+            echo "FAIL: $assets/$f diverso da quello generato (rigenerare con python3 tools/art/build.py)" >&2
+            fail=1
+        fi
     elif ! cmp -s "$tmp/$f" "$assets/$f"; then
         echo "FAIL: $assets/$f diverso da quello generato (rigenerare con python3 tools/art/build.py)" >&2
         fail=1

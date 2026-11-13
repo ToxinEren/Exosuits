@@ -45,6 +45,34 @@ def _hash(ix, iy, iz, seed):
     return (h & 0xFFFF) / 65535.0
 
 
+class HashRng:
+    """Sequenza pseudo-casuale fatta solo di aritmetica intera (splitmix64 su seme + contatore): non dipende dal
+    generatore di numpy, il cui flusso puo' cambiare tra una versione e l'altra."""
+
+    MASK = (1 << 64) - 1
+
+    def __init__(self, seed):
+        self.seed, self.n = seed & self.MASK, 0
+
+    def _next(self):
+        self.n += 1
+        z = (self.seed + self.n * 0x9E3779B97F4A7C15) & self.MASK
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & self.MASK
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & self.MASK
+        return z ^ (z >> 31)
+
+    def integers(self, lo, hi):
+        """Intero in [lo, hi)."""
+        return lo + self._next() % (hi - lo)
+
+    def choice(self, items):
+        return items[self._next() % len(items)]
+
+    def random(self):
+        """Reale in [0, 1)."""
+        return (self._next() >> 11) / float(1 << 53)
+
+
 def vnoise(P, scale, seed):
     """Rumore a valori 3D, continuo nello spazio."""
     q = P / scale
@@ -86,7 +114,7 @@ class Face:
         # centro del texel, spostato un poco verso l'interno perche' l'arrotondamento a intero sia stabile
         self.P = tl + ((ii[..., None] + 0.5) * su) * ua + ((jj[..., None] + 0.5) * sv) * va - 0.25 * n
         self.seed = (box.seed + zlib.crc32(face.encode())) & 0x7FFFFFFF
-        self.rng = np.random.default_rng(self.seed)
+        self.rng = HashRng(self.seed)
         self.edge = (ii == 0) | (jj == 0) | (ii == self.w - 1) | (jj == self.h - 1)
         self.vertical = face not in ('up', 'down')
         self.long_axis = int(np.argmax(box.size))

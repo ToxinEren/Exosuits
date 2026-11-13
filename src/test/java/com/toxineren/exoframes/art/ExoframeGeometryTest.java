@@ -106,6 +106,12 @@ class ExoframeGeometryTest {
             JsonObject bone = BONES.get(entry.getKey());
             assertNotNull(bone, "manca l'osso " + entry.getKey());
             assertEquals(entry.getValue(), bone.get("parent").getAsString(), "genitore di " + entry.getKey());
+            double[] pivot = vec(bone, "pivot");
+            double[] parentPivot = TOP_LEVEL.get(entry.getValue());
+            for (int axis = 0; axis < 3; axis++) {
+                assertEquals(parentPivot[axis], pivot[axis], 1e-9, "perno di " + entry.getKey() + " diverso dal genitore");
+            }
+            assertFalse(bone.has("rotation"), "osso del telaio ruotato: " + entry.getKey());
             JsonArray cubes = bone.getAsJsonArray("cubes");
             assertTrue(cubes != null && !cubes.isEmpty(), entry.getKey() + " non ha scatole");
             for (JsonElement cube : cubes) {
