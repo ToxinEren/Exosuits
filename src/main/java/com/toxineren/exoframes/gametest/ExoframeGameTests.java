@@ -35,7 +35,7 @@ import net.minecraft.world.level.block.Blocks;
  *
  * <p>Per aggiungere un test: un metodo {@code private static void temaCaso(GameTestHelper helper)} che chiude con
  * {@code helper.succeed()}, e una riga {@code add(tests, "temaCaso", ExoframeGameTests::temaCaso);} in
- * {@link #generate()}.
+ * {@link #generate()}. tools/run_gametests.sh conta queste righe per sapere quanti test aspettarsi.
  *
  * <p>I test nascono da un {@link GameTestGenerator} e non dall'annotazione {@code @GameTest}, perche' i loader
  * risolvono in modo diverso il nome della struttura dell'annotazione; il costruttore a 7 argomenti di
@@ -47,7 +47,7 @@ public final class ExoframeGameTests {
     private static final String EMPTY_STRUCTURE = RedstoneExoframes.MOD_ID + ":empty";
     private static final int MAX_TICKS = 100;
 
-    /** Costruttore pubblico senza argomenti: l'entrypoint {@code fabric-gametest} istanzia la classe. */
+    /** Costruttore pubblico senza argomenti: GameTestRegistry vanilla istanzia la classe per chiamare il generatore. */
     public ExoframeGameTests() {
     }
 

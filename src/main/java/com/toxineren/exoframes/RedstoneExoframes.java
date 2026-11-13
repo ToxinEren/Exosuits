@@ -25,7 +25,7 @@ public final class RedstoneExoframes {
         ModItems.register();
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
-        Compat.gameTests().register(ExoframeGameTests.class); // non fa nulla se il server di test non e' attivo
+        Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

@@ -10,6 +10,9 @@ import java.util.UUID;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 *///?}
+//? if fabric {
+/*import net.minecraft.gametest.framework.GameTestRegistry;
+*///?}
 //? if forge {
 /*import com.toxineren.exoframes.RedstoneExoframes;
 import dev.architectury.platform.forge.EventBuses;
@@ -23,23 +26,29 @@ import net.neoforged.neoforge.gametest.GameTestHooks;
 //?}
 
 /**
- * Implementazione di {@link GameTests}. Registrazione: su Forge e NeoForge un ascoltatore di
- * {@code RegisterGameTestsEvent} sul bus del mod, aggiunto solo se il server di test e' attivo (proprieta'
- * forge/neoforge.gameTestServer, mai in produzione); su Fabric non serve nulla, perche' la classe e' l'entrypoint
- * {@code fabric-gametest} di fabric.mod.json. Giocatore finto: su 1.20.1 la connessione e' agganciata a un
- * {@code EmbeddedChannel} come fa gia' 1.21.1 (senza canale Forge lancia un NPE in
+ * Implementazione di {@link GameTests}. Registrazione, solo se il server di test e' attivo (mai in produzione): su
+ * Forge e NeoForge un ascoltatore di {@code RegisterGameTestsEvent} sul bus del mod (proprieta'
+ * forge/neoforge.gameTestServer); su Fabric {@code GameTestRegistry.register} diretto (proprieta'
+ * fabric-api.gametest), al posto dell'entrypoint {@code fabric-gametest}, che il modulo di Fabric registra a ogni
+ * avvio e che renderebbe i test eseguibili con {@code /test} su un client normale. Il modulo di Fabric usa la mod
+ * dell'entrypoint solo per i metodi {@code @GameTest}; i nostri test nascono da un {@code @GameTestGenerator}.
+ * Giocatore finto: su 1.20.1 la connessione e' agganciata a un {@code EmbeddedChannel} come fa gia' 1.21.1 (senza canale Forge lancia un NPE in
  * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli).
  */
 public final class GameTestsImpl implements GameTests {
     @Override
     public void register(Class<?> testClass) {
-        //? if forge {
+        //? if fabric {
+        /*if (System.getProperty("fabric-api.gametest") != null) {
+            GameTestRegistry.register(testClass);
+        }
+        *///?} else if forge {
         /*if (ForgeGameTestHooks.isGametestServer()) {
             EventBuses.getModEventBus(RedstoneExoframes.MOD_ID)
                     .orElseThrow(() -> new IllegalStateException("mod event bus not registered with Architectury"))
                     .addListener((RegisterGameTestsEvent event) -> event.register(testClass));
         }
-        *///?} else if neoforge {
+        *///?} else {
         if (GameTestHooks.isGametestServer()) {
             ModList.get().getModContainerById(RedstoneExoframes.MOD_ID)
                     .orElseThrow(() -> new IllegalStateException("mod container not found: " + RedstoneExoframes.MOD_ID))
