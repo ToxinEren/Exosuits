@@ -53,7 +53,8 @@ public interface FrameStateAccess {
 
     /**
      * Crea lo stato se assente, applica la modifica, segna il dato come da salvare e sincronizza il giocatore. Solo
-     * sul server, sul thread di gioco.
+     * sul server, sul thread di gioco. Una voce indossata del giocatore che il dato salvato non ha potuto leggere non
+     * viene mai tolta ne' coperta: resta nel file, identica, accanto al record nuovo.
      */
     void update(ServerPlayer p, Consumer<FrameState> change);
 
@@ -69,6 +70,8 @@ public interface FrameStateAccess {
     /**
      * Rimuove lo stato del giocatore, segna il dato come da salvare e invia al giocatore uno stato assente. L'armatura
      * stivata ancora nel record non si perde: passa, identica, fra quella dei telai tolti (vedi {@link #removePlaced}).
+     * Una voce indossata del giocatore che il dato salvato non ha potuto leggere non viene tolta: resta nel file,
+     * identica.
      */
     void clear(ServerPlayer p);
 

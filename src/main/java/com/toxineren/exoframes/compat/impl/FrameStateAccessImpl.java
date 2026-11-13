@@ -32,10 +32,10 @@ import net.minecraft.world.phys.Vec3;
  * la copia ricevuta in {@link FrameStateClientCache}; il pacchetto e' {@link FrameStateSyncPacket}.
  * <p>
  * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare; {@link #update} e
- * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. {@link #update} e {@link #clear} tolgono le
- * voci grezze non lette del giocatore (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola lettura
- * (schema piu' recente), le tre scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync, un solo
- * ERROR nel log; {@link #get} resta vuoto.
+ * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. Nessuna scrittura toglie le voci grezze non
+ * lette del giocatore: restano nel file, identiche (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola
+ * lettura (schema piu' recente), le tre scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync, un
+ * solo ERROR nel log; {@link #get} resta vuoto.
  * <p>
  * Le operazioni di registro ({@link #place}, {@link #enter}, {@link #exit}, i piazzati, l'armatura stivata) passano
  * dal record di {@link FrameStateSavedData} e seguono la stessa regola: ogni scrittura segna il dato come da salvare,
@@ -69,7 +69,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         }
         FrameState state = data.getOrCreateWorn(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()))
                 .state();
-        data.dropUnread(p.getUUID());
         try {
             change.accept(state);
         } finally {
@@ -107,7 +106,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             return;
         }
         data.removeWorn(p.getUUID());
-        data.dropUnread(p.getUUID());
         data.setDirty();
         syncTo(p);
     }

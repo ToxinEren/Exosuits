@@ -53,20 +53,21 @@ import net.minecraft.core.HolderLookup;
  * altre restano. Cosi' anche una voce con un'identita' gia' letta in un'altra voce: resta la prima letta, prima gli
  * indossati e poi i piazzati, e dentro una sezione in ordine di chiave (le chiavi si leggono ordinate, non nell'ordine
  * della HashMap del tag). La voce saltata non si perde: resta come tag grezzo nella sua sezione e {@code save} la
- * riscrive identica; quelle indossate finche' lo stato di quel giocatore non viene creato o sostituito con
- * {@code update()} o rimosso con {@code clear()} ({@link #dropUnread}).
+ * riscrive identica, per sempre: nessuna operazione della mod la toglie (ne' {@code update()} che crea lo stato del
+ * giocatore, ne' {@code clear()} che lo toglie), perche' puo' contenere armatura stivata; se mai servisse, si toglie a
+ * mano dal file.
  * <p>
  * Una voce grezza non blocca mai il gioco ne' viene coperta: se un record vivo prende la stessa chiave (un giocatore
  * con una voce indossata non letta entra in un telaio; esce o viene piazzato il telaio di un'identita' che ha anche
  * una voce piazzata non letta), il record vivo si scrive sotto la chiave e la voce grezza accanto, identica, sotto
  * {@code <chiave>~unread} (con un numero in coda se anche quella e' presa), con un avviso una volta per chiave. Al
  * caricamento successivo quella chiave non e' un UUID, quindi la voce resta fra le non lette e si riscrive identica
- * sotto lo stesso nome; {@link #dropUnread} non la tocca piu'.
+ * sotto lo stesso nome, una volta sola. Se nessun record vivo prende la chiave (lo stato non e' mai stato creato, o
+ * e' stato tolto), la voce grezza resta sotto la sua chiave.
  * <p>
  * Accanto alle sezioni c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link #CURRENT_SCHEMA}; assente vale 1). Lo schema 1
  * aveva solo la sezione {@code frames} (uno stato per giocatore): si legge ancora, e ogni stato diventa un record
- * indossato con un'identita' nuova; le sue voci non lette restano in {@code frames}, identiche, finche' non vengono
- * tolte. Se il marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa
+ * indossato con un'identita' nuova; le sue voci non lette restano in {@code frames}, identiche, per sempre. Se il marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa
  * versione della mod ({@link #readOnly()}): un solo ERROR al caricamento, nessuna voce viene letta, e i punti di
  * modifica non cambiano nulla; il dato non risulta mai da salvare, e se viene salvato lo stesso riproduce il tag letto
  * per intero. Nulla si legge, si cambia o si perde.
@@ -114,7 +115,12 @@ final class FrameStateSavedData extends SavedData {
     private record Placed(FrameRecord record, PlacedSpot spot) {
     }
 
+    /**
+     * Il dato si crea o si carica una volta per server: e' il momento in cui i risultati di lettura degli stack
+     * ricordati da un server precedente (nello stesso processo, con altri registri) vanno dimenticati.
+     */
     private FrameStateSavedData() {
+        StackTags.forgetOutcomes();
     }
 
     /** Il dato del mondo del server, creato vuoto se non esiste ancora. */
@@ -566,27 +572,6 @@ final class FrameStateSavedData extends SavedData {
     @Override
     public boolean isDirty() {
         return !readOnly() && super.isDirty();
-    }
-
-    /**
-     * Dimentica le voci indossate grezze non lette del giocatore, di schema 2 e di schema 1 (chiamato quando il suo
-     * stato viene creato o sostituito con {@code update()} o rimosso con {@code clear()}): la chiave e' confrontata
-     * come UUID, cosi' vale anche per una chiave scritta in forma non canonica.
-     */
-    void dropUnread(UUID player) {
-        if (readOnly()) {
-            return;
-        }
-        unreadWorn.keySet().removeIf(key -> isPlayerKey(key, player));
-        unreadFrames.keySet().removeIf(key -> isPlayerKey(key, player));
-    }
-
-    private static boolean isPlayerKey(String key, UUID player) {
-        try {
-            return UUID.fromString(key).equals(player);
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 
     //? if >=1.21 {

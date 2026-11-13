@@ -254,8 +254,13 @@ class FrameStateSavedDataTest {
         FrameStateSavedData again = loadThrowingOnMarked(written);
         assertEquals(data.worn(GOOD).frameId(), again.worn(GOOD).frameId());
         assertEquals(written, again.write(new CompoundTag()));
-        again.dropUnread(BAD);
-        assertFalse(again.write(new CompoundTag()).contains("frames"));
+        // creare e togliere lo stato di quel giocatore non toglie la voce di schema 1 non letta
+        again.getOrCreateWorn(BAD, FrameStateSavedDataTest::state);
+        assertEquals(corrupt, again.write(new CompoundTag()).getCompound("frames").get(BAD.toString()));
+        assertTrue(again.removeWorn(BAD));
+        assertEquals(corrupt, again.write(new CompoundTag()).getCompound("frames").get(BAD.toString()));
+        CompoundTag reloaded = roundTripThrowing(again).write(new CompoundTag());
+        assertEquals(corrupt, reloaded.getCompound("frames").get(BAD.toString()));
     }
 
     @Test
@@ -492,15 +497,53 @@ class FrameStateSavedDataTest {
     }
 
     @Test
-    void unreadEntryIsDroppedOnlyForThatPlayer() {
-        FrameStateSavedData data = loadThrowingOnMarked(mixedRoot());
-        data.dropUnread(BAD);
-        data.dropUnread(GOOD);
+    void unreadWornEntryIsNeverDropped() {
+        CompoundTag root = mixedRoot();
+        // la voce non letta del giocatore porta armatura stivata: non deve mai sparire
+        CompoundTag corrupt = root.getCompound(NbtKeys.WORN).getCompound(BAD.toString());
+        ListTag stowed = new ListTag();
+        stowed.add(stowedEntry("head", "minecraft:iron_helmet"));
+        corrupt.put(NbtKeys.STOWED, stowed);
+        Tag raw = corrupt.copy();
+        String moved = BAD + "~unread";
+
+        // come update(): il record vivo prende la chiave, la voce grezza va accanto, una volta sola
+        FrameStateSavedData data = loadThrowingOnMarked(root);
+        data.getOrCreateWorn(BAD, FrameStateSavedDataTest::state);
         CompoundTag worn = data.write(new CompoundTag()).getCompound(NbtKeys.WORN);
-        assertFalse(worn.contains(BAD.toString()));
-        assertTrue(worn.contains(GOOD.toString()));
-        assertTrue(worn.contains("not-a-uuid"));
-        assertTrue(worn.contains("00000000-0000-0000-0000-000000000003"));
+        assertEquals(raw, worn.get(moved));
+        assertEquals(1, countValue(worn, raw));
+        assertTrue(worn.contains(GOOD.toString()) && worn.contains("not-a-uuid")
+                && worn.contains("00000000-0000-0000-0000-000000000003"));
+
+        // salvataggi e caricamenti ripetuti: sempre una sola copia, sotto lo stesso nome
+        FrameStateSavedData reloaded = data;
+        for (int i = 0; i < 3; i++) {
+            reloaded = loadThrowingOnMarked(reloaded.write(new CompoundTag()));
+            CompoundTag again = reloaded.write(new CompoundTag()).getCompound(NbtKeys.WORN);
+            assertEquals(raw, again.get(moved));
+            assertEquals(1, countValue(again, raw));
+            assertFalse(again.contains(moved + "2"));
+        }
+
+        // come clear(): il record vivo sparisce, la voce grezza resta, identica, una volta sola
+        assertTrue(reloaded.removeWorn(BAD));
+        CompoundTag cleared = loadThrowingOnMarked(reloaded.write(new CompoundTag())).write(new CompoundTag())
+                .getCompound(NbtKeys.WORN);
+        assertFalse(cleared.contains(BAD.toString()));
+        assertEquals(raw, cleared.get(moved));
+        assertEquals(1, countValue(cleared, raw));
+
+        // creato e tolto nella stessa sessione, senza ricaricare: la voce torna sotto la sua chiave
+        FrameStateSavedData session = loadThrowingOnMarked(mixedRootWith(raw));
+        session.getOrCreateWorn(BAD, FrameStateSavedDataTest::state);
+        assertTrue(session.removeWorn(BAD));
+        CompoundTag own = session.write(new CompoundTag()).getCompound(NbtKeys.WORN);
+        assertEquals(raw, own.get(BAD.toString()));
+        assertEquals(1, countValue(own, raw));
+        CompoundTag ownReloaded = roundTripThrowing(session).write(new CompoundTag()).getCompound(NbtKeys.WORN);
+        assertEquals(raw, ownReloaded.get(BAD.toString()));
+        assertEquals(1, countValue(ownReloaded, raw));
     }
 
     @Test
@@ -539,6 +582,28 @@ class FrameStateSavedDataTest {
     }
 
     /** Vero se la sezione ha, sotto qualunque chiave, un valore uguale a {@code value}. */
+    /** Quante voci della sezione sono uguali al valore. */
+    private static int countValue(CompoundTag section, Tag value) {
+        int count = 0;
+        for (String key : section.getAllKeys()) {
+            if (value.equals(section.get(key))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** {@link #mixedRoot()} con la voce indossata di BAD sostituita da {@code bad}. */
+    private static CompoundTag mixedRootWith(Tag bad) {
+        CompoundTag root = mixedRoot();
+        root.getCompound(NbtKeys.WORN).put(BAD.toString(), bad.copy());
+        return root;
+    }
+
+    private static FrameStateSavedData roundTripThrowing(FrameStateSavedData data) {
+        return loadThrowingOnMarked(data.write(new CompoundTag()));
+    }
+
     private static boolean containsValue(CompoundTag section, Tag value) {
         for (String key : section.getAllKeys()) {
             if (value.equals(section.get(key))) {
@@ -571,8 +636,6 @@ class FrameStateSavedDataTest {
         assertEquals(List.of(), data.takeStowedOfWorn(GOOD, (frameId, tag) -> Optional.of(tag)));
         assertEquals(List.of(), data.takeStowedOfPlaced(FRAME_A, (frameId, tag) -> Optional.of(tag)));
         assertTrue(data.orphaned().isEmpty());
-        data.dropUnread(BAD);
-        data.dropUnread(GOOD);
         data.setDirty();
         assertFalse(data.isDirty());
         assertTrue(data.frames().isEmpty());

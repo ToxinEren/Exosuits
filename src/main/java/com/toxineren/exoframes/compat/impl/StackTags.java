@@ -44,6 +44,12 @@ import com.mojang.serialization.DataResult;
  * risultato di ogni voce piu' vecchia (lo stack corretto o il motivo per cui non si legge) e quello di ogni voce
  * illeggibile si ricordano per voce: il correttore gira una volta sola per voce, e le prese e i controlli successivi
  * riusano il risultato. La memoria ha chiavi deboli (le voci vive nei record) e confronta le voci per contenuto.
+ * <p>
+ * Un risultato dipende dai registri del server che l'ha prodotto (un datapack puo' aggiungere un incantesimo o un
+ * componente), quindi non sopravvive a quel server: la memoria si svuota ({@link #forgetOutcomes}) ogni volta che il
+ * registro dei telai di un server viene creato o caricato ({@link FrameStateSavedData}), cioe' una volta per server,
+ * prima che quel server legga una voce. Dentro lo stesso server non si svuota mai, cosi' il correttore gira una volta
+ * per voce. Su un server dedicato c'e' un solo server, e la memoria si svuota una volta all'avvio.
  */
 final class StackTags {
     /**
@@ -53,6 +59,19 @@ final class StackTags {
     private static final Map<CompoundTag, Object> OUTCOMES = Collections.synchronizedMap(new WeakHashMap<>());
 
     private StackTags() {
+    }
+
+    /**
+     * Dimentica tutti i risultati ricordati: chiamato quando il registro dei telai di un server viene creato o
+     * caricato, perche' nessun risultato passi da un server all'altro.
+     */
+    static void forgetOutcomes() {
+        OUTCOMES.clear();
+    }
+
+    /** Quanti risultati sono ricordati ora (per i test). */
+    static int rememberedOutcomes() {
+        return OUTCOMES.size();
     }
 
     /** La versione dei dati di Minecraft in esecuzione (3465 su 1.20.1, 3955 su 1.21.1). */
