@@ -8,6 +8,7 @@ import com.toxineren.exoframes.compat.impl.GameTestsImpl;
 import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
 import com.toxineren.exoframes.compat.impl.NetImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
+import com.toxineren.exoframes.compat.impl.SuitAssetsImpl;
 
 /**
  * Punto di accesso unico alle interfacce di compat/: ogni accessor restituisce il singleton dell'unica
@@ -49,6 +50,10 @@ public final class Compat {
         return GameTestsHolder.INSTANCE;
     }
 
+    public static SuitAssets suitAssets() {
+        return SuitAssetsHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
     }
@@ -79,5 +84,9 @@ public final class Compat {
 
     private static final class GameTestsHolder {
         static final GameTests INSTANCE = new GameTestsImpl();
+    }
+
+    private static final class SuitAssetsHolder {
+        static final SuitAssets INSTANCE = new SuitAssetsImpl();
     }
 }

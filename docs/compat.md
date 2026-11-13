@@ -6,11 +6,12 @@ Regole di struttura (Milestone 2b):
 
 - ogni interfaccia ha una sola implementazione `...Impl` in [`compat/impl/`](../src/main/java/com/toxineren/exoframes/compat/impl/), creata pigramente da `Compat` (idioma del holder);
 - le direttive Stonecutter (condizioni come `//? if >=1.21`, `//? if fabric`, `//? if forge`, e qualunque altra direttiva `//?`, `//$`, `//~`, anche in un commento a blocco) stanno solo nelle classi di `compat/impl/`, negli entrypoint di [`platform/`](../src/main/java/com/toxineren/exoframes/platform/) e nell'unica eccezione [`compat/Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java); le interfacce non hanno condizioni e i test non hanno direttive;
-- `compat.impl` si referenzia (import o nome qualificato) solo da dentro `compat/`.
+- `compat.impl` si referenzia (import o nome qualificato) solo da dentro `compat/`;
+- il codice solo client sta nei package `client`, `compat.client` e `compat.impl.client`, che si referenziano solo da quei package e dagli entrypoint di `platform/`: un server dedicato non li carica mai (vedi "Cuciture client" e la regola 7).
 
 Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (vedi in fondo).
 
-## Le otto interfacce
+## Le nove interfacce comuni
 
 ### `Platform` — ambiente di esecuzione
 
@@ -77,9 +78,35 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 - **Condizione:** `GameTestsImpl` (loader in `register`, versione in `mockServerPlayer`).
 - **Uso:** `Compat.gameTests().mockServerPlayer(helper)`.
 
+### `SuitAssets` — item modello della tuta
+
+- **File:** [`SuitAssets.java`](../src/main/java/com/toxineren/exoframes/compat/SuitAssets.java), implementazione [`SuitAssetsImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/SuitAssetsImpl.java) con [`SuitModelItem.java`](../src/main/java/com/toxineren/exoframes/compat/impl/SuitModelItem.java).
+- **A cosa serve:** `newSuitModelItem(props)` crea l'item "modello della tuta", l'unico `GeoItem` della mod: l'animatable che il renderer della tuta (vedi "Cuciture client") disegna con uno stack fittizio. È registrato come `redstone_exoframes:suit_model` (`ModItems.SUIT_MODEL`), perché GeckoLib 4.9 interroga i tag dello stack, ma non si indossa mai, non sta nella scheda creativa e ha un modello d'item normale, così gli agganci di GeckoLib per armature e item non lo trattano. Non ha animazioni.
+- **Differenze chiuse:** i package di `AnimatableInstanceCache` e `AnimatableManager` (sotto `core` in GeckoLib 4.8, alla radice in 4.9); su Fabric 1.20.1 (GeckoLib 4.8.4) `createRenderer` e `getRenderProvider` sono astratti: il fornitore viene da `GeoItem.makeRenderer`, che sul server dedicato non chiama `createRenderer`, e sul client `createRenderer` dà `RenderProvider.DEFAULT` (`RenderProvider.of` non accetta un fornitore nullo). Forge 1.20.1 non ha quei metodi, GeckoLib 4.9 li ha di default.
+- **Condizione:** `SuitModelItem` (versione per gli import, `<1.21 && fabric` per i due metodi).
+- **Server dedicato:** interfaccia, implementazione e item sono codice comune che il server carica: nessun campo, inizializzatore statico o lambda tocca classi client. Il test in mondo `suitModelItemIsRegistered` gira sul server di test dedicato delle quattro varianti.
+- **Uso:** `ModItems.SUIT_MODEL` (registrazione); nessun altro chiamante.
+
+### Fuori dalle interfacce: `SuitBones`
+
+[`SuitBones.java`](../src/main/java/com/toxineren/exoframes/compat/SuitBones.java) è l'unico posto in cui il codice costruisce i nomi delle ossa della geometria della tuta (codice comune, senza dipendenze client): le costanti delle sei ossa di primo livello (`ARMOR_HEAD` … `ARMOR_LEFT_LEG`, elencate in `TOP_LEVEL`), `frame(parte)` per il telaio nudo (`frameHead`, parti in `PARTS`), `piece(slot, stato, regione)` per i pezzi (`pieceLeftArm_s2_p1`; stato in [0, 3], regione `p1`, `p2` o `n`, altrimenti `IllegalArgumentException`) e `decal(slot)` (`pieceTorso_decal`; gli slot con un osso di decalcomania sono in `DECAL_SLOTS`). `ExoframeGeometryTest` confronta questi nomi con il file generato.
+
 ### Fuori dalle interfacce: `Ids`
 
 [`Ids.java`](../src/main/java/com/toxineren/exoframes/compat/Ids.java) costruisce i `ResourceLocation` (`Ids.of(path)`, `Ids.of(namespace, path)`): `new ResourceLocation(ns, path)` su 1.20.1, `ResourceLocation.fromNamespaceAndPath` su 1.21.1. È una classe statica usata direttamente dal codice dei contenuti, ed è l'unico file di `compat/` fuori da `impl/` ammesso a contenere direttive Stonecutter.
+
+## Cuciture client
+
+Il codice solo client vive in tre package: `client/` (codice comune della mod che gira solo sul client), [`compat/client/`](../src/main/java/com/toxineren/exoframes/compat/client/) (interfacce e tipi neutri delle cuciture client) e [`compat/impl/client/`](../src/main/java/com/toxineren/exoframes/compat/impl/client/) (implementazioni, con le condizioni di versione). Nessun file fuori da quei package e da `platform/` li referenzia, e `RedstoneExoframes.init()` nemmeno: un server dedicato non li carica mai (regola 7 di `check_sources.sh`). Il punto di accesso è [`ClientCompat`](../src/main/java/com/toxineren/exoframes/compat/client/ClientCompat.java), con lo stesso idioma del holder di `Compat`.
+
+### `SuitRenderer` — renderer della tuta
+
+- **File:** [`SuitRenderer.java`](../src/main/java/com/toxineren/exoframes/compat/client/SuitRenderer.java) e [`SuitView.java`](../src/main/java/com/toxineren/exoframes/compat/client/SuitView.java), implementazione [`SuitRendererImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/client/SuitRendererImpl.java) con il modello GeckoLib [`SuitModel.java`](../src/main/java/com/toxineren/exoframes/compat/impl/client/SuitModel.java).
+- **A cosa serve:** `render(entità, modello umanoide di base, PoseStack, buffer, luce, partialTick, SuitView)` disegna telaio e pezzi in una sola passata, con una sola texture (`textures/entity/exoframe.png`) e la geometria `geo/exoframe.geo.json`. Le sei ossa di primo livello copiano la posa dal modello di base (come fa GeckoLib per le armature); la visibilità non legge i flag `visible` del modello di base: le ossa di primo livello e del telaio sono sempre visibili; per ogni slot con un pezzo si mostrano le tre ossa dello stato dato e si nascondono le altre nove, per uno slot senza pezzo tutte e dodici; le ossa `_decal` restano nascoste. `_p1` si colora con il colore primario, `_p2` con il secondario, `_n` resta bianca. Un osso cercato e assente nella geometria si salta, e il suo nome finisce nel log (WARN) una volta sola per sessione. Scala e spostamenti della tuta rispetto al giocatore li applica il chiamante sul `PoseStack`. Va chiamato sul thread di rendering; la prima chiamata a `ClientCompat.suitRenderer()` costruisce il renderer, che prende i modelli delle entità da Minecraft, quindi mai prima del caricamento delle risorse.
+- **`SuitView`:** record neutro, `pieces` è una mappa non modificabile slot → `PieceView(stato, primaryRgb, secondaryRgb)`; mappa vuota = telaio nudo. `SuitView.of(riassunto, predefinitoPrimario, predefinitoSecondario)` la ricava da un `SuitSummary`: stato 0 `INTACT`, 1 `DAMAGED`, 2 `CRITICAL`, 3 `BROKEN`; un colore `UNPAINTED` prende il predefinito del livello. `PieceView` rifiuta uno stato fuori da [0, 3] e tiene dei colori solo i 24 bit RGB (mai −1).
+- **Differenze chiuse:** il renderer estende `DyeableGeoArmorRenderer<SuitModelItem>` di `software.bernie.geckolib.renderer` (GeckoLib 4.8, 1.20.1) o `renderer.specialty` (4.9, 1.21.1), e usa il `Color` di `core.object` o di `util`; `prepForRender` a 4 argomenti in 4.8 e a 10 in 4.9 (dove quella a 4 è deprecata); i colori passano da `getColorForBone`, con la stessa firma nelle due versioni, così i ganci con il colore a quattro float (4.8) o intero (4.9) restano quelli di GeckoLib. Lo stack fittizio è dell'item `ModItems.SUIT_MODEL` nello slot del torso. Dopo ogni disegno il renderer azzera entità, stack e modello di base anche su Forge 1.20.1, dove GeckoLib non lo fa.
+- **Condizione:** `SuitRendererImpl` (import e `prepForRender`); `SuitModel` non ne ha bisogno.
+- **Uso:** `ClientCompat.suitRenderer().render(player, getParentModel(), pose, buffers, light, partialTick, SuitView.of(summary, primarioDelLivello, secondarioDelLivello))`, dal layer sul giocatore.
 
 ## Tabella API vanilla/loader → interfaccia
 
@@ -109,6 +136,7 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 | `Block.use(...)` → `useWithoutItem` / `useItemOn` | Rinviata (M3/M4): `CompatEntityBlock` |
 | `saveAdditional/load(CompoundTag)` → con `HolderLookup.Provider`; `getUpdateTag(Provider)` | Rinviata (M3/M4): `CompatBlockEntity` |
 | `SynchedEntityData`: `defineSynchedData()` → `defineSynchedData(Builder)`; `EquipmentSlot.Type.ARMOR` → `HUMANOID_ARMOR` | Rinviata (M3/M4): `CompatEntity` |
+| Package GeckoLib (`core.*` in 4.8, radice in 4.9; `DyeableGeoArmorRenderer` in `renderer.specialty` in 4.9), colore dei ganci di rendering a quattro float o intero, `prepForRender` a 4 o 10 argomenti, metodi astratti di `GeoItem` su Fabric 4.8.4 | `SuitRenderer` (client) e `SuitAssets` (`SuitModelItem`) |
 | `Screen.renderBackground` con firma diversa; `InventoryScreen.renderEntityInInventory`; `Model.renderToBuffer` con colore int; package GeckoLib; `Minecraft.getFrameTime()` → `getTimer()`; `Tesselator`/`BufferUploader`; callback HUD di Architectury con `DeltaTracker`; `setupRotations` con `scale` | Rinviate (M3/M4): basi client (`CompatContainerScreen`, basi GeckoLib, `ClientTiming`) |
 | Id delle loot table `ResourceLocation` → `ResourceKey<LootTable>`; condizione `forge:loot_table_id` → `neoforge:` | Rinviata: `LootHooks` (con il bottino, M6 secondo il piano M2b) |
 | `BlockEntity.load` di cartelli/stendardi, `Component.Serializer.toJson` con Provider (worldgen) | — (M6) |
@@ -168,3 +196,4 @@ Lo script gira dalla radice del repository (`bash tools/check_sources.sh`), stam
 4. Qualunque riferimento a `com.toxineren.exoframes.compat.impl.` (import, anche `import static`, o nome qualificato nel codice) compare solo in file sotto `compat/`, in `src/main/java` e `src/test/java` (cioè `src/(main|test)/java/com/toxineren/exoframes/compat/`).
 5. Ogni file che chiama `registerC2S(` (tranne `Net` e `NetImpl`) referenzia `Compat.frameState()` in una riga che non è un commento: i gestori lato server validano le richieste sullo stato del telaio del giocatore. La regola guarda solo il file che registra, quindi la registrazione e i suoi gestori devono stare nello stesso file.
 6. Regola finale, più stretta della 2, con lo stesso riconoscimento del marcatore: le direttive Stonecutter sono ammesse solo in `compat/impl/`, in `platform/` e in `compat/Ids.java`.
+7. Il codice solo client (package `client`, `compat.client`, `compat.impl.client`) si referenzia (import, anche `import static`, o nome qualificato) solo da file di quei package e di `platform/`, in `src/main/java` e `src/test/java`: un server dedicato non deve mai caricarlo, e `RedstoneExoframes.init()` ne resta fuori.

@@ -43,6 +43,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import software.bernie.geckolib.animatable.GeoItem;
 
 /**
  * Test in gioco (GameTest vanilla) comuni alle quattro varianti, senza differenze di versione o loader: quelle stanno
@@ -82,6 +83,7 @@ public final class ExoframeGameTests {
         add(tests, "debugWearHandlesTorsoWithoutValidSummary",
                 ExoframeGameTests::debugWearHandlesTorsoWithoutValidSummary);
         add(tests, "debugWearDropsArmorWhenInventoryIsFull", ExoframeGameTests::debugWearDropsArmorWhenInventoryIsFull);
+        add(tests, "suitModelItemIsRegistered", ExoframeGameTests::suitModelItemIsRegistered);
         return tests;
     }
 
@@ -147,6 +149,21 @@ public final class ExoframeGameTests {
             int max = new ItemStack(item).getMaxStackSize();
             helper.assertTrue(max == 1, "max stack size of " + id + " is " + max + ", expected 1");
         });
+        helper.succeed();
+    }
+
+    /**
+     * L'item modello della tuta (l'animatable del renderer GeckoLib) e' nel registro con il suo id, e' un
+     * {@link GeoItem} e non e' un'armatura: non si indossa mai. Che il server di test parta con l'item registrato
+     * prova anche che la classe dell'item si carica senza classi client.
+     */
+    private static void suitModelItemIsRegistered(GameTestHelper helper) {
+        ResourceLocation id = Ids.of("suit_model");
+        helper.assertTrue(BuiltInRegistries.ITEM.containsKey(id), "item not registered: " + id);
+        Item item = BuiltInRegistries.ITEM.get(id);
+        helper.assertTrue(item == ModItems.SUIT_MODEL.get(), "registry entry " + id + " is not ModItems.SUIT_MODEL");
+        helper.assertTrue(item instanceof GeoItem, "suit model item is not a GeoItem: " + item.getClass().getName());
+        helper.assertTrue(!(item instanceof ArmorItem), "suit model item must not be armor");
         helper.succeed();
     }
 

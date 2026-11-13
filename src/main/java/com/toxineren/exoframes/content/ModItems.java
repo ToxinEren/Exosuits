@@ -27,6 +27,11 @@ public final class ModItems {
     public static final RegistrySupplier<Item> EXOFRAME_BOOTS = ITEMS.register("exoframe_boots",
             () -> Compat.armorMaterials().newPlaceholder(ArmorItem.Type.BOOTS, new Item.Properties()));
 
+    // Animatable GeckoLib del renderer della tuta, disegnato con uno stack fittizio: non si indossa mai e resta fuori
+    // dalla scheda creativa. Va registrato perche' il renderer di GeckoLib 4.9 interroga i tag dello stack.
+    public static final RegistrySupplier<Item> SUIT_MODEL = ITEMS.register("suit_model",
+            () -> Compat.suitAssets().newSuitModelItem(new Item.Properties()));
+
     private ModItems() {
     }
 

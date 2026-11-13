@@ -91,6 +91,17 @@ if [ -n "$bad" ]; then
     fail=1
 fi
 
+# 7. Il codice solo client (package client, compat.client e compat.impl.client) si referenzia (import, anche static,
+#    o nome qualificato) solo da file di quei package e di platform/ (gli entrypoint client), in src/main/java e
+#    src/test/java: un server dedicato non deve mai caricarlo, e RedstoneExoframes.init() ne resta fuori.
+bad=$(grep -rlE 'com\.toxineren\.exoframes\.(compat\.(impl\.)?)?client\.' src/main/java src/test/java \
+    | grep -vE '^src/(main|test)/java/com/toxineren/exoframes/(client|compat/client|compat/impl/client|platform)/' || true)
+if [ -n "$bad" ]; then
+    echo "FAIL: riferimenti al codice solo client fuori da client/, compat/client/, compat/impl/client/ e platform/:" >&2
+    echo "$bad" >&2
+    fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
     exit 1
 fi

@@ -9,6 +9,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.toxineren.exoframes.compat.SuitBones;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -117,6 +118,26 @@ class ExoframeGeometryTest {
             for (JsonElement cube : cubes) {
                 assertFalse(cube.getAsJsonObject().has("rotation"), "scatola ruotata nel telaio: " + entry.getKey());
             }
+        }
+    }
+
+    /**
+     * I nomi che il renderer cerca, costruiti da {@link SuitBones}, esistono nella geometria: le sei ossa di primo
+     * livello e le sei del telaio, ciascuna sotto il suo osso di primo livello. I nomi dei pezzi e delle
+     * decalcomanie li verifica il test dei pezzi (Task 6).
+     */
+    @Test
+    void rendererFrameBoneNamesExistInGeometry() {
+        assertEquals(6, SuitBones.TOP_LEVEL.size());
+        assertEquals(6, SuitBones.PARTS.size());
+        for (String name : SuitBones.TOP_LEVEL) {
+            assertTrue(BONES.containsKey(name), "il renderer cerca " + name + ", assente nella geometria");
+        }
+        for (int i = 0; i < SuitBones.PARTS.size(); i++) {
+            String frame = SuitBones.frame(SuitBones.PARTS.get(i));
+            JsonObject bone = BONES.get(frame);
+            assertNotNull(bone, "il renderer cerca " + frame + ", assente nella geometria");
+            assertEquals(SuitBones.TOP_LEVEL.get(i), bone.get("parent").getAsString(), "genitore di " + frame);
         }
     }
 
