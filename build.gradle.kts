@@ -178,6 +178,11 @@ java {
 // le texture trasparenti del layer armatura vanilla di 1.20.1 per il materiale "frame".
 sourceSets.main {
     resources.srcDir(rootProject.file("src/main/resources-mc$mc"))
+    // Grandezza reale (design par. 4.8): un mixin di Player per versione del gioco, senza direttive. Si compila solo
+    // quello della versione della variante: l'altro non finirebbe mai caricato (non e' nella configurazione dei mixin)
+    // e farebbe stampare a remapJar un "Cannot remap" a ogni build, lo stesso messaggio di un bersaglio sbagliato vero.
+    val otherSizeMixin = if (mc == "1.20.1") "PlayerSize121Mixin" else "PlayerSize120Mixin"
+    java.exclude("com/toxineren/exoframes/mixin/$otherSizeMixin.java")
 }
 
 tasks.processResources {

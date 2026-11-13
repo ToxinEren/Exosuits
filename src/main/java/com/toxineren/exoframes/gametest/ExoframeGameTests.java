@@ -341,7 +341,8 @@ public final class ExoframeGameTests {
     /**
      * Grandezza reale (design, par. 4.8): {@link DebugWear#wear} porta subito ingombro e occhi a quelli della tuta
      * (0,8 x 2,97, occhi 1,62 * 1,65 e, accovacciati, 1,27 * 1,65), con il riquadro ricostruito e quello di culling
-     * allargato ai lati; {@link DebugWear#remove} li riporta a quelli vanilla. Un segnaposto messo nello slot senza
+     * allargato ai lati; accovacciata 0,8 x 2,475 e a nuoto 0,8 x 0,99 con gli occhi 1,65 volte quelli vanilla, sonno e
+     * morte come senza tuta; {@link DebugWear#remove} li riporta a quelli vanilla. Un segnaposto messo nello slot senza
      * passare da DebugWear cambia la grandezza solo al tick ({@link SuitSize#tick}), e cosi' toglierlo.
      */
     private static void suitGrowsBoxAndEyes(GameTestHelper helper) {
@@ -350,6 +351,8 @@ public final class ExoframeGameTests {
         assertSize(helper, player, "without the suit", 0.6f, 1.8f, 1.62f, 1.27f);
         helper.assertTrue(SuitSize.cullingBox(player, player.getBoundingBox()).equals(player.getBoundingBox()),
                 "culling box widened without the suit");
+        String vanillaSleeping = sizeInPose(player, Pose.SLEEPING);
+        String vanillaDying = sizeInPose(player, Pose.DYING);
 
         DebugWear.wear(player, SuitSummary.BARE);
         assertSize(helper, player, "after wear", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
@@ -360,6 +363,13 @@ public final class ExoframeGameTests {
                 "culling box not widened by 0.5 on the sides: " + SuitSize.cullingBox(player, box));
         SuitSize.tick(player);
         assertSize(helper, player, "after wear and a tick", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+        assertPoseSize(helper, player, Pose.CROUCHING, 0.8f, 1.5f * 1.65f, 1.27f * 1.65f);
+        assertPoseSize(helper, player, Pose.SWIMMING, 0.8f, 0.6f * 1.65f, 0.4f * 1.65f);
+        helper.assertTrue(sizeInPose(player, Pose.SLEEPING).equals(vanillaSleeping),
+                "sleeping size changed by the suit: " + sizeInPose(player, Pose.SLEEPING) + ", vanilla "
+                        + vanillaSleeping);
+        helper.assertTrue(sizeInPose(player, Pose.DYING).equals(vanillaDying),
+                "dying size changed by the suit: " + sizeInPose(player, Pose.DYING) + ", vanilla " + vanillaDying);
 
         DebugWear.remove(player);
         assertSize(helper, player, "after remove", 0.6f, 1.8f, 1.62f, 1.27f);
@@ -413,6 +423,30 @@ public final class ExoframeGameTests {
                 && near(player.getEyeHeight(), eyes) && near(player.getEyeHeight(Pose.CROUCHING), crouchingEyes),
                 "wrong size " + when + ": " + size(player) + ", expected w=" + width + " h=" + height + " eye="
                         + eyes + " crouchEye=" + crouchingEyes);
+    }
+
+    /**
+     * Mette il giocatore nella posa (il cambio di posa ricalcola le dimensioni), verifica larghezza, altezza del
+     * riquadro e occhi, e lo rimette in piedi.
+     */
+    private static void assertPoseSize(GameTestHelper helper, ServerPlayer player, Pose pose, float width,
+            float height, float eyes) {
+        player.setPose(pose);
+        String size = size(player);
+        boolean ok = near(player.getBbWidth(), width) && near(player.getBbHeight(), height)
+                && near((float) player.getBoundingBox().getYsize(), height) && near(player.getEyeHeight(), eyes);
+        player.setPose(Pose.STANDING);
+        helper.assertTrue(ok, "wrong size in pose " + pose + " with the suit: " + size + ", expected w=" + width
+                + " h=" + height + " eye=" + eyes);
+    }
+
+    /** Ingombro e occhi del giocatore nella posa data, letti mettendolo in quella posa; poi lo rimette in piedi. */
+    private static String sizeInPose(ServerPlayer player, Pose pose) {
+        player.setPose(pose);
+        String size = String.format(Locale.ROOT, "pose=%s w=%.4f h=%.4f box=%.4f eye=%.4f", player.getPose(),
+                player.getBbWidth(), player.getBbHeight(), player.getBoundingBox().getYsize(), player.getEyeHeight());
+        player.setPose(Pose.STANDING);
+        return size;
     }
 
     /** Posa, ingombro e occhi del giocatore, per i messaggi dei test. */

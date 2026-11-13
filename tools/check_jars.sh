@@ -107,15 +107,16 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
 
     # (e2) mixin: la configurazione e' alla radice, e' quella della versione (compatibilityLevel), richiesta, con
     #      defaultRequire 1, senza refmap; la sezione mixins (comune ai due lati) elenca esattamente la classe della
-    #      grandezza reale della versione del jar (PlayerSize120Mixin o PlayerSize121Mixin: quella dell'altra versione
-    #      e' nel jar ma non si elenca), la sezione server e' vuota, la sezione client non lo e'; ogni classe elencata
-    #      e' nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge),
-    #      riconosciuti dai nomi Mojang dei bersagli; i metadati del loader la dichiarano (fabric.mod.json "mixins",
-    #      MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
+    #      grandezza reale della versione del jar (PlayerSize120Mixin o PlayerSize121Mixin), e la classe dell'altra
+    #      versione non e' nel jar (la esclude build.gradle.kts); la sezione server e' vuota, la sezione client non lo
+    #      e'; ogni classe elencata e' nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su
+    #      Forge, Mojang su NeoForge), riconosciuti dai nomi Mojang dei bersagli; il mixin della grandezza e quello del
+    #      culling portano esattamente i nomi attesi dei loro bersagli per loader e versione; i metadati del loader la
+    #      dichiarano (fabric.mod.json "mixins", MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
     mixins=redstone_exoframes.mixins.json
     case "$mc" in
-        1.20.1) level=JAVA_17; size_mixin=PlayerSize120Mixin ;;
-        *) level=JAVA_21; size_mixin=PlayerSize121Mixin ;;
+        1.20.1) level=JAVA_17; size_mixin=PlayerSize120Mixin; other_size_mixin=PlayerSize121Mixin ;;
+        *) level=JAVA_21; size_mixin=PlayerSize121Mixin; other_size_mixin=PlayerSize120Mixin ;;
     esac
     case "$loader" in
         fabric) names=intermediary ;;
@@ -125,9 +126,18 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
     if ! echo "$listing" | grep -qx "$mixins"; then
         err "$name" "manca $mixins alla radice"
     else
-        problems=$(python3 - "$jar" "$mixins" "$level" "$names" "$size_mixin" <<'PY'
+        problems=$(python3 - "$jar" "$mixins" "$level" "$names" "$size_mixin" "$other_size_mixin" "$loader" "$mc" <<'PY'
 import json, re, sys, zipfile
-jar, cfg_name, level, names, size_mixin = sys.argv[1:]
+jar, cfg_name, level, names, size_mixin, other_size_mixin, loader, mc = sys.argv[1:]
+# Nomi esatti dei bersagli della grandezza reale e del culling nel jar, per loader e versione (dopo remapJar).
+CULLING = "client.LivingEntityCullingMixin"
+TARGETS = {
+    ("neoforge", "1.21.1"): {"PlayerSize121Mixin": [b"getDefaultDimensions("],
+                             CULLING: [b"getBoundingBoxForCulling("]},
+    ("forge", "1.20.1"): {"PlayerSize120Mixin": [b"m_6972_(", b"m_6431_("], CULLING: [b"m_6921_("]},
+    ("fabric", "1.20.1"): {"PlayerSize120Mixin": [b"method_18377(", b"method_18394("], CULLING: [b"method_5830("]},
+    ("fabric", "1.21.1"): {"PlayerSize121Mixin": [b"method_55694("], CULLING: [b"method_5830("]},
+}
 # Nomi Mojang dei bersagli dei mixin: nel jar restano solo su NeoForge, altrove li sostituisce remapJar.
 MOJANG = (b"setModelProperties", b"renderArmWithItem", b"getDimensions(", b"getStandingEyeHeight(",
           b"getDefaultDimensions(", b"getBoundingBoxForCulling(")
@@ -155,6 +165,24 @@ with zipfile.ZipFile(jar) as z:
     if not client:
         print(f"{cfg_name}: sezione client vuota")
     package = cfg.get("package", "")
+    other = (package + "." + other_size_mixin).replace(".", "/") + ".class"
+    if other in files:
+        print(f"{other}: mixin della grandezza dell'altra versione nel jar (va escluso in build.gradle.kts)")
+    targets = TARGETS.get((loader, mc))
+    if targets is None:
+        print(f"nessun nome atteso dei bersagli per {loader} {mc}")
+        targets = {}
+    for mixin, expected_names in targets.items():
+        path = (package + "." + mixin).replace(".", "/") + ".class"
+        if mixin not in common + client:
+            print(f"{mixin} non elencato in {cfg_name}")
+            continue
+        if path not in files:
+            continue  # segnalato dal controllo delle classi elencate, qui sotto
+        data = z.read(path)
+        for expected_name in expected_names:
+            if expected_name not in data:
+                print(f"{path}: manca il nome del bersaglio {expected_name.decode()} atteso su {loader} {mc}")
     for mixin in common + client:
         path = (package + "." + mixin).replace(".", "/") + ".class"
         if path not in files:

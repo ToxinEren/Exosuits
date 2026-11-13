@@ -11,10 +11,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Grandezza reale su 1.20.1 (design, par. 4.8): ingombro e altezza degli occhi di chi indossa la tuta, sui due lati.
- * Elencato solo nella sezione {@code mixins} di {@code resources-mc1.20.1/redstone_exoframes.mixins.json}: su 1.21.1
- * la classe e' nel jar ma Mixin non la carica mai (e {@code remapJar} avvisa, senza fermarsi, che
- * {@code getStandingEyeHeight} non esiste). Senza stato e senza logica: ogni aggancio e' una chiamata a
- * {@link SuitSize}.
+ * Elencato solo nella sezione {@code mixins} di {@code resources-mc1.20.1/redstone_exoframes.mixins.json}, e
+ * compilato solo nelle varianti 1.20.1 ({@code build.gradle.kts} lo esclude dalle altre, dove i bersagli non
+ * esistono). Senza stato e senza logica: ogni aggancio e' una chiamata a {@link SuitSize}.
  * <p>
  * Bersagli verificati con javap sui jar di 1.20.1, vanilla e con le patch di Forge: {@code getDimensions} legge una
  * tabella fissa per posa e {@code getStandingEyeHeight} restituisce costanti; il gioco li copia nei campi solo in
