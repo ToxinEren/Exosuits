@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Controlli sui jar finali (dalla radice del repository): bash tools/check_jars.sh
-set -e
+set -eu
 
 cd "$(dirname "$0")/.."
 
@@ -8,11 +8,26 @@ fail=0
 err() { echo "FAIL: $1: $2" >&2; fail=1; }
 
 shopt -s nullglob
-jars=(build/libs/all/*.jar)
-if [ "${#jars[@]}" -ne 4 ]; then
-    echo "FAIL: attesi 4 jar in build/libs/all, trovati ${#jars[@]}" >&2
-    exit 1
-fi
+dir=${1:-build/libs/all}
+jars=("$dir"/*.jar)
+
+# L'insieme dei jar deve essere esattamente quello atteso.
+expected=(
+    redstone-exoframes-fabric-0.1.0+mc1.20.1.jar
+    redstone-exoframes-fabric-0.1.0+mc1.21.1.jar
+    redstone-exoframes-forge-0.1.0+mc1.20.1.jar
+    redstone-exoframes-neoforge-0.1.0+mc1.21.1.jar
+)
+for e in "${expected[@]}"; do
+    [ -f "$dir/$e" ] || err "$e" "jar atteso mancante in $dir"
+done
+for jar in "${jars[@]}"; do
+    n=$(basename "$jar")
+    found=0
+    for e in "${expected[@]}"; do [ "$n" = "$e" ] && found=1; done
+    [ "$found" -eq 1 ] || err "$n" "jar inatteso in $dir"
+done
+[ "$fail" -eq 0 ] || exit 1
 
 for jar in "${jars[@]}"; do
     name=$(basename "$jar")
@@ -55,6 +70,7 @@ for jar in "${jars[@]}"; do
         fabric-1.21.1) want='"minecraft": ">=1.21 <1.22"' ;;
         forge-1.20.1) want='versionRange="[1.20.1,1.21)"' ;;
         neoforge-1.21.1) want='versionRange="[1.21.1,1.22)"' ;;
+        *) err "$name" "combinazione loader/mc inattesa $loader-$mc"; continue ;;
     esac
     if ! unzip -p "$jar" "$meta" 2>/dev/null | grep -qF "$want"; then
         err "$name" "intervallo Minecraft atteso $want assente in $meta"
