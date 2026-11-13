@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat;
 
+import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
 
 /**
@@ -14,7 +15,15 @@ public final class Compat {
         return PlatformHolder.INSTANCE;
     }
 
+    public static ItemDataAccess itemData() {
+        return ItemDataHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
+    }
+
+    private static final class ItemDataHolder {
+        static final ItemDataAccess INSTANCE = new ItemDataAccessImpl();
     }
 }
