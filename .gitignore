@@ -7,6 +7,8 @@
 # Stonecutter / Loom
 /run/
 /versions/*/run/
+/versions/*/logs/
+/logs/
 /run-data/
 # IDE
 /.idea/
