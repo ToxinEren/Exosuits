@@ -22,3 +22,6 @@
 Thumbs.db
 # Output locali
 /libs-out/
+# Python
+__pycache__/
+*.pyc
