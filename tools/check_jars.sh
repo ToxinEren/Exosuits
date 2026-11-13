@@ -88,5 +88,13 @@ for jar in "${jars[@]}"; do
     echo "$listing" | grep -qx 'icon.png' || err "$name" "manca icon.png alla radice"
 done
 
+# (g) nessun dato personale nei jar da pubblicare: percorsi locali, e-mail, metadati di immagini e suoni.
+if command -v python3 >/dev/null 2>&1; then
+    python3 tools/check_jar_privacy.py "${jars[@]}" || fail=1
+else
+    echo "FAIL: python3 non trovato: serve per il controllo di privacy (tools/check_jar_privacy.py)" >&2
+    fail=1
+fi
+
 [ "$fail" -eq 0 ] || exit 1
 echo "OK jars"

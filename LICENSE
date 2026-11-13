@@ -1,24 +1,47 @@
-MIT License
+Redstone Exoframes
+Copyright (c) 2026 ToxinEren. All rights reserved.
 
-Copyright (c) 2026 ToxinEren
+This mod is proprietary. The license below covers the whole mod: its source
+code, its compiled code and all of its game assets (textures, models,
+animations, sounds, images, icons).
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+You may:
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+  1. download the mod from the author's official project pages on CurseForge
+     and Modrinth and use it to play Minecraft, in single player and on
+     servers;
+  2. include the mod, unmodified, in modpacks distributed through CurseForge
+     or Modrinth, where the mod file is provided by those platforms;
+  3. publish videos, streams, screenshots and reviews that show the mod.
+
+You may not, without prior written permission from the author:
+
+  1. redistribute, re-upload or mirror the mod, or any part of it, on any
+     other site or service;
+  2. modify the mod, or create derivative works from its code or its assets;
+  3. extract the assets and use them in other projects;
+  4. sell the mod or any part of it, or make access to it conditional on a
+     payment.
+
+Third-party libraries the mod depends on (Architectury API, GeckoLib, Fabric
+API and the mod loaders) are not included in the mod and remain under their
+own licenses.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-This license covers the source code only. Game assets (textures, models,
-animations, sounds, images) are not covered: see LICENSE-ASSETS.md.
+Minecraft is a trademark of Mojang AB. This mod is not affiliated with or
+endorsed by Mojang AB or Microsoft.
+
+---
+
+Riassunto in italiano (fa fede il testo inglese qui sopra): tutti i diritti
+riservati. Si puo' giocare con il mod, mostrarlo in video e includerlo nei
+modpack distribuiti tramite CurseForge e Modrinth. Non si puo' ripubblicarlo
+altrove, modificarlo, riusarne il codice o gli asset, ne' venderlo, senza il
+permesso scritto dell'autore.

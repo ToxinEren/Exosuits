@@ -21,7 +21,7 @@ Serve JDK 21 per eseguire Gradle (il wrapper e' Gradle 9.9.0). La prima build sc
 
 I quattro jar finiscono in `build/libs/all/`. Con Stonecutter 0.9.8 non esiste un task `chiseledBuild`: si usa il comando esplicito qui sopra.
 
-Controlli: `bash tools/check_sources.sh` (sorgenti) e `bash tools/check_jars.sh [cartella]` (jar, cartella di default `build/libs/all`).
+Controlli: `bash tools/check_sources.sh` (sorgenti) e `bash tools/check_jars.sh [cartella]` (jar, cartella di default `build/libs/all`). Il controllo dei jar verifica anche che non contengano dati personali (percorsi del computer, e-mail, metadati di immagini e suoni): serve `python3`. Per cercare anche parole tue, per esempio nome e cognome o il nome utente del PC, elencale nella variabile d'ambiente `EXOFRAMES_PRIVATE_WORDS` separate da virgola, senza mai scriverle nel repository.
 
 La CI (`.github/workflows/build.yml`) compila i quattro jar a ogni push e li carica come artefatto `redstone-exoframes-jars`: `gh run download --repo ToxinEren/Exosuits -n redstone-exoframes-jars` (oppure dalla scheda Actions).
 
@@ -51,7 +51,7 @@ Jar prodotti: `redstone-exoframes-fabric-0.1.0+mc1.20.1.jar`, `redstone-exoframe
 
 ## Licenza
 
-Codice sorgente: MIT (vedi `LICENSE`). Asset (texture, modelli, animazioni, suoni, immagini): tutti i diritti riservati (vedi `LICENSE-ASSETS.md`).
+Tutti i diritti riservati, per il codice e per gli asset (vedi `LICENSE`). È consentito giocare con il mod, mostrarlo in video e includerlo nei modpack distribuiti tramite CurseForge e Modrinth. Non è consentito modificarlo, ripubblicarlo altrove o riusarne codice e asset senza permesso scritto dell'autore.
 
 ## Crediti
 

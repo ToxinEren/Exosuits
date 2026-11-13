@@ -5,7 +5,7 @@
   "name": "Redstone Exoframes",
   "description": "Power armor originale: telaio, celle di redstone, moduli e stazione di manutenzione.",
   "authors": ["ToxinEren"],
-  "license": "MIT (codice) / All Rights Reserved (asset)",
+  "license": "All Rights Reserved",
   "icon": "icon.png",
   "environment": "*",
   "entrypoints": {

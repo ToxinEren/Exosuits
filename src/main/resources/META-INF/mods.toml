@@ -1,6 +1,6 @@
 modLoader="javafml"
 loaderVersion="${loader_range}"
-license="MIT (codice) / All Rights Reserved (asset)"
+license="All Rights Reserved"
 
 [[mods]]
 modId="redstone_exoframes"
