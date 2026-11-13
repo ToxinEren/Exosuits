@@ -19,7 +19,7 @@ Scegli UNA delle due strade. Alla fine devono esserci quattro file:
 
 **A. Artefatto della CI (consigliato).** La CI (`.github/workflows/build.yml`) compila i quattro jar a ogni push e li carica nell'artefatto `redstone-exoframes-jars`.
 
-- [ ] Scarica con `gh run download --repo ToxinEren/Exosuits -n redstone-exoframes-jars` (oppure dalla scheda Actions di GitHub, scegliendo l'ultima esecuzione verde del branch `m1-setup`).
+- [ ] Scarica con `gh run download --repo ToxinEren/Exosuits -n redstone-exoframes-jars` (oppure dalla scheda Actions di GitHub, scegliendo l'ultima esecuzione verde del branch `main`).
 - [ ] Verifica la presenza dei quattro jar con il comando: `bash tools/check_jars.sh <cartella-scaricata>` (dal repository).
 
 **B. Build locale.** Serve JDK 21 per eseguire Gradle (il wrapper e' Gradle 9.9.0). La prima build scarica molto e puo' richiedere 10-15 minuti. Su Windows usa `gradlew.bat` al posto di `./gradlew`.

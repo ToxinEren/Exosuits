@@ -88,6 +88,7 @@ redstone-exoframes/
 | `Net` (sync HUD, attivazione moduli, uscita dal telaio) | Pacchetti con `FriendlyByteBuf` (via Architectury Networking) | `CustomPacketPayload` + `StreamCodec` |
 | `Ids` | `new ResourceLocation(ns, path)` | `ResourceLocation.fromNamespaceAndPath(ns, path)` |
 | `Platform` (config dir, isClient, isModLoaded, menu type) | per loader | per loader |
+| `FrameStateAccess` (stato del telaio per giocatore) | SavedData + pacchetto di sync | SavedData + pacchetto di sync (uguale su entrambe le versioni) |
 
 ### 5.3 Dipendenze e versioni (lette dai Maven il 12 novembre 2026)
 
@@ -109,7 +110,7 @@ Se una combinazione non risolve (per esempio Loom 1.17 con Forge 1.20.1), si sce
 
 Sei pezzi logici (elmo, torso, braccio sx, braccio dx, gamba sx, gamba dx) non entrano nei quattro slot armatura vanilla, quindi:
 
-- Lo **stato del telaio** (sei pezzi con durabilità, moduli e colori; cella inserita; tier; proprietario; armatura "civile" stivata) vive in un dato agganciato al giocatore (Forge/NeoForge: attachment/capability; Fabric: `fabric-data-attachment-api`), serializzato tramite `ItemDataAccess`-like codec in `core/`.
+- Lo **stato del telaio** (sei pezzi con durabilità, moduli e colori; cella inserita; tier; proprietario; armatura "civile" stivata) vive in un `SavedData` del server (mappa UUID → NBT, nome di salvataggio `redstone_exoframes_frames`, nel `DimensionDataStorage` dell'overworld) ed è sincronizzato al client con un pacchetto `Net`: una sola implementazione sui quattro target, niente capability/attachment per loader; è serializzato tramite `ItemDataAccess`-like codec in `core/`.
 - I quattro slot armatura ricevono **quattro stack segnaposto bloccati** (`exoframe_helmet`, `exoframe_torso`, `exoframe_legs`, `exoframe_boots`) che non si possono togliere, non si possono buttare e non cadono alla morte; servono a far passare la protezione nel calcolo vanilla dell'armatura e a bloccare gli slot. Lo stack torso porta anche le due braccia; lo stack gambe porta le due gambe; `exoframe_boots` esiste solo per occupare lo slot.
 - Il **rendering** non usa i segnaposto: un layer GeckoLib dedicato sul renderer del giocatore legge lo stato del telaio e disegna i sei pezzi con il loro stato visivo. Così braccia e gambe sinistre/destre hanno texture e danni indipendenti.
 - L'**armatura che il giocatore indossava** prima di entrare viene stivata nello stato del telaio e rimessa addosso all'uscita; se all'uscita gli slot non sono liberi (non può succedere perché i segnaposto vengono rimossi per primi) cade a terra come item.
@@ -146,6 +147,7 @@ Da stabilire con l'audit del repo (task 2). Candidati: struttura degli item arma
 11. **Asset:** si riusa da Mjolnir solo il codice (renderer, classi modello, controller di animazione, HUD); geometrie, texture, animazioni e suoni sono nuovi perché le forme MJOLNIR sono IP Halo. La sessione cloud produce modelli e texture placeholder puliti e una specifica asset (nomi dei bone, UV, maschere di tinta) per chi farà quelli definitivi. Chi li fa e se l'alpha può uscire con i placeholder: in attesa di Luigi (§10).
 12. **Automazione in M1:** workflow GitHub Actions che compila i quattro jar a ogni push, così Jarvis scarica gli artefatti senza che la sessione cloud debba restare viva.
 13. **Il telaio non cambia le dimensioni del giocatore** (nessuna dipendenza da Pehkui); da confermare entro la fine di M2 perché il sì cambierebbe M3 (mixin su dimensioni, camera e collisioni).
+14. **Stato del telaio per giocatore** in SavedData del server + sync al client (una sola implementazione sui quattro target), non attachment per loader.
 
 ## 8. Milestone e criteri di accettazione
 

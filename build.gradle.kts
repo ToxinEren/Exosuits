@@ -115,6 +115,7 @@ tasks.processResources {
         "version" to project.version.toString(),
         "mc_range" to project.property("mod.mc_range").toString(),
         "loader_range" to project.property("mod.loader_range").toString(),
+        "neoforge_range" to (project.findProperty("mod.neoforge_range") ?: "").toString(),
         "pack_format" to project.property("mod.pack_format").toString(),
     )
     inputs.properties(props)

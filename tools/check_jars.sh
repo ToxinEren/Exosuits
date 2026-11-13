@@ -83,6 +83,9 @@ for jar in "${jars[@]}"; do
     # (e) nessun refmap.
     refmaps=$(echo "$listing" | grep -E '\.refmap\.json$' || true)
     [ -z "$refmaps" ] || err "$name" "refmap presente: $refmaps"
+
+    # (f) icona del mod alla radice del jar (referenziata da icon/logoFile).
+    echo "$listing" | grep -qx 'icon.png' || err "$name" "manca icon.png alla radice"
 done
 
 [ "$fail" -eq 0 ] || exit 1

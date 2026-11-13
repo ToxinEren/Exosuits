@@ -8,11 +8,12 @@ version="${version}"
 displayName="Redstone Exoframes"
 authors="ToxinEren"
 description='''Power armor originale: telaio, celle di redstone, moduli e stazione di manutenzione.'''
+logoFile="icon.png"
 
 [[dependencies.redstone_exoframes]]
 modId="neoforge"
 type="required"
-versionRange="${loader_range}"
+versionRange="${neoforge_range}"
 ordering="NONE"
 side="BOTH"
 
