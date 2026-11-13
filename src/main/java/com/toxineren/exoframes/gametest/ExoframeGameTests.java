@@ -2,6 +2,7 @@ package com.toxineren.exoframes.gametest;
 
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
@@ -21,10 +22,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ArmorItem;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 
@@ -57,6 +62,7 @@ public final class ExoframeGameTests {
         add(tests, "wiringPlacesABlock", ExoframeGameTests::wiringPlacesABlock);
         add(tests, "frameStateOnMockPlayer", ExoframeGameTests::frameStateOnMockPlayer);
         add(tests, "itemDataRoundTripsOnARealStack", ExoframeGameTests::itemDataRoundTripsOnARealStack);
+        add(tests, "placeholdersAreArmorItems", ExoframeGameTests::placeholdersAreArmorItems);
         return tests;
     }
 
@@ -98,6 +104,30 @@ public final class ExoframeGameTests {
                 "suit summary changed on round trip: " + Compat.itemData().suitSummary(stack));
         helper.assertTrue(Optional.of(piece).equals(Compat.itemData().piece(stack)),
                 "writing the suit summary changed the piece data: " + Compat.itemData().piece(stack));
+        helper.succeed();
+    }
+
+    /**
+     * I quattro segnaposto degli slot armatura sono nel registro degli item con il loro id, sono {@link ArmorItem}
+     * del tipo atteso e hanno la pila a 1. Si cercano per id e non dai campi di ModItems, cosi' il test parla dei
+     * nomi che vedono i salvataggi e i comandi.
+     */
+    private static void placeholdersAreArmorItems(GameTestHelper helper) {
+        Map<String, ArmorItem.Type> expected = Map.of(
+                "exoframe_helmet", ArmorItem.Type.HELMET,
+                "exoframe_torso", ArmorItem.Type.CHESTPLATE,
+                "exoframe_legs", ArmorItem.Type.LEGGINGS,
+                "exoframe_boots", ArmorItem.Type.BOOTS);
+        expected.forEach((path, type) -> {
+            ResourceLocation id = Ids.of(path);
+            helper.assertTrue(BuiltInRegistries.ITEM.containsKey(id), "item not registered: " + id);
+            Item item = BuiltInRegistries.ITEM.get(id);
+            helper.assertTrue(item instanceof ArmorItem, "item is not an ArmorItem: " + id);
+            helper.assertTrue(((ArmorItem) item).getType() == type,
+                    "wrong armor type for " + id + ": " + ((ArmorItem) item).getType());
+            int max = new ItemStack(item).getMaxStackSize();
+            helper.assertTrue(max == 1, "max stack size of " + id + " is " + max + ", expected 1");
+        });
         helper.succeed();
     }
 

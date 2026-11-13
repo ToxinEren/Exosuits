@@ -159,6 +159,13 @@ java {
     withSourcesJar()
 }
 
+// Risorse per versione di Minecraft: src/main/resources-mc<versione> (es. resources-mc1.20.1) si aggiunge alle risorse
+// comuni delle varianti di quella versione. La cartella puo' mancare: Gradle ignora una srcDir inesistente. Oggi porta
+// le texture trasparenti del layer armatura vanilla di 1.20.1 per il materiale "frame".
+sourceSets.main {
+    resources.srcDir(rootProject.file("src/main/resources-mc$mc"))
+}
+
 tasks.processResources {
     // Ogni jar porta solo i metadati del proprio loader.
     if (loader != "fabric") exclude("fabric.mod.json")

@@ -1,4 +1,8 @@
 {
   "item.redstone_exoframes.redstone_cell": "Cella di redstone",
+  "item.redstone_exoframes.exoframe_helmet": "Attacco elmo del telaio",
+  "item.redstone_exoframes.exoframe_torso": "Attacco torso del telaio",
+  "item.redstone_exoframes.exoframe_legs": "Attacco gambe del telaio",
+  "item.redstone_exoframes.exoframe_boots": "Attacco stivali del telaio",
   "itemGroup.redstone_exoframes.main": "Redstone Exoframes"
 }

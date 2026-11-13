@@ -8,7 +8,6 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.crafting.Ingredient;
 //? if >=1.21 {
 import com.toxineren.exoframes.RedstoneExoframes;
-import com.toxineren.exoframes.compat.Ids;
 import dev.architectury.registry.registries.DeferredRegister;
 import dev.architectury.registry.registries.RegistrySupplier;
 import java.util.EnumMap;
@@ -28,7 +27,10 @@ import net.minecraft.core.registries.Registries;
  * {@code Holder<ArmorMaterial>} e si risolve solo all'uso, cosi' si puo' passare al costruttore di {@link ArmorItem}
  * (che legge il materiale pigramente) anche prima che la voce sia legata. Su 1.20.1 il materiale e' un enum privato:
  * il nome e' "frame" senza namespace perche' su Fabric il percorso vanilla della texture non ne accetta uno, e il
- * codice e' lo stesso per Fabric e Forge. Nessuna texture e' fornita qui: il rendering dei pezzi passera' da GeckoLib.
+ * codice e' lo stesso per Fabric e Forge. Il layer armatura vanilla non disegna nulla per i segnaposto: su 1.21.1 il
+ * materiale non ha layer; su 1.20.1 vanilla disegna sempre, con {@code minecraft:textures/models/armor/frame_layer_1.png}
+ * e {@code frame_layer_2.png}, che i jar 1.20.1 portano completamente trasparenti (src/main/resources-mc1.20.1). Il
+ * rendering dei pezzi passa dal layer della mod.
  * <p>
  * Gli item di {@code newPlaceholder} hanno sempre la pila a 1 su entrambe le versioni, e le proprieta' date possono
  * avere o no una durabilita' vanilla. Su 1.21.1 si imposta {@code stacksTo(1)}; su 1.20.1 le proprieta' passano
@@ -43,7 +45,9 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
     private static final RegistrySupplier<ArmorMaterial> FRAME = MATERIALS.register("frame", ArmorMaterialsImpl::frame);
 
     /**
-     * Il materiale "frame": difesa 0 per ogni tipo, nessuna riparazione, id del layer {@code redstone_exoframes:frame}.
+     * Il materiale "frame": difesa 0 per ogni tipo, nessuna riparazione, nessun layer. Senza layer il layer armatura
+     * vanilla ({@code HumanoidArmorLayer}, che cicla su {@code material.layers()}) non disegna nulla per i segnaposto:
+     * la tuta la disegna il layer di rendering della mod.
      */
     private static ArmorMaterial frame() {
         Map<ArmorItem.Type, Integer> defense = new EnumMap<>(ArmorItem.Type.class);
@@ -51,7 +55,7 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
             defense.put(type, 0);
         }
         return new ArmorMaterial(defense, 0, SoundEvents.ARMOR_EQUIP_IRON, () -> Ingredient.EMPTY,
-                List.of(new ArmorMaterial.Layer(Ids.of("frame"))), 0f, 0f);
+                List.of(), 0f, 0f);
     }
 
     @Override

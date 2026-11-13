@@ -8,9 +8,15 @@ import os
 import struct
 import zlib
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "main", "resources")
-CELL_PATH = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "item", "redstone_cell.png")
+MAIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "main")
+ROOT = os.path.join(MAIN, "resources")
+ITEM_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "item")
+CELL_PATH = os.path.join(ITEM_DIR, "redstone_cell.png")
 ICON_PATH = os.path.join(ROOT, "icon.png")
+# Texture del layer armatura vanilla di 1.20.1 per il materiale "frame" (nome senza namespace): solo nei jar 1.20.1,
+# dalla cartella di risorse per versione. Completamente trasparenti: il layer vanilla non deve mostrare nulla.
+ARMOR_DIR_1201 = os.path.join(MAIN, "resources-mc1.20.1", "assets", "minecraft", "textures", "models", "armor")
+ARMOR_LAYER_PATHS = [os.path.join(ARMOR_DIR_1201, "frame_layer_%d.png" % n) for n in (1, 2)]
 
 CLEAR = (0, 0, 0, 0)
 
@@ -114,10 +120,106 @@ def draw_icon():
     return px
 
 
+# Palette dei segnaposto: quella della cella (contorno scuro, rame, metallo, redstone).
+OUTLINE = (43, 38, 36, 255)
+COPPER = (168, 136, 108, 255)
+COPPER_LIGHT = (178, 142, 112, 255)
+COPPER_DARK = (116, 98, 88, 255)
+METAL = (150, 150, 156, 255)
+METAL_DARK = (110, 110, 118, 255)
+REDSTONE = (200, 24, 24, 255)
+
+
+def outline(px, color=OUTLINE):
+    """Contorna di color i pixel trasparenti vicini (4-connessi) a un pixel pieno."""
+    h, w = len(px), len(px[0])
+    filled = [[px[y][x][3] > 0 for x in range(w)] for y in range(h)]
+    for y in range(h):
+        for x in range(w):
+            if filled[y][x]:
+                continue
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < w and 0 <= ny < h and filled[ny][nx]:
+                    px[y][x] = color
+                    break
+    return px
+
+
+def draw_helmet():
+    """Attacco elmo 16x16: calotta di rame con visore di redstone."""
+    px = canvas(16, 16)
+    rect(px, 4, 2, 11, 3, COPPER_LIGHT)    # sommita'
+    rect(px, 3, 4, 12, 11, COPPER)         # calotta
+    rect(px, 3, 4, 12, 4, COPPER_LIGHT)
+    rect(px, 4, 7, 11, 8, REDSTONE)        # visore
+    rect(px, 3, 11, 12, 11, COPPER_DARK)
+    rect(px, 6, 9, 9, 12, CLEAR)           # apertura del collo
+    rect(px, 3, 12, 4, 12, METAL_DARK)     # guance
+    rect(px, 11, 12, 12, 12, METAL_DARK)
+    return outline(px)
+
+
+def draw_torso():
+    """Attacco torso 16x16: busto con spalline e nucleo di redstone."""
+    px = canvas(16, 16)
+    rect(px, 1, 2, 4, 5, METAL)            # spalline
+    rect(px, 11, 2, 14, 5, METAL)
+    rect(px, 4, 2, 11, 13, COPPER)         # busto
+    rect(px, 4, 2, 11, 3, COPPER_LIGHT)
+    rect(px, 6, 1, 9, 2, CLEAR)            # scollo
+    rect(px, 6, 6, 9, 9, COPPER_DARK)      # nucleo
+    rect(px, 7, 7, 8, 8, REDSTONE)
+    rect(px, 4, 12, 11, 13, METAL_DARK)    # cintura
+    return outline(px)
+
+
+def draw_legs():
+    """Attacco gambe 16x16: cintura e due gambali separati."""
+    px = canvas(16, 16)
+    rect(px, 3, 1, 12, 3, METAL_DARK)      # cintura
+    rect(px, 7, 2, 8, 2, REDSTONE)
+    rect(px, 3, 4, 6, 14, COPPER)          # gambali
+    rect(px, 9, 4, 12, 14, COPPER)
+    rect(px, 3, 4, 3, 14, COPPER_LIGHT)
+    rect(px, 9, 4, 9, 14, COPPER_LIGHT)
+    rect(px, 3, 8, 6, 9, METAL)            # ginocchiere
+    rect(px, 9, 8, 12, 9, METAL)
+    return outline(px)
+
+
+def draw_boots():
+    """Attacco stivali 16x16: due stivali con suola metallica."""
+    px = canvas(16, 16)
+    rect(px, 2, 4, 5, 11, COPPER)          # gambi
+    rect(px, 9, 4, 12, 11, COPPER)
+    rect(px, 2, 4, 5, 5, COPPER_LIGHT)
+    rect(px, 9, 4, 12, 5, COPPER_LIGHT)
+    rect(px, 2, 10, 7, 12, COPPER)         # punte
+    rect(px, 9, 10, 14, 12, COPPER)
+    rect(px, 2, 13, 7, 13, METAL_DARK)     # suole
+    rect(px, 9, 13, 14, 13, METAL_DARK)
+    px[7][3] = REDSTONE
+    px[7][10] = REDSTONE
+    return outline(px)
+
+
+PIECE_ICONS = (("exoframe_helmet", draw_helmet), ("exoframe_torso", draw_torso),
+               ("exoframe_legs", draw_legs), ("exoframe_boots", draw_boots))
+
+
 def main():
+    written = [CELL_PATH, ICON_PATH]
     write_png(CELL_PATH, 16, 16, draw_cell())
     write_png(ICON_PATH, 64, 64, draw_icon())
-    print("scritti:", os.path.normpath(CELL_PATH), os.path.normpath(ICON_PATH))
+    for name, draw in PIECE_ICONS:
+        path = os.path.join(ITEM_DIR, name + ".png")
+        write_png(path, 16, 16, draw())
+        written.append(path)
+    for path in ARMOR_LAYER_PATHS:
+        write_png(path, 64, 32, canvas(64, 32))
+        written.append(path)
+    print("scritti:", *(os.path.normpath(p) for p in written))
 
 
 if __name__ == "__main__":

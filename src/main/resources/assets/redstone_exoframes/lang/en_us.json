@@ -1,4 +1,8 @@
 {
   "item.redstone_exoframes.redstone_cell": "Redstone Cell",
+  "item.redstone_exoframes.exoframe_helmet": "Exoframe Helmet Mount",
+  "item.redstone_exoframes.exoframe_torso": "Exoframe Torso Mount",
+  "item.redstone_exoframes.exoframe_legs": "Exoframe Leg Mount",
+  "item.redstone_exoframes.exoframe_boots": "Exoframe Boot Mount",
   "itemGroup.redstone_exoframes.main": "Redstone Exoframes"
 }

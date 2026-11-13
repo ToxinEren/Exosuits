@@ -106,6 +106,16 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
 
     # (f) icona del mod alla radice del jar (referenziata da icon/logoFile).
     echo "$listing" | grep -qx 'icon.png' || err "$name" "manca icon.png alla radice"
+
+    # (f2) texture trasparenti del layer armatura vanilla per il materiale "frame": servono solo su 1.20.1, dove
+    #      vanilla le disegna sempre; su 1.21.1 il materiale non ha layer e non devono esserci.
+    for t in assets/minecraft/textures/models/armor/frame_layer_1.png assets/minecraft/textures/models/armor/frame_layer_2.png; do
+        if [ "$mc" = 1.20.1 ]; then
+            echo "$listing" | grep -qx "$t" || err "$name" "manca $t (texture trasparente del materiale frame su 1.20.1)"
+        else
+            ! echo "$listing" | grep -qx "$t" || err "$name" "$t presente in un jar $mc (serve solo su 1.20.1)"
+        fi
+    done
 done
 
 # (g) nessun dato personale nei jar da pubblicare: percorsi locali, e-mail, metadati di immagini e suoni.
