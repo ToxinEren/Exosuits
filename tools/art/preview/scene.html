@@ -1,0 +1,150 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Scena exoframe</title>
+<style>html,body{margin:0;background:#808080;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"/preview/node_modules/three/build/three.module.js"}}</script>
+</head><body>
+<script type="module">
+// Scena per le anteprime in scala (servita da shot.js): ?cfg=<json>. Coordinate della scena: quelle di three.js
+// dopo geo.js (x negata rispetto al file, come in GeckoLib): fronte verso -z, destra del pilota a +x.
+// cfg.models: [{geo, tex, glow, S, dx, dz, pose, p1, p2}]
+//                                  tuta scalata di S attorno ai piedi e spostata di dx, dz; geo/tex/glow sono percorsi
+//                                  serviti da shot.js; glow (maschera luminosa) si usa come emissiva; le ossa _p1/_p2
+//                                  si tingono di p1/p2 come farebbe il renderer
+// cfg.pilots: [{dx, dz, raise, legs}]   pilota a grandezza normale (32 px), sollevato di raise px; legs: false non
+//                                  disegna gambe e scarpe (come nel gioco, dentro la tuta)
+// cfg.floor: {block, from, to, zfrom, zto}   pavimento con griglia di quadrati da `block` px
+// cfg.doors: [{dx, w, h, z}]       porta (luce libera w x h) con stipiti e architrave dietro la tuta
+// cfg.boxes: [{dx, dz, w, h, d, color}]   contorno di un box di collisione centrato sui piedi
+// cfg.dir: [x,y,z]                 direzione dal centro dell'inquadratura verso la camera (ortografica)
+// cfg.fit: [[minx,miny,minz],[maxx,maxy,maxz]] oppure 'auto' (tute e piloti); cfg.pad margine (predefinito 1.08)
+// cfg.ambient, cfg.key: intensita' delle luci (predefinite 0.75 e 1.35, piu' morbide di index.html: la texture
+// porta gia' la sua luce dipinta)
+import * as THREE from 'three';
+import { bakeGeo } from '/preview/geo.js';
+
+const cfg = JSON.parse(new URLSearchParams(location.search).get('cfg'));
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x808080);
+const fitGroup = new THREE.Group(); scene.add(fitGroup);
+
+async function loadTex(url) {
+  const t = await new THREE.TextureLoader().loadAsync(url);
+  t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; return t;
+}
+
+for (const md of cfg.models || []) {
+  const json = await (await fetch('/' + md.geo)).json();
+  const tex = await loadTex('/' + md.tex);
+  const baked = bakeGeo(json, md.pose || {});
+  // regioni di colore dei pezzi: _p1 e _p2 tinte come farebbe il renderer, il resto bianco
+  const TINT = { p1: new THREE.Color(md.p1 ?? 0xB5651D), p2: new THREE.Color(md.p2 ?? 0x5F7D7A) };
+  const WHITE = new THREE.Color(0xffffff);
+  const pos = [], nor = [], uv = [], col = [];
+  for (const quad of baked.quads) for (const k of [0, 1, 2, 0, 2, 3]) {
+    const reg = (quad.bone.match(/_(p1|p2)$/) || [])[1];
+    const c = reg ? TINT[reg] : WHITE;
+    col.push(c.r, c.g, c.b);
+    pos.push(...quad.verts[k]); nor.push(...quad.normal);
+    uv.push(quad.uvs[k][0] / baked.width, quad.uvs[k][1] / baked.height);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  const opts = { map: tex, alphaTest: 0.1, side: THREE.DoubleSide, vertexColors: true };
+  if (md.glow) { opts.emissiveMap = await loadTex('/' + md.glow); opts.emissive = new THREE.Color(0xffffff); }
+  const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial(opts));
+  mesh.scale.setScalar(md.S || 1);           // scala uniforme attorno a (0,0,0), i piedi
+  mesh.position.x = md.dx || 0;
+  mesh.position.z = md.dz || 0;
+  fitGroup.add(mesh);
+}
+
+// pilota di riferimento (skin semplice: viso, maglia, pantaloni, scarpe)
+const M = c => new THREE.MeshLambertMaterial({ color: c });
+for (const pl of cfg.pilots || []) {
+  const dx = pl.dx || 0, up = pl.raise || 0, dz = pl.dz || 0;
+  const skin = M(0xc49a78), shirt = M(0x3f8a96), pants = M(0x3c3f86), shoe = M(0x3a3a3a), hair = M(0x4a3020), eye = M(0x26264a);
+  const parts = [[[-4, 24, -4], [4, 32, 4], skin], [[-4, 30.5, -4.02], [4, 32.02, 4.02], hair], [[-4, 12, -2], [4, 24, 2], shirt],
+    [[-8, 12, -2], [-4, 24, 2], shirt], [[4, 12, -2], [8, 24, 2], shirt], [[-8, 12, -2.01], [-4, 15, 2.01], skin], [[4, 12, -2.01], [8, 15, 2.01], skin],
+    [[-4, 0, -2], [0, 12, 2], pants], [[0, 0, -2], [4, 12, 2], pants], [[-4, 0, -2.01], [4, 2, 2.01], shoe],
+    [[-3, 27, -4.05], [-1.5, 28, -4], eye], [[1.5, 27, -4.05], [3, 28, -4], eye]];
+  for (const [lo, hi, m] of parts) {
+    if (pl.legs === false && hi[1] <= 12.01) continue;   // gambe e scarpe non disegnate dentro la tuta
+    const b = new THREE.Mesh(new THREE.BoxGeometry(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]), m);
+    b.position.set((lo[0] + hi[0]) / 2 + dx, (lo[1] + hi[1]) / 2 + up, (lo[2] + hi[2]) / 2 + dz);
+    fitGroup.add(b);
+  }
+}
+
+function lineBox(x0, y0, z0, x1, y1, z1, color, onTop) {
+  const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0));
+  const l = new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color, depthTest: !onTop, transparent: true, opacity: onTop ? 0.95 : 1 }));
+  l.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+  if (onTop) l.renderOrder = 10;
+  scene.add(l); return l;
+}
+// spessore: piu' linee affiancate di poco
+function thick(fn, n = 3, step = 0.08) { for (let k = 0; k < n; k++) fn((k - (n - 1) / 2) * step); }
+
+if (cfg.floor) {
+  const { block, from, to, zfrom, zto } = cfg.floor;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(to - from, zto - zfrom), M(0x9a9a96));
+  plane.rotation.x = -Math.PI / 2; plane.position.set((from + to) / 2, -0.02, (zfrom + zto) / 2); scene.add(plane);
+  const pts = [];
+  for (let x = from; x <= to + 1e-6; x += block) pts.push(x, 0, zfrom, x, 0, zto);
+  for (let z = zfrom; z <= zto + 1e-6; z += block) pts.push(from, 0, z, to, 0, z);
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0x55554f })));
+}
+for (const d of cfg.doors || []) {
+  // contorno della porta (luce libera w x h) con stipiti e architrave pieni dietro la tuta
+  const fm = M(0x6b4a2c), z = d.z;
+  for (const [x0, x1, y0, y1] of [[-d.w / 2 - 2, -d.w / 2, 0, d.h], [d.w / 2, d.w / 2 + 2, 0, d.h], [-d.w / 2 - 2, d.w / 2 + 2, d.h, d.h + 2]]) {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, 1), fm);
+    b.position.set(d.dx + (x0 + x1) / 2, (y0 + y1) / 2, z + 0.5); scene.add(b);
+  }
+  thick(o => lineBox(d.dx - d.w / 2 + o, 0, z, d.dx + d.w / 2 - o, d.h - o, z, 0xffffff, true), 2, 0.1);
+}
+for (const b of cfg.boxes || []) {
+  const bz = b.dz || 0;
+  thick(o => lineBox(b.dx - b.w / 2 + o, 0, bz - b.d / 2 + o, b.dx + b.w / 2 - o, b.h - o, bz + b.d / 2 - o, b.color || 0xffd23c, true), 2, 0.1);
+}
+
+scene.add(new THREE.AmbientLight(0xffffff, cfg.ambient ?? 0.75));
+const key = new THREE.DirectionalLight(0xfff2e0, cfg.key ?? 1.35);
+const rim = new THREE.DirectionalLight(0xd8e4ff, 0.45);
+scene.add(key, rim);
+const d = new THREE.Vector3(...cfg.dir).normalize();
+// luce principale dall'alto-davanti-destra del pilota (come quella dipinta), riflesso dalla parte opposta
+key.position.set(0.5, 1.0, -0.7).multiplyScalar(10);
+if (d.z > 0.3) key.position.set(0.3, 1.0, 0.6).multiplyScalar(10);
+rim.position.set(-d.x, 0.3, -d.z).multiplyScalar(10);
+
+const box = new THREE.Box3();
+if (cfg.fit === 'auto') box.setFromObject(fitGroup);
+else box.set(new THREE.Vector3(...cfg.fit[0]), new THREE.Vector3(...cfg.fit[1]));
+const center = box.getCenter(new THREE.Vector3());
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 2000);
+cam.position.copy(center).addScaledVector(d, 400);
+cam.up.set(0, 1, 0); cam.lookAt(center); cam.updateMatrixWorld(true);
+let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+  const p = new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse);
+  minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+}
+const aspect = innerWidth / innerHeight;
+const half = Math.max((maxx - minx) / aspect, maxy - miny) / 2 * (cfg.pad ?? 1.08);
+const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+Object.assign(cam, { left: cx - half * aspect, right: cx + half * aspect, top: cy + half, bottom: cy - half });
+cam.updateProjectionMatrix();
+renderer.render(scene, cam);
+window.__ready = true;
+</script></body></html>

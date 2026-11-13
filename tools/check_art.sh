@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 # Controllo della grafica generata (dalla radice del repository): bash tools/check_art.sh
-# Rigenera geometria, atlante e animazioni in una cartella temporanea e li confronta con i file committati in
-# src/main/resources/assets/redstone_exoframes: byte per byte i JSON; per l'atlante blocchi, IHDR e pixel
-# decompressi (tools/art/compare_png.py), perche' i byte compressi dipendono dalla build di zlib.
+# Rigenera geometria, atlante, maschera luminosa e animazioni in una cartella temporanea e li confronta con i file
+# committati in src/main/resources/assets/redstone_exoframes: byte per byte i JSON; per le PNG (atlante e maschera)
+# blocchi, IHDR e pixel decompressi (tools/art/compare_png.py), perche' i byte compressi dipendono dalla build di
+# zlib.
 # Servono python3 e numpy (tools/art/requirements.txt).
 set -eu
 
 cd "$(dirname "$0")/.."
 
 assets=src/main/resources/assets/redstone_exoframes
-files=(geo/exoframe.geo.json textures/entity/exoframe.png animations/exoframe.animation.json)
+files=(geo/exoframe.geo.json textures/entity/exoframe.png textures/entity/exoframe_glowmask.png
+       animations/exoframe.animation.json)
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT

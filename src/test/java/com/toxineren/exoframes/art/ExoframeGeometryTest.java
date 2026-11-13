@@ -143,8 +143,8 @@ class ExoframeGeometryTest {
 
     @Test
     void everyCubeIsInsideTheSuitBox() {
-        double[] min = {-13, -1, -8};
-        double[] max = {13, 36, 9};
+        double[] min = {-9.5, 0, -7};
+        double[] max = {9.5, 30.7, 9};
         for (Map.Entry<String, JsonObject> entry : BONES.entrySet()) {
             for (JsonObject cube : cubes(entry.getValue())) {
                 double[] origin = vec(cube, "origin");
@@ -165,8 +165,8 @@ class ExoframeGeometryTest {
     void uvRectanglesStayInsideTheAtlas() {
         int width = description.get("texture_width").getAsInt();
         int height = description.get("texture_height").getAsInt();
-        assertEquals(256, width);
-        assertEquals(256, height);
+        assertEquals(512, width);
+        assertEquals(512, height);
         int faces = 0;
         for (Map.Entry<String, JsonObject> entry : BONES.entrySet()) {
             for (JsonObject cube : cubes(entry.getValue())) {

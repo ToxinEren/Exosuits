@@ -1,11 +1,12 @@
 """Descrizione del modello a scatole, impacchettamento nell'atlante, controlli ed esportazione Bedrock.
 
-Convenzioni (coordinate del file .geo.json, cioe' Bedrock): 1 unita' = 1 pixel di texture = 1/16 di blocco,
-y verso l'alto, il modello poggia su y = 0, il fronte della tuta guarda verso -z, il lato destro di chi la indossa
-sta a x negativa. GeckoLib, caricando il file, nega x (vedi BakedModelFactory): per questo la faccia "east" di una
-scatola e' quella a x minima del file e "west" quella a x massima. L'orientamento delle facce qui sotto
-(face_frame) e' ricavato dal codice di GeckoLib (GeoQuad.build e VertexSet) e verificato con il visore di
-tools/art/preview contro l'armatura d'esempio di GeckoLib (vedi tools/art/README.md).
+Convenzioni (coordinate del file .geo.json, cioe' Bedrock): 1 unita' = 1 pixel di modello = 1/16 di blocco prima
+della scala della tuta (SUIT_SCALE) = DENSITY texel dell'atlante; y verso l'alto, il modello poggia su y = 0, il
+fronte della tuta guarda verso -z, il lato destro di chi la indossa sta a x negativa. GeckoLib, caricando il file,
+nega x (vedi BakedModelFactory): per questo la faccia "east" di una scatola e' quella a x minima del file e "west"
+quella a x massima. L'orientamento delle facce qui sotto (face_frame) e' ricavato dal codice di GeckoLib
+(GeoQuad.build e VertexSet) e verificato con il visore di tools/art/preview contro l'armatura d'esempio di GeckoLib
+(vedi tools/art/README.md).
 
 Un file di design (tools/art/designs/<nome>.py) dichiara ossa, scatole, materiali e regioni di colore; questo modulo
 non conosce nessun design.
@@ -29,13 +30,24 @@ TOP_BONES = (
 TOP_PIVOT = dict(TOP_BONES)
 FACES = ('north', 'east', 'south', 'west', 'up', 'down')
 
-# Ingombro massimo della tuta (pixel), lo stesso che controlla ExoframeGeometryTest.
-SUIT_MIN = (-13.0, -1.0, -8.0)
-SUIT_MAX = (13.0, 36.0, 9.0)
+# --- scala e pilota ---------------------------------------------------------------------------------------
+# Nel gioco la tuta si disegna scalata di SUIT_SCALE attorno ai piedi (0,0,0); il pilota resta a grandezza normale,
+# sollevato di PILOT_LIFT_PX pixel (9.6) perche' collo e spalle combacino con quelli della tuta, e senza gambe (stanno
+# nelle cosce chiuse della tuta). Il modello qui e' scritto in pixel non scalati.
+SUIT_SCALE = 1.4
+PILOT_LIFT_PX = 24 * (SUIT_SCALE - 1)
 
-# Giocatore di riferimento (pixel): (nome, minimo, massimo, distanza minima delle scatole dalla superficie).
-# 0.25 sul corpo e sugli arti: il secondo strato della skin sta a +0.25 e una scatola che lo tocca da fuori non
-# gli e' complanare con la stessa normale. 0.5 sulla testa, dove il cappello della skin sta a +0.5.
+# Ingombri massimi (pixel non scalati): FRAME_* per le ossa del telaio nudo (regione 'frame', gli stessi che
+# controlla ExoframeGeometryTest), SUIT_* per le ossa dei pezzi (telaio con i pezzi montati).
+FRAME_MIN = (-9.5, 0.0, -7.0)
+FRAME_MAX = (9.5, 30.7, 9.0)
+SUIT_MIN = (-10.75, 0.0, -8.0)
+SUIT_MAX = (10.75, 31.5, 9.5)
+
+# Giocatore di riferimento (pixel, grandezza normale, in piedi su y = 0): (nome, minimo, massimo, distanza minima
+# delle scatole dalla superficie). 0.25 sul corpo e sugli arti: il secondo strato della skin sta a +0.25 e una
+# scatola che lo tocca da fuori non gli e' complanare con la stessa normale. 0.5 sulla testa, dove il cappello della
+# skin sta a +0.5.
 PLAYER = (
     ('head', (-4, 24, -4), (4, 32, 4), 0.5),
     ('body', (-4, 12, -2), (4, 24, 2), 0.25),
@@ -44,24 +56,28 @@ PLAYER = (
     ('rightLeg', (-4, 0, -2), (0, 12, 2), 0.25),
     ('leftLeg', (0, 0, -2), (4, 12, 2), 0.25),
 )
+# Le parti del pilota che si disegnano dentro la tuta (e che Model.check() tiene libere): tutto tranne le gambe.
+PILOT = tuple(p for p in PLAYER if not p[0].endswith('Leg'))
 
 # --- atlante -----------------------------------------------------------------------------------------------
-# 256x256, diviso in regioni fisse: ogni osso dichiara la sua e l'impacchettatore riempie una regione alla volta,
-# quindi aggiungere i pezzi (regioni piece_s*) non sposta mai i rettangoli del telaio.
-#   frame     y   0..31   telaio nudo
-#   piece_s0  y  32..87   pezzi, stato 0 (integro)
-#   piece_s1  y  88..143  pezzi, stato 1 (danneggiato)
-#   piece_s2  y 144..199  pezzi, stato 2 (critico)
-#   piece_s3  y 200..255  pezzi, stato 3 (rotto)
+# DENSITY texel per pixel di modello su ogni faccia. 512x512, diviso in regioni fisse: ogni osso dichiara la sua e
+# l'impacchettatore riempie una regione alla volta, quindi aggiungere i pezzi (regioni piece_s*) non sposta mai i
+# rettangoli del telaio.
+#   frame     y   0..127  telaio nudo
+#   piece_s0  y 128..223  pezzi, stato 0 (integro)
+#   piece_s1  y 224..319  pezzi, stato 1 (danneggiato)
+#   piece_s2  y 320..415  pezzi, stato 2 (critico)
+#   piece_s3  y 416..511  pezzi, stato 3 (rotto)
 # Le quattro regioni dei pezzi hanno la stessa forma: lo stesso pezzo dichiarato con le stesse scatole nei quattro
 # stati finisce nella stessa posizione relativa di ciascuna.
-ATLAS_SIZE = (256, 256)
+DENSITY = 2
+ATLAS_SIZE = (512, 512)
 ATLAS_REGIONS = (
-    ('frame', (0, 0, 256, 32)),
-    ('piece_s0', (0, 32, 256, 56)),
-    ('piece_s1', (0, 88, 256, 56)),
-    ('piece_s2', (0, 144, 256, 56)),
-    ('piece_s3', (0, 200, 256, 56)),
+    ('frame', (0, 0, 512, 128)),
+    ('piece_s0', (0, 128, 512, 96)),
+    ('piece_s1', (0, 224, 512, 96)),
+    ('piece_s2', (0, 320, 512, 96)),
+    ('piece_s3', (0, 416, 512, 96)),
 )
 
 EPS = 1e-6
@@ -93,8 +109,9 @@ def face_frame(face, lo, hi):
 
 
 def texels(length):
-    """Numero di texel per un lato lungo `length` pixel (i lati frazionari, es. 0.75, prendono un texel intero)."""
-    return max(1, int(math.ceil(length - EPS)))
+    """Numero di texel per un lato lungo `length` pixel: DENSITY per pixel, arrotondato in su (a densita' 2 un lato
+    di 0.25 px prende comunque un texel intero)."""
+    return max(1, int(math.ceil(length * DENSITY - EPS)))
 
 
 def mirror_name(name):
@@ -258,15 +275,21 @@ class Model:
     def check(self):
         """Restituisce l'elenco dei problemi (vuoto se il modello e' a posto)."""
         problems = []
+        lift = (0.0, PILOT_LIFT_PX, 0.0)
         for b in self.boxes:
+            bmin, bmax = (FRAME_MIN, FRAME_MAX) if b.bone.region == 'frame' else (SUIT_MIN, SUIT_MAX)
             for k in range(3):
-                if b.lo[k] < SUIT_MIN[k] - EPS or b.hi[k] > SUIT_MAX[k] + EPS:
-                    problems.append(f'{b.name}: fuori dall\'ingombro della tuta {b.lo} -> {b.hi}')
+                if b.lo[k] < bmin[k] - EPS or b.hi[k] > bmax[k] + EPS:
+                    problems.append(f'{b.name}: fuori dall\'ingombro {bmin} -> {bmax}: {b.lo} -> {b.hi}')
                     break
-            for pname, plo, phi, gap in PLAYER:
-                ov = [min(b.hi[k], phi[k] + gap) - max(b.lo[k], plo[k] - gap) for k in range(3)]
+            # come nel gioco: la scatola scalata di SUIT_SCALE attorno ai piedi, il pilota a grandezza normale
+            # sollevato di PILOT_LIFT_PX, senza gambe
+            lo = [v * SUIT_SCALE for v in b.lo]
+            hi = [v * SUIT_SCALE for v in b.hi]
+            for pname, plo, phi, gap in PILOT:
+                ov = [min(hi[k], phi[k] + lift[k] + gap) - max(lo[k], plo[k] + lift[k] - gap) for k in range(3)]
                 if all(o > EPS for o in ov):
-                    problems.append(f'{b.name}: a meno di {gap} px dal giocatore ({pname})')
+                    problems.append(f'{b.name}: a meno di {gap} px dal pilota ({pname})')
         # facce complanari con la stessa normale che si sovrappongono (sfarfallio), in tutte e sei le direzioni
         for i, a in enumerate(self.boxes):
             for b in self.boxes[i + 1:]:
