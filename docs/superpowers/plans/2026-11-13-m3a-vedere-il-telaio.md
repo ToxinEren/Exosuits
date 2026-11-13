@@ -47,6 +47,8 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 - **Task 12 (nuovo):** pilota sollevato, parti del corpo nascoste e oggetto impugnato nella mano della tuta (due mixin client).
 - **Task 6:** sospeso; si riscrive sul telaio nuovo quando il Task 11 è chiuso.
 
+**Revisione 2 (13 novembre 2026).** Luigi ha chiesto più stazza, braccia e petto estesi oltre il pilota e proporzioni più vicine a un riferimento che ha mandato; ha approvato la quarta passata della prova d'arte. Il Task 11 è entrato con il telaio della seconda passata come base tecnica; il Task 6, riscritto, lo sostituisce con il telaio approvato e aggiunge i pezzi Rottame. Dal 13 novembre il client vero gira anche nel cloud senza schermo: la resa si verifica lì con gli screenshot (Task 6 e Task 10) e il PC resta per conferma. Ordine rimasto: 6, poi 10.
+
 ---
 
 ### Task 1: Aspetto (`Appearance`) nel core e nello schema
@@ -154,30 +156,34 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 - [ ] **Step 4: verificare** — test PASS su `1.21.1-neoforge` e `1.20.1-forge`; due esecuzioni consecutive di `build.py --out` danno cartelle identiche (`diff -r`); `bash tools/check_art.sh` → `OK art`; `python3 tools/check_jar_privacy.py` sui jar dopo `collectJar` passa; rendere le anteprime del telaio nudo (fronte, retro, lato) e guardarle: nessuna parte sospesa, nessuna faccia sfarfallante visibile.
 - [ ] **Step 5:** CI: installare Pillow e numpy ed eseguire `bash tools/check_art.sh`; README; eliminare `tools/art/spike/`; commit `art: generatore della grafica e telaio nudo`.
 
-### Task 6: Pezzi Rottame con stati visivi e regioni di colore
+### Task 6: Telaio approvato e pezzi Rottame con stati visivi e regioni di colore
 
-> **Sospeso (Revisione 1).** Si esegue dopo il Task 11 e va riscritto sul telaio nuovo: i pezzi partono dalla prima idea della prova d'arte (`designs/scrap.py`), i nomi delle ossa nei test si costruiscono con `SuitBones` (Task 7), l'atlante è a densità doppia e il test `piecesCoverThePlayerByAtLeastOnePixel` va sostituito con un controllo sull'ingombro ammesso (design §5.1). Il testo qui sotto è quello originale.
+> **Riscritto (Revisione 2, 13 novembre 2026).** Luigi ha approvato la quarta passata della prova d'arte («mi piace l'aspetto dell'armatura rottame nelle ultime tavole»): scheletro largo con braccia e petto estesi oltre il pilota, armatura a piastre pesanti color bronzo. Questo task porta nel repo quel telaio (al posto di quello provvisorio del Task 11) e i sei pezzi Rottame, e aggiunge ciò che la prova non ha: gli stati visivi.
 
 **Files:**
-- Create: `tools/art/designs/scrap.py`
-- Modify: `tools/art/build.py`, `tools/art/paint.py`, i tre file di risorse generati, `ExoframeGeometryTest.java`, `docs/arte/README.md`
+- Modify: `tools/art/designs/frame.py`, `tools/art/exo.py`, `tools/art/paint.py`, `tools/art/build.py`, `tools/art/preview/`, `tools/art/README.md`, i file di risorse generati (geometria, atlante, maschera luminosa), `src/test/java/com/toxineren/exoframes/art/ExoframeGeometryTest.java`, `src/main/java/com/toxineren/exoframes/client/TierPalette.java`, `src/test/java/com/toxineren/exoframes/client/SuitScaleTest.java`, `docs/arte/README.md`
+- Create: `tools/art/designs/scrap.py`, `docs/arte/anteprime/rottame-v4/`
 
 **Interfaces:**
-- Consumes: generatore del Task 5; direzione artistica scelta da Luigi (`docs/arte/README.md` dice quale; se non c'è risposta, la C "caldaia" dello spike, ripulita: caldaia di rame con fasce di ferro, comignolo, manometro, tubi sulle spalle, avambracci grossi, elmo piccolo a oblò).
+- Consumes: generatore del Task 11 (densità 2, atlante 512×512 con le regioni `frame` e `piece_s0..s3`, limiti separati per telaio e pezzi, controllo esatto delle facce complanari, figura del pilota sollevata e senza gambe, maschera luminosa); la prova d'arte 2, fuori dal repo: `designs/frame_v4.py`, `designs/scrap_v4.py`, le sezioni "v3" e "v4" di `PORTING.md`, "Third pass" e "Fourth pass" di `NOTES.md`, le tavole `out/v4_armored_S140.png` e `out/v4_frame_S140.png` viste e approvate da Luigi; `SuitBones` (Task 7) per i nomi delle ossa nei test; design §4.7 e §5.1.
 - Produces:
-  - per ciascuno dei sei slot e per ciascuno stato 0..3: ossa `piece<Slot>_s<stato>_p1` (regione primaria), `_p2` (secondaria), `_n` (neutra), figlie dell'osso `armor*` corrispondente; le quattro copie hanno la stessa geometria e puntano a zone diverse dell'atlante;
-  - pittura per stato: 0 pulito, 1 graffi e ammaccature, 2 danni pesanti e fuliggine, 3 annerito;
-  - regioni primaria e secondaria in toni di grigio chiari (le colora il renderer); la neutra con i colori finali (ferro, rame con patina, cavi rossi);
-  - `textures/entity/exoframe_glowmask.png`, grande quanto l'atlante: opaca solo sui pixel luminosi (cavi rossi, cella, spie), trasparente altrove;
-  - ossa `pieceTorso_decal` (rettangolo piatto 7×7 sul davanti del torso) e `pieceLeftArm_decal` (7×7 sul lato della spalla sinistra), presenti e senza cubi visibili in M3;
-  - braccia e gambe sinistre e destre speculari;
-  - la tabella dei colori predefiniti del Rottame da usare nel Task 8: primario 0xB5651D, secondario 0x5F7D7A (modificabili qui se la resa lo richiede; il Task 8 li legge da `docs/arte/README.md`).
+  - `designs/frame.py`: lo scheletro della quarta passata; limiti `FRAME_MIN/FRAME_MAX` x ±12,75, y 0..30,7, z −8..10.
+  - `designs/scrap.py`: i sei pezzi Rottame della quarta passata; limiti `SUIT_MIN/SUIT_MAX` x ±13,5, y 0..31,5, z −8,75..10,5. Gli spallacci restano nel pezzo `Torso`.
+  - per ciascuno dei sei slot e per ciascuno stato 0..3: ossa `piece<Slot>_s<stato>_p1` (regione primaria), `_p2` (secondaria), `_n` (neutra), figlie dell'osso `armor*` corrispondente; le quattro copie di uno slot hanno la stessa geometria e puntano a quattro zone dell'atlante (`piece_s0` .. `piece_s3`);
+  - pittura per stato, da scrivere (la prova ha solo lo stato 0): 0 integro (vernice consumata ai bordi, come nelle tavole), 1 danneggiato (graffi lunghi, ammaccature scure, più vernice saltata), 2 critico (danni pesanti, fuliggine, crepe scure), 3 rotto (annerito, crepe larghe, quasi senza vernice). Uno stato più alto non deve mai sembrare meno danneggiato di uno più basso sullo stesso pezzo;
+  - regioni primaria e secondaria in toni di grigio chiari (le colora il renderer); la neutra con i colori finali (acciaio, ottone, tubi, feritoie rosse);
+  - maschera luminosa: opaca solo sui texel luminosi (cella, spie, feritoie), per tutti e quattro gli stati;
+  - ossa `pieceTorso_decal` (rettangolo piatto 7×7 sul davanti del torso) e `pieceLeftArm_decal` (7×7 sul lato esterno dello spallaccio sinistro), 0,25 px sopra la piastra, con texel del tutto trasparenti in M3;
+  - pezzi di braccia e gambe sinistri e destri speculari (un solo item per braccio e uno per gamba);
+  - colori predefiniti del Rottame: primario `0x8A6F52`, secondario `0x4A4F55`, scritti in `docs/arte/README.md` nella forma che `TierPaletteTest` già legge, e uguali in `client/TierPalette.java`;
+  - `SuitScaleTest.matchesTheArtGenerator`: legge `SUIT_SCALE` da `tools/art/exo.py` e lo confronta con `SuitScale.S`.
 
-- [ ] **Step 1: test** — in `ExoframeGeometryTest`: `everyPieceHasFourStatesAndThreeRegions` (72 ossa con i nomi esatti), `stateCopiesShareGeometry` (stesso numero di cubi e stesse dimensioni tra gli stati di uno slot), `decalBonesExist`, `leftAndRightPiecesAreMirrored`, `piecesCoverThePlayerByAtLeastOnePixel` (ogni pezzo sporge di almeno 1 px dal volume del corpo del giocatore sotto di lui).
-- [ ] **Step 2: Run** il test — Expected: FAIL.
-- [ ] **Step 3: implementare** `scrap.py`, rigenerare, guardare le anteprime (set completo fronte, retro e lato per lo stato 0 e fronte per gli stati 1, 2 e 3; un'anteprima con colori di prova applicati alle regioni) e correggere finché: nessuna parte sospesa o compenetrata, sagoma leggibile, nessuna somiglianza con design esistenti.
-- [ ] **Step 4: Run** — test PASS sulle due varianti di riferimento; `OK art`; build; privacy sui jar.
-- [ ] **Step 5:** salvare in `docs/arte/anteprime/` le anteprime finali (PNG senza metadati) e aggiornare `docs/arte/README.md`; commit `art: pezzi Rottame con quattro stati visivi e regioni di colore`.
+- [ ] **Step 1: test** — in `ExoframeGeometryTest`: `everyPieceHasFourStatesAndThreeRegions` (i 72 nomi costruiti con `SuitBones.piece`, ognuno sotto l'osso `armor*` giusto), `stateCopiesShareGeometry` (stesso numero di cubi, stesse origini e dimensioni tra gli stati di uno slot e regione), `decalBonesExist` (nomi da `SuitBones.decal`), `leftAndRightPiecesAreMirrored` (braccia e gambe), `frameAndPiecesStayInsideTheirBounds` (ossa `frame*` nei limiti del telaio, ossa `piece*` nei limiti dei pezzi; sostituisce il controllo unico di oggi), `stateRegionsDoNotShareTexels` (le facce di uno stato stanno nella sua zona dell'atlante); in `SuitScaleTest`: `matchesTheArtGenerator`; `TierPaletteTest` resta com'è e deve passare con i colori nuovi.
+- [ ] **Step 2: Run** — Expected: FAIL (la geometria committata non ha pezzi).
+- [ ] **Step 3: portare e completare** — telaio e pezzi dalla prova (i file del repo non si sovrascrivono con quelli della prova: `exo.py`, `paint.py` e `build.py` del repo sono più avanti); scrivere la pittura dei quattro stati; rigenerare; `Model.check()` senza segnalazioni (distanze dal pilota, facce complanari); due esecuzioni di `build.py --out` identiche; `bash tools/check_art.sh` stampa `OK art`.
+- [ ] **Step 4: anteprime** — telaio nudo e tuta armata (fronte, retro, lato) nello stato 0, tuta armata di fronte negli stati 1, 2 e 3, una con due colori di prova diversi dai predefiniti; guardarle e correggere parti sospese o compenetrate e stati che non si distinguono; salvarle in `docs/arte/anteprime/rottame-v4/` (PNG senza metadati).
+- [ ] **Step 5: verificare** — test PASS sulle due varianti di riferimento; build delle quattro varianti; `OK jars`, `OK sources`; nel client vero (script del client senza schermo): `wear nudo`, `wear rottame`, `wear rottame 1`, `2`, `3` e `wear rottame 0 3A6EA5 D9D9D9` su almeno una variante per versione del gioco, con gli screenshot allegati.
+- [ ] **Step 6:** `tools/art/README.md` e `docs/arte/README.md` (telaio e pezzi della quarta passata, stati, colori predefiniti, misure in blocchi); commit `art: telaio approvato e pezzi Rottame con quattro stati visivi e regioni di colore`.
 
 ### Task 7: Renderer del telaio (`SuitRenderer`) e item modello
 
