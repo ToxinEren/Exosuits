@@ -125,7 +125,10 @@ rivetti). Gli stati 1-3 aggiungono sopra, in `paint.wear`, l'usura descritta dal
 colonna per stato: scurimento generale, fuliggine a chiazze larghe (un rumore continuo su tutta la tuta, cosi' si
 legge da lontano), scheggiature piu' larghe, ammaccature (bordo alto in ombra, basso illuminato), graffi lunghi (un
 solco scuro con il labbro chiaro), crepe scure dallo stato 2 (larghe 2 texel nel 3), bruciato nello stato 3 (carbone
-con isole di vernice), texel spenti di spie e vetri negli stati 2 e 3 (fuori dalla maschera luminosa).
+con isole di vernice), texel spenti di spie e vetri negli stati 2 e 3 (fuori dalla maschera luminosa). Le luci di un
+pezzo rotto: circa meta' dei texel spenti, gli altri restano rossi e accesi (il bruciato non copre i materiali
+luminosi), quindi un pezzo rotto ha meno luce di uno critico (144, 144, 128, 67 texel accesi negli stati 0-3) e
+mai un texel nella maschera luminosa che non sia di una luce.
 
 Ogni segno nasce da un rumore o da un `HashRng` con il seme della scatola e della faccia, che e' lo stesso nei quattro
 stati; lo stato sceglie solo la soglia, la quota della lunghezza o l'intensita'. Le soglie scendono e le quote

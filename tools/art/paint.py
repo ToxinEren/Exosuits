@@ -397,6 +397,7 @@ RUST = np.array((132, 64, 30), float)
 CHAR = np.array((44, 42, 40), float)
 SOOT_SEED = 0x50D7
 METALS = ('gun', 'steel', 'brass', 'vent')
+GLOWING = ('lamp', 'glass', 'cell')
 
 
 def _line(F, rng, length, straight):
@@ -452,8 +453,9 @@ def wear(F, col, mat, glow):
         col[dent] *= 0.62
         col[dent & ~up] *= 0.7
         col[dent & ~down & up] *= 1.6
-    # bruciato (stato 3): la superficie diventa carbone, la vernice resta a isole
-    if WEAR['char'][st]:
+    # bruciato (stato 3): la superficie diventa carbone, la vernice resta a isole; le luci no (spie, vetri e celle
+    # accese restano rosse, le altre sono gia' spente da dead_light): un pezzo rotto non sembra piu' acceso di uno critico
+    if WEAR['char'][st] and mat not in GLOWING:
         keep = vnoise(F.P, 1.6, seed + 131) > 0.66
         k = WEAR['char'][st] * (0.85 + 0.3 * white(F.P, seed + 133))
         k[keep] *= 0.3
@@ -486,7 +488,7 @@ def wear(F, col, mat, glow):
                     col[j, i + 1] = CHAR * 0.5
                     glow[j, i + 1] = False
     # spie e vetri: texel spenti (fuori dalla maschera luminosa)
-    if mat in ('lamp', 'glass', 'cell') and WEAR['dead_light'][st] is not None:
+    if mat in GLOWING and WEAR['dead_light'][st] is not None:
         dead = white(F.P, seed + 151) > WEAR['dead_light'][st]
         col[dead] = np.array((48, 18, 14), float) if mat != 'glass' else np.array((14, 18, 20), float)
         glow &= ~dead

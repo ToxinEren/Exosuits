@@ -77,7 +77,8 @@ def torso(m):
     m.box(p2, 'belly_3', (-5, 15.5, -6), (5, 16.25, -5.25), 'paint')
     # falde basse sui fianchi, davanti e di lato
     m.sym(p1, 'tasset_front', (-6, 8.75, -5.5), (-1, 12.5, -4.75), 'paint')
-    m.sym(p1, 'tasset_side', (-7.5, 9.25, -3.25), (-6.75, 13, 3.25), 'paint')
+    # parte da y 10.25, sopra il palmo e il pollice della mano della tuta a riposo
+    m.sym(p1, 'tasset_side', (-7.5, 10.25, -3.25), (-6.75, 13, 3.25), 'paint')
     # schiena: piastra, fianchi della botte
     m.box(p1, 'back_plate', (-9.5, 15.5, 4.5), (9.5, 23.5, 5.25), 'paint')
     m.sym(p2, 'back_flank', (-9.5, 16, 5.25), (-6.5, 23, 6.25), 'paint')

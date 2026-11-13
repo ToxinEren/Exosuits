@@ -40,7 +40,8 @@ def build(m):
 
 
 def head(m):
-    # testa scheletrica stretta (pareti di 1 px attorno alla testa del pilota, x e z +-3.21)
+    # testa scheletrica stretta: pareti di 1 px (x +-3.25..4.25) attorno alla testa del pilota, che con il margine del
+    # cappello arriva a x e z +-2.73
     m.box(HEAD, 'crown', (-4, 31, -3.75), (4, 31.25, 4), 'gun')
     m.sym(HEAD, 'temple', (-4.25, 27.25, -3.75), (-3.25, 31, 3.75), 'gun')
     m.sym(HEAD, 'jaw', (-4.25, 24.25, -4), (-3.25, 27.25, 1.75), 'steel')
@@ -56,7 +57,9 @@ def head(m):
 def torso(m):
     # sedile e anello della vita stretto (la vita e' molto piu' stretta del petto)
     m.box(BODY, 'seat', (-2.75, 12.5, -2.75), (2.75, 16.5, 2.75), 'gun')
-    m.box(BODY, 'seat_lip', (-3, 15, -3.25), (3, 16.25, -2), 'steel')
+    # il bordo sale fino a 16.75 e chiude davanti la fessura tra il sedile (16.5, piu' su toccherebbe il pilota) e il
+    # busto del pilota (16.73)
+    m.box(BODY, 'seat_lip', (-3, 15, -3.25), (3, 16.75, -2), 'steel')
     m.box(BODY, 'seat_back', (-3, 15, 2), (3, 18, 3.25), 'gun')
     m.box(BODY, 'waist_front', (-5.5, 12.5, -5), (5.5, 14.25, -3.25), 'gun')
     m.sym(BODY, 'waist_side', (-5.75, 12.5, -3.25), (-4.25, 14.25, 3.5), 'gun')

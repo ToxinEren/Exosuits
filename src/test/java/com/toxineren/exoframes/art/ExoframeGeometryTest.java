@@ -268,12 +268,13 @@ class ExoframeGeometryTest {
 
     /**
      * Le facce di ogni stato stanno nella sua zona dell'atlante (righe 128 + 96 * stato, alte 96), quelle del telaio
-     * sopra la riga 128; due rettangoli diversi non si sovrappongono (una copia specchiata riusa il rettangolo della
-     * sorgente, quindi rettangoli identici sono ammessi).
+     * nelle righe 0..111 e quelle delle decalcomanie nelle righe 112..127; due rettangoli diversi non si sovrappongono,
+     * e lo stesso rettangolo lo usano al piu' una faccia e la sua copia specchiata (uv_size negativo).
      */
     @Test
     void stateRegionsDoNotShareTexels() {
-        Set<List<Integer>> rects = new HashSet<>();
+        // rettangolo -> segni della larghezza delle facce che lo usano (negativa = copia specchiata)
+        Map<List<Integer>, List<Integer>> rects = new HashMap<>();
         for (Map.Entry<String, JsonObject> entry : BONES.entrySet()) {
             String name = entry.getKey();
             Matcher m = STATE_BONE.matcher(name);
@@ -285,8 +286,12 @@ class ExoframeGeometryTest {
                 bottom = top + 96;
             } else if (name.startsWith("frame")) {
                 top = 0;
+                bottom = 112;
+            } else if (name.endsWith("_decal")) {
+                top = 112;
                 bottom = 128;
             } else {
+                assertTrue(cubes(entry.getValue()).isEmpty(), "osso con scatole fuori dalle zone note: " + name);
                 continue;
             }
             for (JsonObject cube : cubes(entry.getValue())) {
@@ -294,11 +299,18 @@ class ExoframeGeometryTest {
                     List<Integer> rect = rect(face.getValue().getAsJsonObject());
                     String where = name + " " + face.getKey() + " " + rect;
                     assertTrue(rect.get(1) >= top && rect.get(3) <= bottom, "faccia fuori dalla sua zona: " + where);
-                    rects.add(rect);
+                    double width = face.getValue().getAsJsonObject().getAsJsonArray("uv_size").get(0).getAsDouble();
+                    rects.computeIfAbsent(rect, k -> new ArrayList<>()).add(width < 0 ? -1 : 1);
                 }
             }
         }
-        List<List<Integer>> all = new ArrayList<>(rects);
+        for (Map.Entry<List<Integer>, List<Integer>> entry : rects.entrySet()) {
+            List<Integer> signs = entry.getValue();
+            boolean mirrorPair = signs.size() == 2 && signs.get(0) + signs.get(1) == 0;
+            assertTrue(signs.size() == 1 || mirrorPair,
+                    "rettangolo usato da piu' facce che non sono una sorgente e la sua copia specchiata: " + entry.getKey());
+        }
+        List<List<Integer>> all = new ArrayList<>(rects.keySet());
         for (int i = 0; i < all.size(); i++) {
             for (int j = i + 1; j < all.size(); j++) {
                 List<Integer> a = all.get(i);
@@ -435,8 +447,15 @@ class ExoframeGeometryTest {
         return out;
     }
 
+    /** Origine e dimensioni come testo, con -0.0 portato a 0.0 (una scatola che finisce a x = 0, specchiata). */
     private static String box(double[] origin, double[] size) {
-        return Arrays.toString(origin) + " " + Arrays.toString(size);
+        double[] o = origin.clone();
+        double[] s = size.clone();
+        for (int axis = 0; axis < 3; axis++) {
+            o[axis] += 0.0;
+            s[axis] += 0.0;
+        }
+        return Arrays.toString(o) + " " + Arrays.toString(s);
     }
 
     /** Il rettangolo di una faccia come [u minimo, v minimo, u massimo, v massimo] (uv_size puo' essere negativo). */
