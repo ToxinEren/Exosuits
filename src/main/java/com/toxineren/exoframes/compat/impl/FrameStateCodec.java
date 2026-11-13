@@ -76,11 +76,28 @@ final class FrameStateCodec {
     }
 
     /**
-     * Ricostruisce lo stato. Ordine: pezzi montati, poi i loro moduli, i riporti del danno e gli aspetti (montare un
-     * pezzo azzera riporto e aspetto e toglie moduli e toggle dello slot), infine i toggle accesi dei moduli toggle
-     * installati.
+     * Ricostruisce lo stato validando i moduli contro la config di chi legge: ogni modulo passa da
+     * {@link FrameState#installModule} e quelli rifiutati (slot pieni, livello troppo basso...) vengono scartati con
+     * un avviso. E' la lettura del caricamento sul server. Ordine: pezzi montati, poi i loro moduli, i riporti del
+     * danno e gli aspetti (montare un pezzo azzera riporto e aspetto e toglie moduli e toggle dello slot), infine i
+     * toggle accesi dei moduli toggle installati.
      */
     static FrameState read(CompoundTag root, ExoframesConfig cfg) {
+        return read(root, cfg, false);
+    }
+
+    /**
+     * Come {@link #read}, ma i moduli si ripristinano con {@link FrameState#restoreModules} senza i controlli
+     * dell'installatore: nessun modulo viene scartato per colpa della config di chi legge. Serve per uno stato gia'
+     * validato da chi l'ha scritto (la copia del client ricevuta dal server). Gli id sconosciuti si saltano come in
+     * {@link #read} e i doppioni di uno slot li toglie gia' il lettore condiviso ({@link PieceTags#readPiece}, che
+     * tiene il primo), cosi' un tag corrotto non fa lanciare {@code restoreModules}.
+     */
+    static FrameState readTrusted(CompoundTag root, ExoframesConfig cfg) {
+        return read(root, cfg, true);
+    }
+
+    private static FrameState read(CompoundTag root, ExoframesConfig cfg, boolean trusted) {
         FrameState state = new FrameState(cfg);
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
         Map<PieceSlot, CompoundTag> mounted = new EnumMap<>(PieceSlot.class);
@@ -101,12 +118,10 @@ final class FrameStateCodec {
         for (Map.Entry<PieceSlot, CompoundTag> entry : mounted.entrySet()) {
             PieceSlot slot = entry.getKey();
             PieceData data = pieceData.get(slot);
-            for (ModuleType module : data.modules()) {
-                ModuleInstaller.Reason reason = state.installModule(slot, module);
-                if (reason != ModuleInstaller.Reason.OK) {
-                    SchemaIds.warnOnce("drop module:" + module.id() + ":" + SchemaIds.slotId(slot) + ":" + reason,
-                            "Dropping module {} from frame slot {}: {}", module.id(), SchemaIds.slotId(slot), reason);
-                }
+            if (trusted) {
+                state.restoreModules(slot, data.modules());
+            } else {
+                installModules(state, slot, data.modules());
             }
             int carry = clampCarry(entry.getValue().getInt(NbtKeys.CARRY_MILLI));
             if (carry > 0) {
@@ -138,6 +153,17 @@ final class FrameStateCodec {
         state.setOwner(SchemaIds.readUuid(root, NbtKeys.OWNER).orElse(null));
         state.setUnlocked(root.getBoolean(NbtKeys.UNLOCKED));
         return state;
+    }
+
+    /** Installa i moduli validandoli; quelli rifiutati si scartano con un avviso (una volta per motivo). */
+    private static void installModules(FrameState state, PieceSlot slot, List<ModuleType> modules) {
+        for (ModuleType module : modules) {
+            ModuleInstaller.Reason reason = state.installModule(slot, module);
+            if (reason != ModuleInstaller.Reason.OK) {
+                SchemaIds.warnOnce("drop module:" + module.id() + ":" + SchemaIds.slotId(slot) + ":" + reason,
+                        "Dropping module {} from frame slot {}: {}", module.id(), SchemaIds.slotId(slot), reason);
+            }
+        }
     }
 
     /** Il riporto del danno riportato nell'intervallo [0, 999]. */

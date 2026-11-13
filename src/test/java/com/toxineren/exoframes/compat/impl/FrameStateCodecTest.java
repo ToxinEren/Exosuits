@@ -169,6 +169,40 @@ class FrameStateCodecTest {
     }
 
     @Test
+    void trustedReadKeepsModulesTheReaderConfigWouldRefuse() {
+        ExoframesConfig writer = ExoframesConfig.defaults();
+        writer.pieces.baseModuleSlots.put(PieceSlot.TORSO, 2);
+        ExoframesConfig reader = ExoframesConfig.defaults();
+        reader.pieces.baseModuleSlots.put(PieceSlot.TORSO, 0);
+        FrameState state = new FrameState(writer);
+        state.mount(Piece.fresh(PieceSlot.TORSO, Tier.SCRAP, writer.tiers));
+        assertEquals(ModuleInstaller.Reason.OK, state.installModule(PieceSlot.TORSO, ModuleType.JETPACK));
+        state.restoreModules(PieceSlot.TORSO, List.of(ModuleType.JETPACK, ModuleType.ENERGY_SHIELD));
+        state.activeToggles().add(ModuleType.ENERGY_SHIELD);
+        CompoundTag tag = FrameStateCodec.write(state);
+
+        FrameState trusted = FrameStateCodec.readTrusted(tag, reader);
+        assertSameState(state, trusted);
+        assertEquals(List.of(ModuleType.JETPACK, ModuleType.ENERGY_SHIELD), trusted.modules().get(PieceSlot.TORSO));
+
+        FrameState validated = FrameStateCodec.read(tag, reader);
+        assertTrue(validated.modules().getOrDefault(PieceSlot.TORSO, List.of()).isEmpty());
+        assertTrue(validated.activeToggles().isEmpty());
+    }
+
+    @Test
+    void trustedReadDropsDuplicateModules() {
+        CompoundTag tag = FrameStateCodec.write(populated());
+        ListTag helmetModules = tag.getCompound(NbtKeys.PIECES).getCompound("helmet").getList(NbtKeys.MODULES, 8);
+        helmetModules.add(StringTag.valueOf(ModuleType.SCANNER.id()));
+        helmetModules.add(StringTag.valueOf(ModuleType.NIGHT_VISION.id()));
+        helmetModules.add(StringTag.valueOf("laser_eyes"));
+        FrameState read = FrameStateCodec.readTrusted(tag, cfg);
+        assertEquals(List.of(ModuleType.NIGHT_VISION, ModuleType.SCANNER), read.modules().get(PieceSlot.HELMET));
+        assertSameState(populated(), read);
+    }
+
+    @Test
     void malformedOwnerIsAbsent() {
         CompoundTag tag = FrameStateCodec.write(populated());
         tag.put(NbtKeys.OWNER, new IntArrayTag(new int[] {1, 2, 3}));

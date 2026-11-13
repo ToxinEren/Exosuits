@@ -19,10 +19,14 @@ final class FrameStateClientCache {
     private FrameStateClientCache() {
     }
 
-    /** Deposita lo stato ricevuto, o lo dimentica se il pacchetto dice che e' assente. */
+    /**
+     * Deposita lo stato ricevuto, o lo dimentica se il pacchetto dice che e' assente. Lo stato e' gia' stato validato
+     * dal server: si legge con {@link FrameStateCodec#readTrusted}, cosi' una config del client diversa non scarta
+     * moduli che il server ha accettato.
+     */
     static void accept(FrameStateSyncPacket msg) {
         if (msg.state().isPresent()) {
-            STATES.put(msg.player(), FrameStateCodec.read(msg.state().get(), RedstoneExoframes.config()));
+            STATES.put(msg.player(), FrameStateCodec.readTrusted(msg.state().get(), RedstoneExoframes.config()));
         } else {
             STATES.remove(msg.player());
         }

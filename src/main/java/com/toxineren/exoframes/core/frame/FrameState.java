@@ -140,6 +140,35 @@ public final class FrameState {
     }
 
     /**
+     * Sostituisce i moduli dello slot con quelli dati, nell'ordine dato, senza i controlli di
+     * {@link ModuleInstaller#canInstall}: serve a ripristinare uno stato gia' validato altrove (per esempio quello
+     * ricevuto dal server), che la config di chi legge potrebbe rifiutare. I moduli tolti dallo slot spengono i loro
+     * toggle, come in {@link #takeModules(PieceSlot)}. Se la richiesta viene rifiutata lo stato non cambia.
+     *
+     * @throws IllegalStateException se nello slot non c'e' un pezzo montato
+     * @throws IllegalArgumentException se la lista contiene null o lo stesso modulo piu' volte
+     */
+    public void restoreModules(PieceSlot slot, List<ModuleType> modules) {
+        Objects.requireNonNull(modules, "modules");
+        if (!pieces.containsKey(Objects.requireNonNull(slot, "slot"))) {
+            throw new IllegalStateException("no piece mounted in " + slot);
+        }
+        Set<ModuleType> seen = EnumSet.noneOf(ModuleType.class);
+        for (ModuleType module : modules) {
+            if (module == null) {
+                throw new IllegalArgumentException("null module for " + slot);
+            }
+            if (!seen.add(module)) {
+                throw new IllegalArgumentException("duplicate module " + module.id() + " for " + slot);
+            }
+        }
+        takeModules(slot);
+        if (!modules.isEmpty()) {
+            this.modules.put(slot, new ArrayList<>(modules));
+        }
+    }
+
+    /**
      * Mappa mutabile del riporto frazionario del danno per slot, in millesimi di punto (uno slot assente vale 0):
      * da passare a {@link com.toxineren.exoframes.core.armor.DamageRouter#route(
      * com.toxineren.exoframes.core.armor.DamageKind, int, Map, Map)}, che la aggiorna. Ogni valore sta in
