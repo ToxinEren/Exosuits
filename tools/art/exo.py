@@ -7,7 +7,7 @@ scatola e' quella a x minima del file e "west" quella a x massima. L'orientament
 (face_frame) e' ricavato dal codice di GeckoLib (GeoQuad.build e VertexSet) e verificato con il visore di
 tools/art/preview contro l'armatura d'esempio di GeckoLib (vedi tools/art/README.md).
 
-Una design file (tools/art/designs/<nome>.py) dichiara ossa, scatole, materiali e regioni di colore; questo modulo
+Un file di design (tools/art/designs/<nome>.py) dichiara ossa, scatole, materiali e regioni di colore; questo modulo
 non conosce nessun design.
 """
 import json

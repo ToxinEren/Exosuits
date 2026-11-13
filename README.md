@@ -23,6 +23,8 @@ I quattro jar finiscono in `build/libs/all/`. Con Stonecutter 0.9.8 non esiste u
 
 Controlli: `bash tools/check_sources.sh` (sorgenti) e `bash tools/check_jars.sh [cartella]` (jar, cartella di default `build/libs/all`). Il controllo dei jar verifica anche che non contengano dati personali (percorsi del computer, e-mail, metadati di immagini e suoni): serve `python3`. Per cercare anche parole tue, per esempio nome e cognome o il nome utente del PC, elencale nella variabile d'ambiente `EXOFRAMES_PRIVATE_WORDS` separate da virgola, senza mai scriverle nel repository.
 
+Grafica: `python3 tools/art/build.py` rigenera geometria, atlante e animazioni del telaio in `src/main/resources/assets/redstone_exoframes/` (serve numpy); `bash tools/check_art.sh` controlla che i file committati siano quelli generati. Le anteprime sono uno strumento locale: istruzioni in `tools/art/README.md`.
+
 Test in gioco senza client (GameTest): `bash tools/run_gametests.sh [variante...]` (senza argomenti le quattro varianti; per una sola anche `./gradlew --console=plain :1.21.1-neoforge:runGameTestServer`). Lo script passa solo se ogni variante esce con 0 e stampa "All N required tests passed" con N > 0; i test stanno in `src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java`.
 
 La CI (`.github/workflows/build.yml`) compila i quattro jar a ogni push e li carica come artefatto `redstone-exoframes-jars`: `gh run download --repo ToxinEren/Exosuits -n redstone-exoframes-jars` (oppure dalla scheda Actions).
