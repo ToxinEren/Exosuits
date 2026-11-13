@@ -106,9 +106,19 @@ java {
 }
 
 tasks.processResources {
-    val props = mapOf("version" to project.version.toString())
+    // Ogni jar porta solo i metadati del proprio loader.
+    if (loader != "fabric") exclude("fabric.mod.json")
+    if (loader != "forge") exclude("META-INF/mods.toml")
+    if (loader != "neoforge") exclude("META-INF/neoforge.mods.toml")
+
+    val props = mapOf(
+        "version" to project.version.toString(),
+        "mc_range" to project.property("mod.mc_range").toString(),
+        "loader_range" to project.property("mod.loader_range").toString(),
+        "pack_format" to project.property("mod.pack_format").toString(),
+    )
     inputs.properties(props)
-    filesMatching(listOf("fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml")) {
+    filesMatching(listOf("fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml", "pack.mcmeta")) {
         expand(props)
     }
 }

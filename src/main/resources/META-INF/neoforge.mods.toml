@@ -1,0 +1,38 @@
+modLoader="javafml"
+loaderVersion="${loader_range}"
+license="MIT (codice) / All Rights Reserved (asset)"
+
+[[mods]]
+modId="redstone_exoframes"
+version="${version}"
+displayName="Redstone Exoframes"
+authors="ToxinEren"
+description='''Power armor originale: telaio, celle di redstone, moduli e stazione di manutenzione.'''
+
+[[dependencies.redstone_exoframes]]
+modId="neoforge"
+type="required"
+versionRange="${loader_range}"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.redstone_exoframes]]
+modId="minecraft"
+type="required"
+versionRange="${mc_range}"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.redstone_exoframes]]
+modId="architectury"
+type="required"
+versionRange="[13,)"
+ordering="AFTER"
+side="BOTH"
+
+[[dependencies.redstone_exoframes]]
+modId="geckolib"
+type="required"
+versionRange="[4.7,)"
+ordering="AFTER"
+side="BOTH"

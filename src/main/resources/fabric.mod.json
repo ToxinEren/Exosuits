@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "redstone_exoframes",
+  "version": "${version}",
+  "name": "Redstone Exoframes",
+  "description": "Power armor originale: telaio, celle di redstone, moduli e stazione di manutenzione.",
+  "authors": ["ToxinEren"],
+  "license": "MIT (codice) / All Rights Reserved (asset)",
+  "environment": "*",
+  "entrypoints": {
+    "main": ["com.toxineren.exoframes.platform.RedstoneExoframesFabric"]
+  },
+  "depends": {
+    "fabricloader": "${loader_range}",
+    "fabric-api": "*",
+    "minecraft": "${mc_range}",
+    "architectury": "*",
+    "java": ">=17"
+  }
+}
