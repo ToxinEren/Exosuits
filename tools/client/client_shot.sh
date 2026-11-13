@@ -258,11 +258,19 @@ checked() {
     case "$reply" in *"#exo has 1 "*) return 0 ;; esac
     return 1
 }
-# Sud (yaw 0) e' l'orientamento con cui entra un giocatore nuovo: girarlo con /tp gira la testa ma non il corpo, che
-# resterebbe indietro fino a 50 gradi; con lo stesso yaw dell'ingresso corpo e testa coincidono.
 rc "op $user" "gamemode creative $user" "time set 6000" "weather clear" "gamerule doDaylightCycle false" \
     "gamerule doWeatherCycle false" "tp $user 0.5 -60 0.5 0 15" "scoreboard objectives add exo_shot dummy" \
     || fail "preparazione del mondo: comando rifiutato (vedi $out/rcon.log)"
+# Corpo allineato alla testa. /tp gira la testa ma non il corpo, e il client crea il giocatore con un orientamento
+# del corpo a caso (su 1.20.1 si vede): fermo, il corpo resta indietro fino a 50 gradi rispetto alla testa e gli
+# scatti "davanti" e "dietro" vengono di tre quarti. Camminando il corpo si gira nella direzione del passo: un passo
+# in avanti (W per 0,8 s), poi di nuovo al punto di partenza.
+sleep 5 # il client finisce di caricare il terreno attorno al giocatore
+xdotool keydown w
+sleep 0.8
+xdotool keyup w
+sleep 0.5
+rc "tp $user 0.5 -60 0.5 0 15" || fail "ritorno al punto di partenza: comando rifiutato (vedi $out/rcon.log)"
 for c in "$@"; do
     checked "${c#/}" || fail "comando rifiutato o non riuscito: \"$c\" (risposta in $out/rcon.log)"
     log "comando eseguito: $c"
@@ -299,15 +307,16 @@ for _ in $(seq 12); do xdotool mousemove_relative -- 60 0; sleep 0.15; done
 shot quarter
 
 # Log del client e del server: righe WARN/ERROR che nominano il mod o i mixin, eccezioni e tracce che passano dal
-# codice del mod, errori di applicazione dei mixin. Sono da guardare, non fermano lo script. Esclusa una riga nota e
-# innocua dello sviluppo: GeckoLib non trova il proprio refmap ("If this is a development environment you can ignore
-# this message").
+# codice del mod, errori di applicazione dei mixin. Sono da guardare, non fermano lo script. Escluse due righe note e
+# innocue dello sviluppo: GeckoLib non trova il proprio refmap ("If this is a development environment you can ignore
+# this message") e, su NeoForge, JarJar che trova mixinextras gia' passato come libreria.
 {
     grep -HE '/(WARN|ERROR)\]' "$out/gradle-client.log" "$out/gradle-server.log" \
         | grep -iE 'redstone_exoframes|redstone exoframes|exoframes|mixin'
     grep -HE 'com\.toxineren|InvalidInjectionException|MixinApplyError|Mixin apply .*failed' \
         "$out/gradle-client.log" "$out/gradle-server.log"
-} | grep -v 'If this is a development environment you can ignore this message' | sort -u >"$out/log-check.txt"
+} | grep -v -e 'If this is a development environment you can ignore this message' \
+    -e 'Attempted to select a dependency jar for JarJar which was passed in as source' | sort -u >"$out/log-check.txt"
 if [ -s "$out/log-check.txt" ]; then
     log "ATTENZIONE: $(wc -l <"$out/log-check.txt") righe del mod o dei mixin da guardare nei log: $out/log-check.txt"
 else

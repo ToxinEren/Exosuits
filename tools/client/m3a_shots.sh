@@ -4,7 +4,8 @@
 #
 #   EXO_ACCEPT_EULA=true bash tools/client/m3a_shots.sh <variante> <cartella>
 #
-#   01-nudo           telaio nudo, con una colonna di tre blocchi di lana bianca a fianco come metro
+#   01-nudo           telaio nudo, con una colonna di tre blocchi di lana bianca a fianco come metro (a ovest, dal
+#                     lato opposto a quello dove va la telecamera nello scatto a tre quarti)
 #   02-rottame-s0     sei pezzi Rottame, stato 0 (integro), colori predefiniti, con la stessa colonna
 #   03-rottame-s1     stato 1 (danneggiato)
 #   04-rottame-s2     stato 2 (critico)
@@ -12,7 +13,8 @@
 #   06-colori         stato 0 verniciato con i colori di prova 3A6EA5 (primario) e D9D9D9 (secondario)
 #   07-mani           Rottame stato 0 con un piccone di ferro nella mano principale e uno scudo nell'altra
 #   08-sdraiato       telaio nudo da sdraiati: un blocco di vetro sopra la testa lascia un solo blocco libero e il
-#                     gioco forza la posa strisciante
+#                     gioco forza la posa strisciante; qui front.png non serve (la telecamera davanti finisce
+#                     contro la testa), contano back.png e quarter.png
 #
 # Una esecuzione per scatto e non una lunga con piu' scatti: ogni scatto parte dallo stesso stato (mondo nuovo,
 # corpo e testa allineati, telecamera al primo F5) e un errore resta confinato al suo scatto. Costa circa un minuto
@@ -32,7 +34,7 @@ out=$2
 u=${EXO_SHOT_USER:-Exo}
 
 wear="execute as $u run exoframe debug wear"
-ruler="execute as $u at @s run fill ~3 ~ ~ ~3 ~2 ~ minecraft:white_wool"
+ruler="execute as $u at @s run fill ~-3 ~ ~ ~-3 ~2 ~ minecraft:white_wool"
 
 names=()
 commands=()
