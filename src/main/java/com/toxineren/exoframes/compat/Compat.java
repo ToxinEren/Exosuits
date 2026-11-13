@@ -2,6 +2,7 @@ package com.toxineren.exoframes.compat;
 
 import com.toxineren.exoframes.compat.impl.ArmorMaterialsImpl;
 import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
+import com.toxineren.exoframes.compat.impl.NetImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
 
 /**
@@ -24,6 +25,10 @@ public final class Compat {
         return ArmorMaterialsHolder.INSTANCE;
     }
 
+    public static Net net() {
+        return NetHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
     }
@@ -34,5 +39,9 @@ public final class Compat {
 
     private static final class ArmorMaterialsHolder {
         static final ArmorMaterials INSTANCE = new ArmorMaterialsImpl();
+    }
+
+    private static final class NetHolder {
+        static final Net INSTANCE = new NetImpl();
     }
 }
