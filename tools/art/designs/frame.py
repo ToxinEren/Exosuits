@@ -3,8 +3,9 @@ senza pezzi montati. E' il telaio della quarta passata della prova d'arte, appro
 scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe, con petto a botte, testa incassata,
 spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli attuatori,
 pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette, borchie).
-Piedi (dita divise, cerniera, puntoni della caviglia, appoggio del tallone) e parte bassa e laterale della schiena
-(trave lombare con feritoie, puntoni verso il giogo) sono della quinta passata; la cella e il suo alloggiamento no.
+La parte bassa e laterale della schiena (trave lombare con feritoie, puntoni verso il giogo) e' della quinta passata;
+la cella e il suo alloggiamento no. Dal ginocchio in giu' la gamba riproduce l'immagine di riferimento di Luigi (sesta
+passata, sua decisione esplicita: vale solo per quella parte).
 
 Il renderer scala la tuta di exo.SUIT_SCALE (1.65) attorno ai piedi e disegna il pilota a grandezza normale sollevato
 di exo.PILOT_LIFT_PX (24(S-1) = 15.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
@@ -21,9 +22,21 @@ x negativa; sym() scrive il lato destro e aggiunge il sinistro. Nessuna scatola 
 Materiali: gun (acciaio brunito), steel (parti lavorate chiare), brass (mozzi), chrome (steli, impugnature,
 borchie), cable (rame), rubber (tubi), vent (griglie calde), cell (cella di redstone), lamp (spie).
 """
+from designs._legs import leg
+
 ORDER = 0
 
 HEAD, BODY, RARM, RLEG = 'frameHead', 'frameBody', 'frameRightArm', 'frameRightLeg'
+
+
+# parte bassa della gamba destra (il sinistro e' speculare), misurata sull'immagine di riferimento di Luigi riportata
+# ai pixel del modello: (|x| minimo, |x| massimo, y minimo, y massimo). Piede del telaio (anima d'acciaio, il guscio di
+# bronzo e' nei pezzi): strato basso diviso attorno alla porta davanti
+FOOT_CORE = (
+    ('foot_0_out', 4.25, 4.5, 0, 1), ('foot_0_in', 2.25, 2.75, 0, 1),
+    ('foot_1', 2.25, 4.5, 1, 1.5), ('foot_2', 2.25, 4.25, 1.5, 1.75),
+)
+ANKLE_BAND = ((1.75, 2), (2.25, 2.5), (2.75, 3.75), (4, 4.25), (4.5, 4.75))
 # gradini dei puntoni della schiena, lato destro: (x minimo, y minimo, y massimo), larghi 1.5 px
 BACK_STRUT_STEPS = ((-7.5, 12, 15.5), (-8.5, 15.5, 18.5), (-9.5, 18.5, 21.5), (-10.5, 21.5, 24.5))
 
@@ -181,35 +194,58 @@ def legs(m):
     m.sym(RLEG, 'hip_hub', (-6.25, 9, -1.75), (-5.75, 11.25, 1.75), 'brass', hub=True)
     m.sym(RLEG, 'thigh_ram', (-4.25, 8.75, -4), (-1, 11.25, -3.25), 'steel')
     m.sym(RLEG, 'thigh_rod', (-3, 7.25, -3.75), (-2, 8.75, -3.25), 'chrome')
-    # ginocchio grande
+    # ginocchio (dietro lo scudo dello stinco dei pezzi)
     m.sym(RLEG, 'knee_block', (-5.25, 4.5, -2.5), (-0.5, 7, 2.5), 'gun')
-    m.sym(RLEG, 'knee_hub', (-6.5, 4, -2.25), (-5.25, 7.5, 2.25), 'brass', hub=True)
     m.sym(RLEG, 'knee_cap', (-4.25, 4.75, -3.75), (-1.25, 7.25, -2.5), 'brass', hub=True)
-    # stinco spesso: due montanti, pistone davanti, pistone del polpaccio
-    m.sym(RLEG, 'shin_outer', (-6, 2, -1.5), (-4, 4.5, 1.5), 'gun')
-    m.sym(RLEG, 'shin_inner', (-2, 2, -1.75), (-0.5, 4.5, 1.75), 'gun')
-    m.sym(RLEG, 'shin_ram', (-3.5, 2.25, -3), (-2, 4.75, -1.5), 'steel')
-    m.sym(RLEG, 'calf_ram', (-4, 3, 2), (-1.5, 6.5, 3.5), 'steel')
-    m.sym(RLEG, 'calf_rod', (-3.25, 1.75, 2.5), (-2.25, 3, 3.25), 'chrome')
-    # caviglia: blocco sopra il piede, mozzo esterno e puntoni a gradini sui due lati, dal tallone allo stinco
-    m.sym(RLEG, 'ankle_block', (-5.75, 1.75, -2), (-1, 2.75, 2), 'gun')
-    m.sym(RLEG, 'ankle_hub', (-7.75, 1, -1.25), (-7, 3, 1.25), 'brass', hub=True)
-    m.sym(RLEG, 'ankle_strut_out_0', (-8, 1, 2), (-6.75, 2.25, 3.5), 'steel')
-    m.sym(RLEG, 'ankle_strut_out_1', (-7.75, 2.25, 1.25), (-7, 3.5, 2.75), 'steel')
-    m.sym(RLEG, 'ankle_strut_out_2', (-7.5, 3.5, 0.5), (-6, 4.75, 2), 'steel')
-    m.sym(RLEG, 'ankle_strut_in_0', (-0.75, 1, 2), (-0.25, 2.25, 3.5), 'steel')
-    m.sym(RLEG, 'ankle_strut_in_1', (-0.75, 2.25, 1.25), (-0.25, 3.5, 2.75), 'steel')
-    m.sym(RLEG, 'ankle_strut_in_2', (-0.75, 3.5, 0.5), (-0.25, 4.75, 2), 'steel')
-    # piede grande: base, collo del piede, tallone; davanti due dita squadrate con un'apertura in mezzo, su una
-    # cerniera d'ottone che si vede dai due lati; dietro il tallone un appoggio a due gradini
-    m.sym(RLEG, 'foot_base', (-7, 0, -3), (-0.5, 1, 4.5), 'gun')
-    m.sym(RLEG, 'instep', (-6.75, 1, -3), (-0.75, 2, 1.25), 'steel')
-    m.sym(RLEG, 'heel', (-6.75, 1, 1.25), (-0.75, 2.25, 4.25), 'gun')
-    for side, (x0, x1) in (('out', (-7.5, -4.25)), ('in', (-3.75, -0.5))):
-        m.sym(RLEG, f'toe_{side}', (x0, 0, -8), (x1, 1.25, -3), 'gun')
-        m.sym(RLEG, f'toe_{side}_cap', (x0 + 0.25, 1.25, -7.75), (x1 - 0.25, 1.75, -3.25), 'steel')
-    m.sym(RLEG, 'toe_hinge', (-7.75, 0.25, -3.75), (-0.25, 1.5, -2.5), 'brass', hub=True)
-    m.sym(RLEG, 'heel_strut', (-5.75, 0, 4.5), (-1.75, 1.25, 6.5), 'gun')
-    m.sym(RLEG, 'heel_spur', (-5.25, 0, 6.5), (-2.25, 0.75, 7.25), 'steel')
-    # borchie per i pezzi delle gambe
-    m.sym(RLEG, 'shin_boss', (-6.25, 2.75, -0.5), (-6, 3.75, 0.5), 'chrome')
+    # Dal ginocchio in giu' la gamba riproduce quella dell'immagine di riferimento di Luigi (sua decisione, Task 14),
+    # misurata sul riferimento (|x| = distanza dal piano di mezzo). Qui l'anima d'acciaio; quello che nel riferimento ha
+    # il colore dell'armatura (scudo, puntone, polpaccio, piede, tallone) e' nei pezzi delle gambe.
+    leg(m, RLEG, 'shin_outer', 3.5, 4.75, 2.5, 4.5, -1.5, 1.5, 'gun')
+    leg(m, RLEG, 'shin_inner', 0.5, 1.75, 2.5, 4.5, -1.75, 1.75, 'gun')
+    leg(m, RLEG, 'shin_ram', 2, 3.25, 2.5, 4.75, -3, -1.5, 'steel')
+    leg(m, RLEG, 'calf_ram', 1.25, 3.75, 3, 6, 2, 3.25, 'steel')
+    # fascia della caviglia in cinque segmenti (due corti, uno lungo, due corti)
+    for k, (a0, a1) in enumerate(ANKLE_BAND):
+        leg(m, RLEG, f'ankle_band_{k}', a0, a1, 2, 2.25, -1.75, 1.75, 'steel')
+    # asta del puntone esterno, anima del cuscinetto, staffa alla caviglia
+    leg(m, RLEG, 'strut_rod', 5.5, 5.75, 3, 6.5, -0.25, 0.25, 'steel')
+    leg(m, RLEG, 'strut_rod_low', 5.25, 5.5, 1.75, 3, -0.25, 0.25, 'steel')
+    leg(m, RLEG, 'strut_arm', 5, 5.5, 5, 6, -0.25, 0.25, 'steel')
+    leg(m, RLEG, 'strut_pad_core', 5.25, 5.75, 6.5, 7.25, -1, 1, 'steel')
+    leg(m, RLEG, 'strut_bracket_core', 5.5, 5.75, 1.25, 1.75, -0.25, 0.25, 'gun')
+    # solco scuro tra il puntone e lo scudo/la piastra del polpaccio (|x| 5..5.25), davanti e dietro al ginocchio e
+    # sotto di esso; davanti, il riempimento scuro tra la piastra alta, il cuscinetto e la linguetta
+    leg(m, RLEG, 'strut_gap_low', 5, 5.25, 1.75, 4.5, -0.5, 0.5, 'rubber')
+    leg(m, RLEG, 'strut_gap_front', 5, 5.25, 4.5, 6.25, -2.75, -2.5, 'rubber')
+    leg(m, RLEG, 'strut_gap_back', 4.75, 5.25, 3.5, 6.25, 2.5, 2.75, 'rubber')
+    # davanti, accanto al bordo interno del piede: uno schermo scuro davanti al cuneo interno del tallone
+    leg(m, RLEG, 'heel_in_screen', 1, 2, 0, 1, -1.25, -1, 'rubber')
+    # montanti scuri ai lati del piede
+    leg(m, RLEG, 'foot_post_in', 1.25, 2, 1.25, 2, -1, 1, 'gun')
+    leg(m, RLEG, 'foot_post_in_flare', 1, 2, 1, 1.25, -1, 1, 'gun')
+    leg(m, RLEG, 'foot_post_out', 4.75, 5, 1, 2, -0.75, 0.75, 'gun')
+    # piede: anima a tre strati; davanti, dietro la porta del guscio, un incavo con il fondo nero
+    for name, a0, a1, y0, y1 in FOOT_CORE:
+        leg(m, RLEG, name, a0, a1, y0, y1, -6.25, 3.5, 'steel')
+    leg(m, RLEG, 'foot_0_mid', 2.75, 4.25, 0, 1, -5.75, 3.5, 'steel')
+    leg(m, RLEG, 'foot_notch_back', 3, 4, 0, 0.75, -6, -5.75, 'rubber')
+    # tallone: anime dei tre blocchi e i due solchi scuri tra il centrale e i laterali
+    leg(m, RLEG, 'heel_core_center', 2.5, 2.75, 0, 1.75, 3.5, 4.75, 'steel')
+    leg(m, RLEG, 'heel_core_out', 3.75, 4.25, 0, 1.25, 3.5, 4.5, 'steel')
+    leg(m, RLEG, 'heel_core_in', 1.5, 1.75, 0, 1, 3.5, 4.5, 'steel')
+    leg(m, RLEG, 'heel_gap_out', 3.25, 3.5, 0, 1.75, 3.75, 4.75, 'gun')
+    leg(m, RLEG, 'heel_gap_in', 2, 2.25, 0, 1.75, 3.75, 4.75, 'gun')
+    # incavo del polpaccio dietro l'arco della piastra: fondo nero, barra, blocchetto con un quadretto, due montanti
+    leg(m, RLEG, 'calf_recess', 1.75, 4, 2, 4, 3.25, 3.75, 'rubber')
+    leg(m, RLEG, 'calf_recess_top', 2, 3.5, 4, 4.25, 3.25, 3.5, 'rubber')
+    leg(m, RLEG, 'calf_bar', 2.25, 3.25, 3.5, 3.75, 3.75, 4, 'steel', tone=0.85, bolts=False)
+    leg(m, RLEG, 'calf_block', 2.5, 3.25, 2.5, 3.5, 3.75, 4, 'steel')
+    leg(m, RLEG, 'calf_block_square', 2.75, 3, 2.75, 3, 4, 4.25, 'chrome')
+    leg(m, RLEG, 'calf_post_out', 3.5, 3.75, 2, 3, 3.75, 4, 'steel')
+    leg(m, RLEG, 'calf_post_in', 2, 2.25, 2, 3, 3.75, 4, 'steel')
+    # buca del ginocchio sopra la piastra del polpaccio: fondo nero e tre aste chiare, la centrale con un cappuccio
+    leg(m, RLEG, 'knee_pit', 1.5, 3.5, 6.25, 7.5, 3, 3.25, 'rubber')
+    leg(m, RLEG, 'knee_pit_rod_in', 1.75, 2, 6.25, 7.25, 3.25, 3.5, 'steel')
+    leg(m, RLEG, 'knee_pit_rod_mid', 2.25, 2.75, 6.25, 7, 3.25, 3.5, 'steel')
+    leg(m, RLEG, 'knee_pit_rod_cap', 2.25, 2.75, 7, 7.25, 3.25, 3.5, 'chrome')
+    leg(m, RLEG, 'knee_pit_rod_out', 3, 3.25, 6.25, 7.25, 3.25, 3.5, 'steel')

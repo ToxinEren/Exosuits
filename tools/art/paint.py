@@ -19,8 +19,15 @@ Materiali (stringa per tutta la scatola o dizionario {faccia: materiale, 'defaul
   pipe     tubo di rame
   glass    vetro scuro con riflesso (luminoso)
   decal    decalcomania: la faccia non si dipinge, i suoi texel restano trasparenti (fino a M5)
-Opzioni della scatola (parole chiave di Model.box): hub (bool), heat (bool: sorgente di tinta di calore oltre alle
-griglie), bolts (bool, predefinito True), hide (facce da non esportare, vedi exo.Model.pack).
+Opzioni della scatola (parole chiave di Model.box):
+  hub      bool: mozzo (vedi hub())
+  heat     bool: sorgente di tinta di calore oltre alle griglie
+  bolts    bool, predefinito True: bulloni sulle facce grandi
+  tone     fattore sul colore di base (non sui materiali luminosi), per staccare parti vicine dello stesso colore
+  even     bool: niente sfumatura verticale ne' spigoli chiari e scuri, per piastre fatte di piu' scatole impilate
+  hide     facce da non esportare (vedi exo.Model.pack)
+  lines    linee sottili scure sulle facce davanti e dietro (vedi fine_lines()); danno a quelle facce la griglia
+           fine (exo.Box.fine, exo.Box.fine_for)
 Luce dipinta: dall'alto, dal davanti e dal lato destro di chi indossa (x negativa del file).
 I materiali cell, lamp e glass finiscono anche nella maschera luminosa (vedi paint_model).
 Le ossa dei pezzi negli stati visivi 1-3 ricevono sopra l'usura di wear() (vedi WEAR e tools/art/README.md).
@@ -184,7 +191,9 @@ def brushed(F, base, amp):
     streak = _hash(col_id.astype(np.int64), np.zeros_like(col_id, np.int64), np.zeros_like(col_id, np.int64), F.seed)
     slow = vnoise(F.P * np.array([1, 0.25, 1]) if F.vertical else F.P, 2.5, F.seed + 3)
     m = 1 + amp * (0.10 * (streak - 0.5) + 0.12 * (slow - 0.5))
-    if F.vertical:
+    if F.vertical and F.box.opts.get('even'):
+        pass   # tono uniforme: niente sfumatura dall'alto in basso (scatole impilate della stessa piastra)
+    elif F.vertical:
         m *= 1.08 - 0.18 * (F.j + 0.5) / F.h
     else:
         m *= 1.10 if F.face == 'up' else 0.78
@@ -204,8 +213,8 @@ def bolt(col, x, y, base):
 def metal(F, base, amp=1.0, bolts=True, scratches=True):
     col = brushed(F, base, amp)
     w, h, rng = F.w, F.h, F.rng
-    # spigoli: chiaro verso la luce, scuro dalla parte opposta
-    if w >= 3 and h >= 3:
+    # spigoli: chiaro verso la luce, scuro dalla parte opposta (non sulle scatole 'even', parti di una piastra unica)
+    if w >= 3 and h >= 3 and not F.box.opts.get('even'):
         for mask, d in F.edges():
             lit = float(d @ LIGHT)
             if lit > 0.25:
@@ -348,6 +357,10 @@ def paint_face(F, mat):
             col[0, 1] = (255, 214, 190)
     else:
         raise ValueError(f'materiale sconosciuto {mat}')
+    # tono della scatola: un fattore sul colore di base, prima di ombre e usura (separa parti dello stesso colore);
+    # non sui materiali luminosi, il cui colore va anche nella maschera luminosa
+    if not glow:
+        col = col * o.get('tone', 1.0)
 
     if not glow:
         # occlusione: linea scura nelle rientranze e sotto gli sporgenti
@@ -508,19 +521,115 @@ def paint_model(model, debug_position=False):
         for f, rect in b.faces.items():
             if b.mat_for(f) == 'decal':
                 continue   # decalcomania: texel trasparenti (si disegnano in M5)
-            F = Face(model, b, f, rect)
-            if debug_position:
-                q = F.S
-                col = np.stack([(q[..., 0] + 14) / 28, q[..., 1] / 37, (q[..., 2] + 9) / 19], -1) * 230 + 15
-                col[(F.i == 0) & (F.j == 0)] = (255, 255, 255)
-                glow = np.zeros((F.h, F.w), bool)
-            else:
-                col, glow = paint_face(F, b.mat_for(f))
-            sl = (slice(F.v, F.v + F.h), slice(F.u, F.u + F.w))
+            col, glow = base_face(model, b, f, rect, debug_position)
+            if not debug_position:
+                col[fine_lines(b, f, rect)] *= LINE_DARK
+            u, v, w, h = rect
+            sl = (slice(v, v + h), slice(u, u + w))
             atlas[sl][..., :3] = np.clip(col, 0, 255).astype(np.uint8)
             atlas[sl][..., 3] = 255
             glowmask[sl][glow] = atlas[sl][glow]
     return atlas, glowmask
+
+
+# scurimento delle linee sottili: sempre lo stesso, quindi restano scure in tutti e quattro gli stati
+LINE_DARK = 0.3
+
+
+def base_face(model, b, f, rect, debug_position=False):
+    """Colori e maschera luminosa di una faccia senza linee sottili. Su una scatola con la griglia fine (b.fine > 1)
+    la faccia si dipinge alla densita' normale e ogni texel si ripete fine x fine volte: grana, usura e luce restano
+    quelle di sempre."""
+    k = b.fine_for(f)
+    u, v, w, h = rect
+    F = Face(model, b, f, (u, v, w // k, h // k))
+    if debug_position:
+        q = F.S
+        col = np.stack([(q[..., 0] + 14) / 28, q[..., 1] / 37, (q[..., 2] + 9) / 19], -1) * 230 + 15
+        col[(F.i == 0) & (F.j == 0)] = (255, 255, 255)
+        glow = np.zeros((F.h, F.w), bool)
+    else:
+        col, glow = paint_face(F, b.mat_for(f))
+    if k > 1:
+        col = np.repeat(np.repeat(col, k, 0), k, 1)
+        glow = np.repeat(np.repeat(glow, k, 0), k, 1)
+    return col, glow
+
+
+def fine_lines(b, f, rect):
+    """Maschera delle linee sottili della faccia (vero = texel da scurire). opts['lines'] e' un elenco di linee in
+    coordinate del file: ('h', y, x0, x1) orizzontale all'altezza y, ('v', x, y0, y1) verticale all'ascissa x, spesse un
+    texel della griglia fine; si disegnano sulle facce davanti e dietro (north, south). Una copia specchiata riusa la
+    faccia della sorgente, quindi le sue linee si specchiano con lei."""
+    u, v, w, h = rect
+    mask = np.zeros((h, w), bool)
+    if f not in ('north', 'south') or not b.opts.get('lines'):
+        return mask
+    tl, ua, va, fw, fh, _ = face_frame(f, b.lo, b.hi)
+    su, sv = w / fw, h / fh
+
+    def inside(k, *vals):
+        for val in vals:
+            if not b.lo[k] - 1e-6 <= val <= b.hi[k] + 1e-6:
+                axis = 'xyz'[k]
+                raise ValueError(f'scatola {b.name}: linea fuori dalla scatola ({axis} = {val}, la scatola va da '
+                                 f'{b.lo[k]} a {b.hi[k]})')
+
+    def col_of(x):
+        return int(np.floor(((x - tl[0]) * ua[0]) * su + 1e-6))
+
+    def row_of(y):
+        return int(np.floor((tl[1] - y) * sv + 1e-6))
+
+    for kind, at, a, c in b.opts['lines']:
+        if kind == 'h':
+            inside(1, at)
+            inside(0, a, c)
+            j = min(max(row_of(at), 0), h - 1)
+            i0, i1 = sorted((col_of(a), col_of(c)))
+            mask[j, max(i0, 0):min(i1 + 1, w)] = True
+        elif kind == 'v':
+            inside(0, at)
+            inside(1, a, c)
+            i = min(max(col_of(at), 0), w - 1)
+            j0, j1 = sorted((row_of(a), row_of(c)))
+            mask[max(j0, 0):min(j1 + 1, h), i] = True
+        else:
+            raise ValueError(f'scatola {b.name}: linea sconosciuta {kind}')
+    return mask
+
+
+def check_fine(model, atlas, glowmask, reference):
+    """Problemi delle facce con la griglia fine. `reference` e' lo stesso disegno costruito con Model(fine=False) e
+    impacchettato: ogni faccia fine, fuori dalle linee sottili, deve essere esattamente la stessa faccia di `reference`
+    dipinta (alla densita' normale, nel suo rettangolo) e ingrandita fine x fine; sulle linee gli stessi colori
+    scuriti di LINE_DARK; la maschera luminosa deve essere quella di `reference` ingrandita. Cosi' la griglia fine non
+    puo' cambiare grana, usura, toni o luci senza che il controllo lo veda."""
+    problems = []
+    ref = {b.name: b for b in reference.boxes}
+    for b in model.boxes:
+        if b.fine == 1 or b.mirror_of is not None:
+            continue
+        rb = ref[b.name]
+        for f, (u, v, w, h) in b.faces.items():
+            k = b.fine_for(f)
+            if k == 1:
+                continue
+            col, glow = base_face(reference, rb, f, rb.faces[f])
+            big = np.repeat(np.repeat(col, k, 0), k, 1)
+            big_glow = np.repeat(np.repeat(glow, k, 0), k, 1)
+            expect = big.copy()
+            expect[fine_lines(b, f, (u, v, w, h))] *= LINE_DARK
+            expect = np.clip(expect, 0, 255).astype(np.uint8)
+            got = atlas[v:v + h, u:u + w]
+            if not (got[..., :3] == expect).all() or not (got[..., 3] == 255).all():
+                problems.append(f'{b.name} {f}: la griglia fine non e\' la faccia normale ingrandita piu\' le linee')
+            expect_glow = np.zeros((h, w, 4), np.uint8)
+            expect_glow[big_glow] = got[big_glow]
+            if not (glowmask[v:v + h, u:u + w] == expect_glow).all():
+                problems.append(f'{b.name} {f}: la maschera luminosa della griglia fine non e\' quella '
+                                'normale ingrandita')
+    return problems
 
 
 def check_wear(model, atlas):

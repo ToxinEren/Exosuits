@@ -116,6 +116,23 @@ def build(m):
 - **Decalcomanie:** un osso nella regione `decal` (`piece<Slot>_decal`, come `SuitBones.decal`) con una scatola piatta
   di materiale `decal`: i suoi texel restano trasparenti. Con `hide` si esporta solo la faccia esterna.
 - **Materiali e opzioni:** in testa a `paint.py`. Un materiale nuovo si aggiunge in `paint_face`.
+- **Tono:** l'opzione `tone=<fattore>` moltiplica il colore di base della scatola (prima di occlusione, calore e usura;
+  non sui materiali luminosi, il cui colore va nella maschera luminosa):
+  separa per luminosita' parti vicine dello stesso materiale o colore, come fanno i contorni in un disegno.
+  `even=True` toglie alla scatola la sfumatura verticale e gli spigoli chiari e scuri: per una piastra fatta di piu'
+  scatole impilate, che deve avere un tono solo.
+- **Linee sottili:** l'opzione `lines=[('h', y, x0, x1), ('v', x, y0, y1), ...]` (coordinate del file) disegna linee
+  scure spesse un texel fine sulle facce davanti e dietro della scatola, e da' a quelle due facce (`exo.FINE_FACES`,
+  `Box.fine_for`) una griglia di texel quattro volte piu' fine (`fine`, predefinito 4 con `lines`: 8 texel per
+  pixel); le altre facce restano alla densita' normale. Una linea fuori dalla scatola e' un errore. La pittura di base
+  di quelle facce resta quella normale, ogni texel ripetuto 4 x 4 (`paint.base_face`), e le linee si scuriscono di
+  `paint.LINE_DARK` dopo l'usura, quindi restano scure in tutti gli stati. `paint.check_fine` (in `build.py`) costruisce
+  lo stesso disegno con `Model(fine=False)` e verifica che ogni faccia fine sia esattamente quella faccia dipinta alla
+  densita' normale e ingrandita, linee a parte, maschera luminosa compresa. Nell'atlante quelle facce occupano 16
+  volte i texel: si usa solo sulle scatole che portano feritoie, tacche o giunture (oggi la parte bassa delle gambe,
+  che riproduce l'immagine di riferimento di Luigi per sua decisione). Le misure di quella parte sono date come
+  distanza |x| dal piano di mezzo: `designs/_legs.py` (`ax`, `leg`) le porta alla gamba destra e aggiunge la
+  sinistra speculare.
 - Ogni scatola ha un seme suo (dal nome; le copie di stato di un pezzo dal nome dichiarato, quindi lo stesso):
   aggiungere scatole non cambia il rumore di quelle esistenti. Occlusione, calore e grasso guardano le scatole
   vicine, ma il telaio guarda solo il telaio (`paint.looks_at`): aggiungere o cambiare un pezzo non cambia nessun

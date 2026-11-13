@@ -11,7 +11,8 @@ Uso, dalla radice del repository:
 
 Stesso input, stessi byte: semi fissi, nessuna data, ordine stabile, PNG senza metadati. Esce con 1, senza scrivere
 nulla, se il modello non passa i controlli (facce complanari, scatole troppo vicine al pilota o fuori dall'ingombro)
-o se uno stato visivo di un pezzo non e' piu' scuro del precedente (paint.check_wear).
+o se uno stato visivo di un pezzo non e' piu' scuro del precedente (paint.check_wear), o se una faccia con la griglia
+fine non e' la pittura normale ingrandita piu' le sue linee (paint.check_fine).
 """
 import argparse
 import os
@@ -22,7 +23,7 @@ sys.path.insert(0, HERE)
 
 from designs import load_all  # noqa: E402
 from exo import Model, dumps_json, write_png, write_text  # noqa: E402
-from paint import check_wear, paint_model  # noqa: E402
+from paint import check_fine, check_wear, paint_model  # noqa: E402
 
 DEFAULT_OUT = os.path.join(HERE, '..', '..', 'src', 'main', 'resources', 'assets', 'redstone_exoframes')
 GEO = os.path.join('geo', 'exoframe.geo.json')
@@ -31,8 +32,8 @@ GLOWMASK = os.path.join('textures', 'entity', 'exoframe_glowmask.png')
 ANIMATION = os.path.join('animations', 'exoframe.animation.json')
 
 
-def build_model(designs=None):
-    model = Model('exoframe')
+def build_model(designs=None, fine=True):
+    model = Model('exoframe', fine=fine)
     for design in load_all(designs):
         design.build(model)
     model.pack()
@@ -54,7 +55,11 @@ def main():
         sys.exit(1)
 
     atlas, glowmask = paint_model(model, debug_position=args.debug_position)
-    problems = [] if args.debug_position else check_wear(model, atlas)
+    problems = []
+    if not args.debug_position:
+        # le facce con la griglia fine si confrontano con lo stesso modello costruito senza
+        reference = build_model(args.designs.split(',') if args.designs else None, fine=False)
+        problems = check_wear(model, atlas) + check_fine(model, atlas, glowmask, reference)
     if problems:
         for p in problems:
             print('FAIL:', p, file=sys.stderr)

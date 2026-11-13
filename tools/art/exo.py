@@ -29,6 +29,8 @@ TOP_BONES = (
 )
 TOP_PIVOT = dict(TOP_BONES)
 FACES = ('north', 'east', 'south', 'west', 'up', 'down')
+# facce su cui si disegnano le linee sottili e che prendono la griglia fine (Box.fine_for)
+FINE_FACES = ('north', 'south')
 
 # --- scala e pilota ---------------------------------------------------------------------------------------
 # Nel gioco la tuta si disegna scalata di SUIT_SCALE attorno ai piedi (0,0,0); il pilota resta a grandezza normale,
@@ -168,12 +170,22 @@ class Box:
                     raise ValueError(f'scatola {name}: le coordinate vanno in quarti di pixel ({v})')
         self.mat = mat if isinstance(mat, dict) else {'default': mat}
         self.opts = dict(opts)
+        # griglia di texel piu' fine per le facce davanti e dietro di questa scatola (le sole su cui si disegnano le
+        # linee sottili di opts['lines']): fine x fine texel per ogni texel normale; la pittura di base resta quella
+        # normale, ripetuta. Le altre facce restano alla densita' normale (vedi fine_for)
+        self.fine = int(self.opts.get('fine', 4 if self.opts.get('lines') else 1))
+        if self.fine < 1:
+            raise ValueError(f'scatola {name}: fine deve essere >= 1')
         self.mirror_of = None   # scatola sorgente se questa e' la copia specchiata (condivide le UV)
         self.mirrors = []       # copie specchiate di questa scatola
         self.faces = {}         # faccia -> (u, v, larghezza, altezza) in texel; facce sepolte assenti
         # le copie di uno stesso pezzo nei quattro stati hanno lo stesso seme: graffi e ammaccature stanno negli
         # stessi punti e crescono con lo stato
         self.seed = zlib.crc32((seed_name or name).encode('utf-8'))
+
+    def fine_for(self, face):
+        """Moltiplicatore dei texel di una faccia: self.fine davanti e dietro (north, south), 1 altrove."""
+        return self.fine if face in FINE_FACES else 1
 
     @property
     def size(self):
@@ -184,8 +196,11 @@ class Box:
 
 
 class Model:
-    def __init__(self, identifier):
+    def __init__(self, identifier, fine=True):
+        """fine=False costruisce ogni scatola alla densita' normale, ignorando la griglia fine: serve a
+        paint.check_fine per confrontare le facce fini con la stessa faccia costruita senza."""
         self.identifier = identifier
+        self.fine = fine
         self.bones = []
         self.boxes = []
         self._names = set()
@@ -225,6 +240,8 @@ class Model:
             raise ValueError(f'nome di scatola duplicato {name}')
         self._names.add(name)
         b = Box(self._bone(bone), name, lo, hi, mat, opts, seed_name)
+        if not self.fine:
+            b.fine = 1
         self.boxes.append(b)
         return b
 
@@ -285,7 +302,8 @@ class Model:
                 if self._buried(b, f) and all(self._buried(m, swap.get(f, f)) for m in b.mirrors):
                     continue
                 _, _, _, fw, fh, _ = face_frame(f, b.lo, b.hi)
-                rects[b.bone.region].append((texels(fh), texels(fw), seq, b, f))
+                k = b.fine_for(f)
+                rects[b.bone.region].append((texels(fh) * k, texels(fw) * k, seq, b, f))
                 seq += 1
         self.used = {}
         for name, (rx, ry, rw, rh) in ATLAS_REGIONS:
