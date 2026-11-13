@@ -15,9 +15,13 @@ Dalla radice del repository (serve Python 3 con numpy, versione in `tools/art/re
     python3 tools/art/build.py --out <dir> --designs frame
                                                solo i design indicati (per esempio il telaio nudo, per le anteprime)
     bash tools/check_art.sh                    rigenera in una cartella temporanea e confronta: "OK art"
-    python3 tools/art/swing.py [--all]         gambe in movimento: per ogni gamba e direzione il primo angolo (1..60
-                                               gradi) a cui una scatola della gamba entra nel busto; da rifare quando
-                                               si cambiano gambe, bacino o schiena (non e' un controllo della build)
+    python3 tools/art/swing.py [--part gambe|braccia|testa|tutto] [--max N] [--all]
+                                               arti e testa in movimento: per ogni parte e direzione il primo angolo
+                                               (1..81 gradi, il passo di corsa del gioco base) a cui una sua scatola
+                                               entra nel busto; gambe e braccia avanti e indietro, la testa a destra,
+                                               a sinistra, in su e in giu'; predefinito gambe. Da rifare quando si
+                                               cambiano gambe, braccia, testa, bacino o schiena (non e' un controllo
+                                               della build); i risultati di oggi sono in docs/arte/README.md
 
 File generati (uguali sulle quattro varianti):
 
@@ -31,7 +35,11 @@ File generati (uguali sulle quattro varianti):
 Stesso input, stessi byte: semi ricavati dai nomi delle scatole, nessuna data, ordine stabile di ossa, scatole e
 rettangoli, JSON con chiavi in ordine fisso e numeri interi quando possibile, PNG compresse con lo zlib di Python
 (livello 9). La pittura usa solo aritmetica intera per le scelte casuali (`paint.HashRng`, niente generatore di
-numpy, il cui flusso puo' cambiare tra versioni); numpy resta comunque fissato in `requirements.txt`.
+numpy, il cui flusso puo' cambiare tra versioni); numpy resta comunque fissato in `requirements.txt`. La pittura
+pero' usa ancora i numeri in virgola mobile di numpy (anche `cos` e `sin` in `paint._line`): i byte sono gli stessi
+su x86-64 con il numpy fissato, ma su un'altra architettura (per esempio ARM) l'ultima cifra puo' cambiare. Se
+`check_art.sh` fallisce solo su una macchina cosi', si rigenera dove gira la CI (x86-64) e non si committa il
+risultato dell'altra macchina.
 `check_art.sh` confronta byte per byte i due JSON; per le due PNG (atlante e maschera luminosa) confronta l'elenco
 dei blocchi (solo IHDR, IDAT, IEND), IHDR e i pixel decompressi (`tools/art/compare_png.py`), perche' i byte
 compressi cambiano con la build di zlib (per esempio zlib-ng) anche a pixel identici.
@@ -111,8 +119,9 @@ def build(m):
   confrontano. Le quattro copie hanno le stesse scatole; le dipinge `paint.wear` (sotto).
 - **Regioni di colore:** `paint='p1'`/`'p2'` per le ossa da colorare (materiale `paint`, in toni di grigio),
   `'n'` per il metallo neutro. Il nome dell'osso porta la regione (`piece<Slot>_s<0-3>_p1`, `_p2`, `_n`, come
-  `SuitBones.piece`). `piece_bones` dichiara anche le ossa senza scatole (oggi `_n` delle braccia): il renderer
-  le cerca tutte.
+  `SuitBones.piece`). `piece_bones` dichiara anche le ossa senza scatole (oggi `_n` delle braccia e delle gambe e
+  `_p2` delle gambe: dalla sesta passata il pezzo delle gambe e' tutto nella regione primaria, vedi
+  `docs/arte/README.md`, "Regioni di colore"): il renderer le cerca tutte.
 - **Decalcomanie:** un osso nella regione `decal` (`piece<Slot>_decal`, come `SuitBones.decal`) con una scatola piatta
   di materiale `decal`: i suoi texel restano trasparenti. Con `hide` si esporta solo la faccia esterna.
 - **Materiali e opzioni:** in testa a `paint.py`. Un materiale nuovo si aggiunge in `paint_face`.
@@ -170,16 +179,33 @@ dichiarazione). Una faccia piu' larga della regione (oltre 256 px di modello) fe
 
 | Regione | Righe | Contenuto |
 |---|---|---|
-| `frame` | 0..111 | telaio nudo (oggi ne usa 60) |
+| `frame` | 0..111 | telaio nudo (oggi ne usa 56) |
 | `decal` | 112..127 | decalcomanie (texel trasparenti; oggi 7 righe) |
-| `piece_s0` | 128..223 | i sei pezzi, stato 0 (integro; oggi 41 righe, come gli altri stati) |
+| `piece_s0` | 128..223 | i sei pezzi, stato 0 (integro; oggi 49 righe su 96, 47 libere, come gli altri stati) |
 | `piece_s1` | 224..319 | stato 1 (danneggiato) |
 | `piece_s2` | 320..415 | stato 2 (critico) |
 | `piece_s3` | 416..511 | stato 3 (rotto) |
 
 Aggiungere i pezzi non sposta i rettangoli del telaio. Le quattro regioni dei pezzi hanno la stessa forma: lo stesso
 pezzo dichiarato con le stesse scatole nei quattro stati finisce nella stessa posizione relativa. Una copia
-specchiata (`sym`) riusa i rettangoli della sorgente con `uv_size` negativo.
+specchiata (`sym`) riusa i rettangoli della sorgente con `uv_size` negativo. Le righe usate le stampa `build.py`
+(`righe usate: ...`).
+
+### Aggiungere un livello
+
+Il generatore oggi fa un livello solo (il Rottame), e chi aggiunge il secondo incontra tre limiti:
+
+- i nomi delle ossa non portano il livello (`piece<Slot>_s<stato>_<regione>`, come `SuitBones` nel codice Java): un
+  secondo design di pezzi si ferma in `piece_bones` con "osso duplicato". Servono nomi con il livello, nel generatore
+  e in `SuitBones`, e il renderer che sceglie le ossa del livello del pezzo;
+- un livello grande come il Rottame non ci sta: le regioni dei pezzi hanno 96 righe e il Rottame ne usa 49, quindi
+  restano 47 righe per stato, meno di un secondo Rottame;
+- le regioni (`exo.ATLAS_REGIONS`) e la grandezza dell'atlante, 512x512, sono fisse, e `ExoframeGeometryTest` (JUnit)
+  controlla la stessa grandezza: un atlante piu' grande o un atlante per livello cambia anche il test e la texture
+  che il renderer usa.
+
+Prima del secondo livello va deciso come: un atlante e una geometria per livello, oppure un atlante piu' grande con
+regioni per livello e stato.
 
 ## Orientamento delle facce
 

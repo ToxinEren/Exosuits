@@ -67,12 +67,12 @@ class HashRng:
     def integers(self, lo, hi):
         """Intero in [lo, hi)."""
         if hi <= lo:
-            raise ValueError(f'HashRng.integers: empty range [{lo}, {hi})')
+            raise ValueError(f'HashRng.integers: intervallo vuoto [{lo}, {hi})')
         return lo + self._next() % (hi - lo)
 
     def choice(self, items):
         if not items:
-            raise ValueError('HashRng.choice: empty list')
+            raise ValueError('HashRng.choice: elenco vuoto')
         return items[self._next() % len(items)]
 
     def random(self):
@@ -191,10 +191,10 @@ def brushed(F, base, amp):
     streak = _hash(col_id.astype(np.int64), np.zeros_like(col_id, np.int64), np.zeros_like(col_id, np.int64), F.seed)
     slow = vnoise(F.P * np.array([1, 0.25, 1]) if F.vertical else F.P, 2.5, F.seed + 3)
     m = 1 + amp * (0.10 * (streak - 0.5) + 0.12 * (slow - 0.5))
-    if F.vertical and F.box.opts.get('even'):
-        pass   # tono uniforme: niente sfumatura dall'alto in basso (scatole impilate della stessa piastra)
-    elif F.vertical:
-        m *= 1.08 - 0.18 * (F.j + 0.5) / F.h
+    if F.vertical:
+        # con 'even' tono uniforme: niente sfumatura dall'alto in basso (scatole impilate della stessa piastra)
+        if not F.box.opts.get('even'):
+            m *= 1.08 - 0.18 * (F.j + 0.5) / F.h
     else:
         m *= 1.10 if F.face == 'up' else 0.78
     return quant(m)[..., None] * np.array(base, float)[None, None, :]
@@ -545,7 +545,7 @@ def base_face(model, b, f, rect, debug_position=False):
     F = Face(model, b, f, (u, v, w // k, h // k))
     if debug_position:
         q = F.S
-        col = np.stack([(q[..., 0] + 14) / 28, q[..., 1] / 37, (q[..., 2] + 9) / 19], -1) * 230 + 15
+        col = np.stack([(q[..., 0] + 14) / 28, q[..., 1] / 37, (q[..., 2] + 9) / 19.5], -1) * 230 + 15
         col[(F.i == 0) & (F.j == 0)] = (255, 255, 255)
         glow = np.zeros((F.h, F.w), bool)
     else:

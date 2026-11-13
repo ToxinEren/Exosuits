@@ -11,7 +11,7 @@ def load_all(only=None):
     if only is not None:
         unknown = sorted(set(only) - set(names))
         if unknown:
-            raise ValueError(f'unknown designs: {", ".join(unknown)} (available: {", ".join(names)})')
+            raise ValueError(f'design sconosciuti: {", ".join(unknown)} (disponibili: {", ".join(names)})')
         names = [n for n in names if n in only]
     mods = []
     for name in names:

@@ -6,7 +6,7 @@ Uso: python3 tools/art/compare_png.py <atteso.png> <committato.png>
 Il deflate prodotto da zlib non e' un contratto (zlib-ng e versioni diverse danno byte diversi per gli stessi
 pixel), quindi si confrontano: l'elenco dei blocchi (solo IHDR, IDAT, IEND, nessun metadato), i campi di IHDR e i
 dati di IDAT decompressi. Il confronto resta esatto sui pixel. Esce con 0 se i due file sono equivalenti, con 1
-stampando le differenze altrimenti.
+stampando le differenze altrimenti, con 2 (e l'uso) se non riceve esattamente due argomenti.
 """
 import struct
 import sys
@@ -45,6 +45,9 @@ def read(path):
 
 
 def main():
+    if len(sys.argv) != 3:
+        print('uso: python3 tools/art/compare_png.py <png attesa> <png da controllare>', file=sys.stderr)
+        return 2
     expected_path, actual_path = sys.argv[1:3]
     problems = []
     try:
