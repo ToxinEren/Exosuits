@@ -27,3 +27,8 @@ __pycache__/
 *.pyc
 # Copie di lavoro temporanee degli agenti
 /.claude/worktrees/
+# Anteprime grafiche locali
+node_modules/
+/tools/art/preview/out/
+/tools/art/spike/build/
+/tools/art/spike/out/

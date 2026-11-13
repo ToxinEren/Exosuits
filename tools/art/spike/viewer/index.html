@@ -1,0 +1,137 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Exoframe preview</title>
+<style>html,body{margin:0;background:#808080;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../node_modules/three/build/three.module.js"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+
+const q = new URLSearchParams(location.search);
+const dir = q.get('model') || 'A';
+const view = q.get('view') || 'full_front';
+const showPieces = !view.startsWith('frame');
+const mannequin = q.get('mannequin') !== '0';
+
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({antialias: true, preserveDrawingBuffer: true});
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(W, H);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x808080);
+
+const loader = new THREE.TextureLoader();
+function tex(url) {
+  return new Promise(r => loader.load(url, t => {
+    t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter;
+    t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace; r(t);
+  }));
+}
+
+const data = await (await fetch(`../build/${dir}/model.json`)).json();
+const atlas = await tex(`../build/${dir}/atlas.png?${Date.now()}`);
+const glow = await tex(`../build/${dir}/glow.png?${Date.now()}`);
+const [AW, AH] = data.atlas;
+
+const FACE = {
+  north: (lo, hi) => [[hi[0], hi[1], lo[2]], [-1, 0, 0], [0, -1, 0], hi[0] - lo[0], hi[1] - lo[1]],
+  south: (lo, hi) => [[lo[0], hi[1], hi[2]], [1, 0, 0], [0, -1, 0], hi[0] - lo[0], hi[1] - lo[1]],
+  east:  (lo, hi) => [[hi[0], hi[1], hi[2]], [0, 0, -1], [0, -1, 0], hi[2] - lo[2], hi[1] - lo[1]],
+  west:  (lo, hi) => [[lo[0], hi[1], lo[2]], [0, 0, 1], [0, -1, 0], hi[2] - lo[2], hi[1] - lo[1]],
+  up:    (lo, hi) => [[lo[0], hi[1], lo[2]], [1, 0, 0], [0, 0, 1], hi[0] - lo[0], hi[2] - lo[2]],
+  down:  (lo, hi) => [[lo[0], lo[1], hi[2]], [1, 0, 0], [0, 0, -1], hi[0] - lo[0], hi[2] - lo[2]],
+};
+
+function boxGeometry(lo, hi, faces, offset) {
+  const pos = [], nor = [], uv = [], idx = [];
+  for (const [f, fn] of Object.entries(FACE)) {
+    const fu = faces ? faces[f] : [0, 0, 1, 1, false];
+    if (!fu) continue;
+    const [tl, ua, va, fw, fh] = fn(lo, hi);
+    const t = new THREE.Vector3(...tl).sub(offset);
+    const u = new THREE.Vector3(...ua).multiplyScalar(fw), v = new THREE.Vector3(...va).multiplyScalar(fh);
+    const n = new THREE.Vector3(...va).cross(new THREE.Vector3(...ua)).normalize();
+    const corners = [t.clone(), t.clone().add(u), t.clone().add(u).add(v), t.clone().add(v)];
+    let [u0, v0, w, h, flip] = fu;
+    let ua0 = u0, ua1 = u0 + w;
+    if (flip) [ua0, ua1] = [ua1, ua0];
+    const uvs = [[ua0, v0], [ua1, v0], [ua1, v0 + h], [ua0, v0 + h]];
+    const base = pos.length / 3;
+    for (let k = 0; k < 4; k++) {
+      pos.push(corners[k].x, corners[k].y, corners[k].z); nor.push(n.x, n.y, n.z);
+      uv.push(uvs[k][0] / AW, 1 - uvs[k][1] / AH);
+    }
+    // tl, bl, br / tl, br, tr
+    idx.push(base, base + 3, base + 2, base, base + 2, base + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
+const mat = new THREE.MeshLambertMaterial({map: atlas, emissiveMap: glow, emissive: 0xffffff, emissiveIntensity: 1.0});
+const root = new THREE.Group();
+scene.add(root);
+const bbox = new THREE.Box3();
+for (const b of data.boxes) {
+  const piv = b.pivot || [0, 0, 0];
+  const off = new THREE.Vector3(...piv);
+  const m = new THREE.Mesh(boxGeometry(b.from, b.to, b.faces, off), mat);
+  const g = new THREE.Group();
+  g.position.copy(off);
+  if (b.rot) g.rotation.set(...b.rot.map(d => d * Math.PI / 180), 'ZYX');
+  g.add(m);
+  g.updateMatrixWorld(true);
+  bbox.expandByObject(g);   // fit on the full suit so frame and full views share a scale
+  if (b.group === 'piece' && !showPieces) continue;
+  root.add(g);
+}
+// stand-in player (undersuit), slightly shrunk to avoid z-fighting
+if (mannequin) {
+  const suit = new THREE.MeshLambertMaterial({color: 0x3d3029});
+  const skin = new THREE.MeshLambertMaterial({color: 0x9c7a62});
+  const P = [[[-4, 24, -4], [4, 32, 4], skin], [[-4, 12, -2], [4, 24, 2], suit],
+    [[-8, 12, -2], [-4, 24, 2], suit], [[4, 12, -2], [8, 24, 2], suit],
+    [[-4, 0, -2], [0, 12, 2], suit], [[0, 0, -2], [4, 12, 2], suit]];
+  for (const [lo, hi, mm] of P) {
+    const e = 0.02;
+    const l = lo.map(x => x + e), h = hi.map(x => x - e);
+    root.add(new THREE.Mesh(boxGeometry(l, h, null, new THREE.Vector3()), mm));
+  }
+}
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.15));
+const key = new THREE.DirectionalLight(0xfff4e8, 2.1); key.position.set(0.6, 1.0, -0.8); scene.add(key);
+const rim = new THREE.DirectionalLight(0xdde6ff, 0.9); rim.position.set(-0.7, 0.4, 0.9); scene.add(rim);
+
+const views = {
+  full_front: [0.62, 0.30, -0.78], frame_front: [0.62, 0.30, -0.78],
+  full_back: [-0.62, 0.30, 0.78], full_side: [-1, 0.12, 0.0001],
+  front: [0, 0.1, -1],
+};
+const d = new THREE.Vector3(...(views[view] || views.full_front)).normalize();
+if (view === 'full_back') { key.position.set(-0.6, 1.0, 0.8); rim.position.set(0.7, 0.4, -0.9); }
+if (view === 'full_side') { key.position.set(-1, 1.0, -0.4); }
+const center = bbox.getCenter(new THREE.Vector3());
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+cam.position.copy(center).addScaledVector(d, 200);
+cam.lookAt(center);
+cam.updateMatrixWorld(true);
+// fit: project bbox corners into camera space
+let minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
+const inv = cam.matrixWorldInverse;
+for (const x of [bbox.min.x, bbox.max.x]) for (const y of [bbox.min.y, bbox.max.y]) for (const z of [bbox.min.z, bbox.max.z]) {
+  const p = new THREE.Vector3(x, y, z).applyMatrix4(inv);
+  minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); miny = Math.min(miny, p.y); maxy = Math.max(maxy, p.y);
+}
+const half = Math.max(maxx - minx, maxy - miny) / 2 * 1.08;
+const cx = (minx + maxx) / 2, cy = (miny + maxy) / 2;
+cam.left = cx - half; cam.right = cx + half; cam.top = cy + half; cam.bottom = cy - half;
+cam.updateProjectionMatrix();
+renderer.render(scene, cam);
+window.__ready = true;
+</script></body></html>
