@@ -9,8 +9,9 @@
 # RCON (senza la barra iniziale; il giocatore si chiama come EXO_SHOT_USER, di default Exo) e salva nella cartella
 # back.png (da dietro), front.png (davanti), quarter.png (da dietro a tre quarti) con l'interfaccia nascosta, piu'
 # i log: gradle-server.log e gradle-client.log (uscita di Gradle e del gioco), server.log e client.log (latest.log
-# delle due cartelle di esecuzione), rcon.log (comandi e risposte), log-check.txt (avvisi ed errori del mod o dei
-# mixin nei due log, vuoto se non ce ne sono). Alla fine chiude server, client e Xvfb, anche dopo un errore o Ctrl-C.
+# delle due cartelle di esecuzione), rcon.log (comandi e risposte), xvfb.log (uscita di Xvfb), log-check.txt
+# (avvisi ed errori del mod o dei mixin nei due log, vuoto se non ce ne sono). Prima di cominciare cancella dalla
+# cartella solo questi file, per nome. Alla fine chiude server, client e Xvfb, anche dopo un errore o Ctrl-C.
 #
 # Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
 # run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta.
@@ -29,8 +30,8 @@
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
 #
 # Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, scatto);
-# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata); 130 Ctrl-C; 143 TERM. Ogni errore
-# stampa una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata, Xvfb che non parte, OpenGL core 3.2
+# assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -106,7 +107,11 @@ out=$(cd "$out" && pwd)
 exec 9>"$sdir/.lock"
 flock -n 9 || fatal "un'altra esecuzione di client_shot.sh usa gia' la variante $variant"
 
-rm -f "$out"/back.png "$out"/front.png "$out"/quarter.png "$out"/*.log "$out"/log-check.txt
+# Si tolgono solo i file che lo script scrive, per nome: la cartella e' dell'utente e puo' contenere altro.
+for f in back.png front.png quarter.png gradle-server.log gradle-client.log server.log client.log rcon.log xvfb.log \
+        log-check.txt; do
+    rm -f "$out/$f"
+done
 
 t0=$(date +%s)
 log() { echo "[$(($(date +%s) - t0))s] $*"; }
@@ -208,21 +213,32 @@ trap cleanup EXIT
 trap 'echo "interrotto (Ctrl-C), chiusura in corso" >&2; exit 130' INT
 trap 'echo "terminato (TERM), chiusura in corso" >&2; exit 143' TERM
 
-fail() { log "ERRORE: $*"; exit 1; }
+fail() { log "ERRORE: $*" >&2; exit 1; }
 
 # --- schermo virtuale -----------------------------------------------------------------------------------------------
-n=90
-while [ -e "/tmp/.X11-unix/X$n" ] || [ -e "/tmp/.X$n-lock" ]; do n=$((n + 1)); done
-Xvfb ":$n" -screen 0 "${width}x${height}x24" -nolisten tcp >"$out/xvfb.log" 2>&1 &
+# Il numero dello schermo lo sceglie Xvfb (-displayfd), che prende il primo libero con il proprio lucchetto: due
+# esecuzioni partite nello stesso istante non finiscono sullo stesso schermo. Lo scrive sul descrittore 3, in un file
+# della cartella del server, quando accetta connessioni.
+dfile="$sdir/.xvfb-display"
+rm -f "$dfile"
+Xvfb -displayfd 3 -screen 0 "${width}x${height}x24" -nolisten tcp 3>"$dfile" >"$out/xvfb.log" 2>&1 &
 xpid=$!
+for _ in $(seq 20); do
+    [ -s "$dfile" ] && break
+    kill -0 "$xpid" 2>/dev/null || break
+    sleep 0.5
+done
+n=$(head -n 1 "$dfile" 2>/dev/null | tr -cd '0-9')
+[ -n "$n" ] && kill -0 "$xpid" 2>/dev/null || fatal "Xvfb non parte (vedi $out/xvfb.log)"
 export DISPLAY=":$n"
-for _ in $(seq 20); do xdotool getdisplaygeometry >/dev/null 2>&1 && break; sleep 0.5; done
-xdotool getdisplaygeometry >/dev/null 2>&1 || fail "Xvfb non parte (vedi $out/xvfb.log)"
+xdotool getdisplaygeometry >/dev/null 2>&1 || fatal "lo schermo :$n di Xvfb non risponde (vedi $out/xvfb.log)"
+# Lo schermo deve essere ancora quello di questa esecuzione: il suo Xvfb vivo.
+kill -0 "$xpid" 2>/dev/null || fatal "Xvfb si e' fermato appena partito (vedi $out/xvfb.log)"
 glx=$(glxinfo -B 2>&1)
 core=$(echo "$glx" | sed -n 's/.*Max core profile version: *\([0-9]*\.[0-9]*\).*/\1/p' | head -n 1)
 case "$core" in
     3.[2-9]* | [4-9].*) ;;
-    *) fail "OpenGL core 3.2 non disponibile sotto Xvfb (serve Mesa con llvmpipe, pacchetto libgl1-mesa-dri);" \
+    *) fatal "OpenGL core 3.2 non disponibile sotto Xvfb (serve Mesa con llvmpipe, pacchetto libgl1-mesa-dri);" \
             "glxinfo dice: $(echo "$glx" | grep -m1 -E 'renderer|Error|error' || echo niente)" ;;
 esac
 log "schermo :$n ${width}x${height}, $(echo "$glx" | sed -n 's/.*OpenGL renderer string: *//p' | head -n 1)"

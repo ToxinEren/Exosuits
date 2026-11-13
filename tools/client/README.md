@@ -8,10 +8,10 @@ Scatti in terza persona dal client vero di Minecraft, senza schermo, per vedere 
 
 - Xvfb, xdotool, ImageMagick (`import`, `identify`, `convert`), `glxinfo` e il driver software di Mesa. Su Debian/Ubuntu: `apt-get install -y xvfb xdotool imagemagick mesa-utils libgl1-mesa-dri`.
 - JDK 21 (Gradle), `python3` (client RCON, solo libreria standard), `flock` (util-linux).
-- Circa 3 GB di memoria libera oltre ai demoni di Gradle: client 2 GB, server 1 GB.
+- Memoria: per un'esecuzione circa 3 GB per il gioco (client 2 GB, server 1 GB) più i due demoni di Gradle che lo avviano, uno per il server e uno per il client, fino a 3 GB ciascuno (`-Xmx3G` in `gradle.properties`), che restano accesi a riposo dopo la fine: fino a circa 9 GB in tutto. Due esecuzioni insieme (due varianti, o un secondo clone) arrivano a circa 18 GB, più della macchina cloud (15 GB): una alla volta, oppure `./gradlew --stop` tra l'una e l'altra se si fa altro.
 - Rete verso i Maven del progetto e verso i server delle risorse di Minecraft, solo la prima volta.
 
-Lo script controlla all'avvio che i programmi ci siano e che sotto Xvfb ci sia OpenGL core 3.2 o più; se manca qualcosa lo nomina ed esce con 2.
+Lo script controlla all'avvio che i programmi ci siano, che Xvfb parta e che sotto Xvfb ci sia OpenGL core 3.2 o più; se manca qualcosa lo nomina ed esce con 2. Il numero dello schermo virtuale lo sceglie Xvfb (`-displayfd`): due esecuzioni partite insieme non finiscono sullo stesso schermo.
 
 ## EULA
 
@@ -38,10 +38,12 @@ Nella cartella lascia:
 
 - `back.png` da dietro, `front.png` davanti, `quarter.png` da dietro a tre quarti, con l'interfaccia nascosta (F1);
 - `gradle-server.log`, `gradle-client.log`: uscita di Gradle e del gioco; `server.log`, `client.log`: i `latest.log`;
-- `rcon.log`: comandi e risposte;
+- `rcon.log`: comandi e risposte; `xvfb.log`: uscita di Xvfb;
 - `log-check.txt`: avvisi ed errori del mod o dei mixin nei due log (righe WARN/ERROR che nominano il mod o i mixin, tracce che passano da `com.toxineren`, errori di applicazione dei mixin); vuoto se non ce ne sono. Non ferma lo script: lo segnala.
 
-Ogni comando dell'utente passa da `execute store success`: se il server lo rifiuta (sintassi, bersaglio inesistente, colore non valido di `/exoframe`...) lo script si ferma. Serve perché un errore dentro `execute as ... run` non arriva nella risposta RCON. Conta come rifiutato anche un comando che il server esegue ma con risultato 0, per esempio un `fill` che non cambia nessun blocco o un `execute as` senza bersagli.
+All'inizio lo script cancella dalla cartella solo questi file, per nome; il resto della cartella non lo tocca.
+
+Ogni comando dell'utente passa da `execute store success`: se il server lo rifiuta (sintassi, bersaglio inesistente, colore non valido di `/exoframe`...) o non risponde entro 15 s lo script si ferma. Serve perché un errore dentro `execute as ... run` non arriva nella risposta RCON. Conta come rifiutato anche un comando che il server esegue ma con risultato 0, per esempio un `fill` che non cambia nessun blocco o un `execute as` senza bersagli.
 
 **`m3a_shots.sh`** fa l'insieme standard della parte 3a, una esecuzione e una sottocartella per scatto: `01-nudo`, `02-rottame-s0` … `05-rottame-s3`, `06-colori` (`3A6EA5` e `D9D9D9`), `07-mani` (piccone di ferro nella mano principale, scudo nell'altra), `08-sdraiato` (telaio nudo, posa strisciante forzata da un blocco di vetro sopra la testa; qui `front.png` non serve, perché la telecamera davanti finisce contro la testa: contano `back.png` e `quarter.png`). Negli scatti 01 e 02 c'è una colonna di tre blocchi di lana bianca a tre blocchi dal giocatore, verso ovest, come metro per l'altezza. Alla fine monta `stati-fronte.png` (le quattro viste frontali degli stati affiancate) e stampa un riepilogo. Una esecuzione per scatto invece di una lunga: ogni scatto parte dallo stesso stato e un errore resta nel suo scatto; costa un minuto in più a scatto.
 
@@ -59,7 +61,7 @@ Lo script lavora sul checkout in cui si trova (compila il codice com'è, anche l
 
 ## Errori
 
-Uscita 0: scatti salvati. Uscita 1: qualcosa si è fermato durante l'esecuzione, con una riga `ERRORE:` che dice cosa (build fallita, server o client che non partono, giocatore che non entra o viene espulso, comando rifiutato, scatto quasi tutto di un colore). Uscita 2: uso o ambiente sbagliati (variante sconosciuta, programmi mancanti, EULA non accettata, porta occupata, un'altra esecuzione sulla stessa variante). Uscita 130: interrotto con Ctrl-C; 143: terminato con TERM. In ogni caso lo script ferma il server con `stop`, manda TERM ai suoi due processi Gradle (che annullano la build nel demone, così un server o un client non ancora partiti non partono più) e alle JVM del gioco di quell'esecuzione, dopo 30 s le uccide, chiude Xvfb e copia i log. La chiusura dura al massimo circa 35 s, e un secondo Ctrl-C non la interrompe.
+Uscita 0: scatti salvati. Uscita 1: qualcosa si è fermato durante l'esecuzione, con una riga `ERRORE:` su stderr che dice cosa (build fallita, server o client che non partono, giocatore che non entra o viene espulso, comando rifiutato o senza risposta, scatto quasi tutto di un colore). Uscita 2: uso o ambiente sbagliati (variante sconosciuta, programmi mancanti, EULA non accettata, porta occupata, un'altra esecuzione sulla stessa variante, Xvfb che non parte, OpenGL core 3.2 assente); `m3a_shots.sh` allora non prova gli scatti successivi. Uscita 130: interrotto con Ctrl-C; 143: terminato con TERM. In ogni caso lo script ferma il server con `stop`, manda TERM ai suoi due processi Gradle (che annullano la build nel demone, così un server o un client non ancora partiti non partono più) e alle JVM del gioco di quell'esecuzione, dopo 30 s le uccide, chiude Xvfb e copia i log. La chiusura dura al massimo circa 35 s, e un secondo Ctrl-C non la interrompe.
 
 Uno scatto non si salva se il client non è più vivo o il giocatore ha lasciato il server: uno scatto del menu principale non passa mai per buono.
 

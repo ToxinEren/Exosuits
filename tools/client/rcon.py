@@ -10,9 +10,12 @@ Manda i comandi in ordine (senza la barra iniziale) e stampa ogni risposta. Un c
 un errore di Minecraft (sintassi, bersaglio inesistente, oggetto sconosciuto, colore non valido del mod...) ferma
 l'esecuzione: la riga RIFIUTATO va su stderr e l'uscita e' 1. RCON non dice se un comando e' riuscito, quindi il
 controllo legge il testo della risposta (il server risponde sempre in inglese): l'elenco e' in FAILURE_PATTERNS.
-Con --no-check le risposte non si controllano (serve per "stop" alla chiusura).
-Uscite: 0 tutto accettato, 1 comando rifiutato, 2 connessione o autenticazione fallita, 64 uso sbagliato o
-password mancante.
+Un comando senza risposta entro 15 s (o con la connessione chiusa prima della risposta) non conta come accettato:
+la riga SENZA RISPOSTA va su stderr e l'uscita e' 1.
+Con --no-check le risposte non si controllano e un comando senza risposta passa (serve per "stop" alla chiusura,
+dopo il quale il server chiude la connessione).
+Uscite: 0 tutto accettato, 1 comando rifiutato o senza risposta, 2 connessione o autenticazione fallita, 64 uso
+sbagliato o password mancante.
 Solo libreria standard."""
 import os
 import re
@@ -90,7 +93,11 @@ def main(argv):
             try:
                 _, body = receive(sock)
             except (ConnectionError, socket.timeout):
-                body = '(nessuna risposta)'
+                print(f'> {command}\n(nessuna risposta)', flush=True)
+                if check:
+                    print(f'SENZA RISPOSTA dal server entro 15 s: "{command}"', file=sys.stderr)
+                    return 1
+                continue
             print(f'> {command}\n{body}', flush=True)
             if check and FAILURE_RE.search(body):
                 print(f'RIFIUTATO dal server: "{command}": {body.strip()}', file=sys.stderr)
