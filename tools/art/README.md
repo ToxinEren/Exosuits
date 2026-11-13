@@ -14,7 +14,9 @@ Dalla radice del repository (serve Python 3 con numpy, versione in `tools/art/re
     python3 tools/art/build.py --out <dir>     li scrive in <dir>/geo, <dir>/textures/entity, <dir>/animations
     python3 tools/art/build.py --out <dir> --designs frame
                                                solo i design indicati (per esempio il telaio nudo, per le anteprime)
-    bash tools/check_art.sh                    rigenera in una cartella temporanea e confronta: "OK art"
+    bash tools/check_art.sh                    prove negative, poi rigenera in una cartella temporanea e confronta:
+                                               "OK art"
+    python3 tools/art/selftest.py              solo le prove negative dei controlli (vedi sotto)
     python3 tools/art/swing.py [--part gambe|braccia|testa|tutto] [--max N] [--all]
                                                arti e testa in movimento: per ogni parte e direzione il primo angolo
                                                (1..81 gradi, il passo di corsa del gioco base) a cui una sua scatola
@@ -49,7 +51,9 @@ quello della pittura degli stati (`paint.check_wear`, sotto):
 
 - facce complanari con la stessa normale che si sovrappongono, in tutte e sei le direzioni (anche verso il basso),
   salvo la parte coperta da altre scatole (controllata cella per cella sulla griglia dei quarti di pixel, quindi
-  anche una striscia scoperta di 0.25 px viene segnalata);
+  anche una striscia scoperta di 0.25 px viene segnalata). Coprono solo le scatole che si disegnano sempre insieme
+  alle due facce (`Model._always_with`): il telaio, e i pezzi dello slot e dello stato delle due facce; mai un pezzo
+  di un altro slot (con l'armatura parziale puo' mancare) ne' le decalcomanie (il renderer le nasconde);
 - scatole troppo vicine al pilota, misurate come nel gioco: la tuta scalata di `exo.SUIT_SCALE` (1.65) attorno ai
   piedi, il pilota a grandezza normale sollevato di `exo.PILOT_LIFT_PX` (24(S-1) = 15.6 px, collo e spalle
   allineati a quelli della tuta) e senza gambe (non si disegnano: stanno nelle cosce chiuse della tuta). Margini:
@@ -61,7 +65,18 @@ quello della pittura degli stati (`paint.check_wear`, sotto):
   (uno stato piu' alto non deve mai sembrare meno rovinato).
 
 Le facce interamente sepolte in altre scatole dello stesso osso non vengono esportate (niente spazio sprecato
-nell'atlante). `ExoframeGeometryTest` (JUnit) legge il file generato e controlla nomi e perni delle ossa (quelli dei
+nell'atlante); anche questo si decide cella per cella sulla griglia dei quarti di pixel, quindi una faccia con una
+striscia scoperta di 0.25 px non sparisce.
+
+`tools/art/selftest.py` (eseguito da `check_art.sh`, quindi anche dalla CI) prova che i controlli funzionano:
+inietta un difetto alla volta in una copia del modello costruita in memoria e pretende la segnalazione (striscia
+complanare coperta solo da un pezzo di un altro slot o da una decalcomania; faccia sepolta con una striscia
+scoperta su un lato dispari; scatola nella testa del pilota; fuori dai limiti; fuori dalla griglia; linea sottile
+fuori dalla sua scatola; stato piu' chiaro del precedente; regione dell'atlante piena; faccia fine diversa dalla sua
+versione a densita' normale).
+Esce con 1 se un difetto passa. Un controllo nuovo va aggiunto anche li'.
+
+`ExoframeGeometryTest` (JUnit) legge il file generato e controlla nomi e perni delle ossa (quelli dei
 pezzi e delle decalcomanie costruiti da `SuitBones`), i due ingombri, che le quattro copie di un pezzo abbiano le
 stesse scatole e stiano ognuna nella sua zona dell'atlante, che braccia e gambe sinistre siano lo specchio delle
 destre (scatole e rettangoli), che le decalcomanie siano piatte e trasparenti, dimensione dell'atlante e UV.
@@ -133,7 +148,9 @@ def build(m):
 - **Linee sottili:** l'opzione `lines=[('h', y, x0, x1), ('v', x, y0, y1), ...]` (coordinate del file) disegna linee
   scure spesse un texel fine sulle facce davanti e dietro della scatola, e da' a quelle due facce (`exo.FINE_FACES`,
   `Box.fine_for`) una griglia di texel quattro volte piu' fine (`fine`, predefinito 4 con `lines`: 8 texel per
-  pixel); le altre facce restano alla densita' normale. Una linea fuori dalla scatola e' un errore. La pittura di base
+  pixel); le altre facce restano alla densita' normale. Una linea fuori dalla scatola e' un errore; gli estremi di
+  una linea che cadono su un bordo di texel non aggiungono un texel, cosi' la linea ha la stessa lunghezza davanti e
+  dietro. La pittura di base
   di quelle facce resta quella normale, ogni texel ripetuto 4 x 4 (`paint.base_face`), e le linee si scuriscono di
   `paint.LINE_DARK` dopo l'usura, quindi restano scure in tutti gli stati. `paint.check_fine` (in `build.py`) costruisce
   lo stesso disegno con `Model(fine=False)` e verifica che ogni faccia fine sia esattamente quella faccia dipinta alla
@@ -233,8 +250,9 @@ cd tools/art/preview && npm install && node shot.js
 rifa' le viste standard in `tools/art/preview/out/` (ignorata da git): `fronte`, `retro`, `lato` (3/4 davanti, 3/4
 dietro, lato destro), `testa` e `gamba` (primi piani), `porta` (davanti, con griglia a blocchi di 17.07 px, porta
 1x2 in bianco con stipiti e architrave, box di collisione in piedi 0.6S x 1.8S blocchi in giallo). La tuta e'
-scalata di 1.65 attorno ai piedi, il pilota e' a grandezza normale, sollevato di 15.6 px e senza gambe, la maschera
-luminosa fa da emissiva, le ossa `_p1`/`_p2` si tingono con i colori predefiniti del Rottame (0x8A6F52, 0x4A4F55).
+scalata di `exo.SUIT_SCALE` (letta da `exo.py`, oggi 1.65) attorno ai piedi, il pilota e' a grandezza normale, sollevato
+di 15.6 px e senza gambe, la maschera luminosa fa da emissiva, le ossa `_p1`/`_p2` si tingono con i colori predefiniti
+del Rottame (0x8A6F52, 0x4A4F55).
 Come nel gioco si vedono solo le ossa dei pezzi di uno stato (predefinito 0), mai le decalcomanie. Opzioni:
 `--views fronte,porta`, `--state 0..3` o `--state nudo` (telaio senza pezzi), `--colors RRGGBB,RRGGBB` (colori dei
 pezzi), `--assets <dir>` per un modello scritto da `build.py --out <dir>` invece dei file del mod,

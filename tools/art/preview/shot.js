@@ -38,7 +38,14 @@ for (let i = 2; i < process.argv.length; i += 2) {
 }
 
 // --- viste standard ---------------------------------------------------------------------------------------------
-const S = 1.65;                // exo.SUIT_SCALE
+// La scala si legge da tools/art/exo.py (SUIT_SCALE, la stessa riga che legge SuitScaleTest): niente copie del numero.
+function suitScale() {
+  const src = fs.readFileSync(path.join(HERE, '..', 'exo.py'), 'utf8');
+  const m = src.match(/^SUIT_SCALE = ([0-9]+(?:\.[0-9]+)?)$/m);
+  if (!m) { console.error('SUIT_SCALE non trovato in tools/art/exo.py'); process.exit(2); }
+  return Number(m[1]);
+}
+const S = suitScale();         // exo.SUIT_SCALE
 const LIFT = 24 * (S - 1);     // exo.PILOT_LIFT_PX: collo e spalle del pilota allineati a quelli della tuta
 const BLOCK = 16 / 0.9375;     // px di modello non scalati per blocco (il giocatore e' reso a 15/16): 17.07
 const MODEL = { geo: 'model/geo/exoframe.geo.json', tex: 'model/textures/entity/exoframe.png',

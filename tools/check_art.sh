@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Controllo della grafica generata (dalla radice del repository): bash tools/check_art.sh
-# Rigenera geometria, atlante, maschera luminosa e animazioni in una cartella temporanea e li confronta con i file
-# committati in src/main/resources/assets/redstone_exoframes: byte per byte i JSON; per le PNG (atlante e maschera)
-# blocchi, IHDR e pixel decompressi (tools/art/compare_png.py), perche' i byte compressi dipendono dalla build di
-# zlib.
+# Esegue le prove negative dei controlli (tools/art/selftest.py), poi rigenera geometria, atlante, maschera luminosa
+# e animazioni in una cartella temporanea e li confronta con i file committati in
+# src/main/resources/assets/redstone_exoframes: byte per byte i JSON; per le PNG (atlante e maschera) blocchi, IHDR e
+# pixel decompressi (tools/art/compare_png.py), perche' i byte compressi dipendono dalla build di zlib.
 # Servono python3 e numpy (tools/art/requirements.txt).
 set -eu
 
@@ -15,6 +15,13 @@ files=(geo/exoframe.geo.json textures/entity/exoframe.png textures/entity/exofra
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
+
+# prove negative dei controlli del generatore (lavorano in memoria, non scrivono nel repository)
+if ! python3 tools/art/selftest.py >"$tmp/selftest.log" 2>&1; then
+    cat "$tmp/selftest.log" >&2
+    echo "FAIL: tools/art/selftest.py: un difetto iniettato non e' stato segnalato" >&2
+    exit 1
+fi
 
 if ! python3 tools/art/build.py --out "$tmp" >"$tmp/build.log" 2>&1; then
     cat "$tmp/build.log" >&2

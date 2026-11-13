@@ -204,6 +204,7 @@ class Model:
         self.bones = []
         self.boxes = []
         self._names = set()
+        self._slot_of = {}      # osso di primo livello -> slot del suo pezzo (uno solo: vedi _always_with)
 
     # --- dichiarazione -------------------------------------------------------------------------------------
     def bone(self, name, parent, region, state=None, paint=None):
@@ -214,7 +215,13 @@ class Model:
         return b
 
     def piece_bones(self, slot, parent):
-        """Le dodici ossa del pezzo di uno slot: quattro stati (regioni piece_s0..s3) per tre regioni di colore."""
+        """Le dodici ossa del pezzo di uno slot: quattro stati (regioni piece_s0..s3) per tre regioni di colore.
+        Ogni osso di primo livello porta il pezzo di un solo slot: i controlli (_always_with) riconoscono lo slot
+        dall'osso."""
+        if self._slot_of.get(parent, slot) != slot:
+            raise ValueError(f'{parent} porta gia\' il pezzo {self._slot_of[parent]}: non puo\' portare anche {slot} '
+                             f'(uno slot per osso di primo livello)')
+        self._slot_of[parent] = slot
         for state in range(STATES):
             for region in REGIONS:
                 self.bone(piece(slot, region).replace(ANY_STATE, f'_s{state}_'), parent, f'piece_s{state}',
@@ -263,26 +270,36 @@ class Model:
         return all(lo[k] + EPS < p[k] < hi[k] - EPS for k in range(3))
 
     @staticmethod
-    def _face_samples(box, face, offset):
-        """Centri dei texel della faccia, spostati di `offset` lungo la normale."""
+    def _cell_centres(box, face, offset):
+        """Centri delle celle da GRID px della faccia, spostati di `offset` lungo la normale. Tutti gli spigoli
+        stanno sulla griglia dei quarti di pixel, quindi ogni cella e' o tutta coperta da un'altra scatola o tutta
+        scoperta: decidere su questi punti e' esatto, anche per una striscia di 0.25 px."""
         tl, ua, va, fw, fh, n = face_frame(face, box.lo, box.hi)
-        tw, th = texels(fw), texels(fh)
-        pts = []
-        for j in range(th):
-            for i in range(tw):
-                s, t = (i + 0.5) * fw / tw, (j + 0.5) * fh / th
-                pts.append(tuple(tl[k] + s * ua[k] + t * va[k] + offset * n[k] for k in range(3)))
-        return pts
+        cu, cv = int(round(fw / GRID)), int(round(fh / GRID))
+        return [tuple(tl[k] + (i + 0.5) * GRID * ua[k] + (j + 0.5) * GRID * va[k] + offset * n[k] for k in range(3))
+                for j in range(cv) for i in range(cu)]
 
     def _together(self, a, b):
         """True se le due scatole possono essere visibili nello stesso momento."""
         sa, sb = a.bone.state, b.bone.state
         return sa is None or sb is None or sa == sb
 
+    def _always_with(self, c, a, b):
+        """True se la scatola c si disegna sempre quando si disegnano a e b: il telaio sempre; un pezzo solo se e'
+        dello slot di a o di b (stesso osso di primo livello: uno slot per osso) e del loro stato; le decalcomanie mai
+        (il renderer le nasconde). Solo queste scatole possono coprire due facce complanari."""
+        if c.bone.region == 'frame':
+            return True
+        if c.bone.state is None:
+            return False
+        slots = {x.bone.parent for x in (a, b) if x.bone.state is not None}
+        return c.bone.parent in slots and self._together(c, a) and self._together(c, b)
+
     def _buried(self, box, face):
-        """True se la faccia e' interamente dentro altre scatole dello stesso osso (non si vede mai)."""
+        """True se la faccia e' interamente dentro altre scatole dello stesso osso (non si vede mai). Decide sulle
+        celle da un quarto di pixel, come check()."""
         others = [c for c in self.boxes if c is not box and c.bone is box.bone]
-        return all(any(self._inside(p, c.lo, c.hi) for c in others) for p in self._face_samples(box, face, 0.01))
+        return all(any(self._inside(p, c.lo, c.hi) for c in others) for p in self._cell_centres(box, face, 0.01))
 
     # --- impacchettamento ----------------------------------------------------------------------------------
     def pack(self):
@@ -370,8 +387,8 @@ class Model:
                     hi = [min(a.hi[k], b.hi[k]) for k in range(3)]
                     p = [0.0, 0.0, 0.0]
                     p[ax] = side[ax] + 0.01 * n[ax]
-                    occ = [c for c in self.boxes if c is not a and c is not b and self._together(c, a)
-                           and self._together(c, b) and c.lo[ax] + EPS < p[ax] < c.hi[ax] - EPS
+                    occ = [c for c in self.boxes if c is not a and c is not b and self._always_with(c, a, b)
+                           and c.lo[ax] + EPS < p[ax] < c.hi[ax] - EPS
                            and all(c.lo[k] < hi[k] - EPS and c.hi[k] > lo[k] + EPS for k in o)]
                     steps = [int(round((hi[k] - lo[k]) / GRID)) for k in o]
                     visible = False

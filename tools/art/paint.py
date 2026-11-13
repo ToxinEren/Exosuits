@@ -575,25 +575,38 @@ def fine_lines(b, f, rect):
                 raise ValueError(f'scatola {b.name}: linea fuori dalla scatola ({axis} = {val}, la scatola va da '
                                  f'{b.lo[k]} a {b.hi[k]})')
 
+    def u_of(x):
+        return ((x - tl[0]) * ua[0]) * su      # in texel, da sinistra
+
+    def v_of(y):
+        return (tl[1] - y) * sv                # in texel, dall'alto
+
     def col_of(x):
-        return int(np.floor(((x - tl[0]) * ua[0]) * su + 1e-6))
+        return int(np.floor(u_of(x) + 1e-6))
 
     def row_of(y):
-        return int(np.floor((tl[1] - y) * sv + 1e-6))
+        return int(np.floor(v_of(y) + 1e-6))
+
+    def span(t0, t1):
+        """Texel [primo, ultimo escluso] che l'intervallo [t0, t1] (in texel) tocca: gli estremi che cadono su un
+        bordo di texel non aggiungono un texel, quindi la stessa linea ha la stessa lunghezza sulla faccia davanti e su
+        quella dietro, dove si legge da destra a sinistra."""
+        lo, hi = sorted((t0, t1))
+        return int(np.floor(lo + 1e-6)), int(np.ceil(hi - 1e-6))
 
     for kind, at, a, c in b.opts['lines']:
         if kind == 'h':
             inside(1, at)
             inside(0, a, c)
             j = min(max(row_of(at), 0), h - 1)
-            i0, i1 = sorted((col_of(a), col_of(c)))
-            mask[j, max(i0, 0):min(i1 + 1, w)] = True
+            i0, i1 = span(u_of(a), u_of(c))
+            mask[j, max(i0, 0):min(i1, w)] = True
         elif kind == 'v':
             inside(0, at)
             inside(1, a, c)
             i = min(max(col_of(at), 0), w - 1)
-            j0, j1 = sorted((row_of(a), row_of(c)))
-            mask[max(j0, 0):min(j1 + 1, h), i] = True
+            j0, j1 = span(v_of(a), v_of(c))
+            mask[max(j0, 0):min(j1, h), i] = True
         else:
             raise ValueError(f'scatola {b.name}: linea sconosciuta {kind}')
     return mask
