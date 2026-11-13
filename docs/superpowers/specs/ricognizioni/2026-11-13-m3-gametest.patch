@@ -1,0 +1,275 @@
+diff --git a/build.gradle.kts b/build.gradle.kts
+index e58230d..82d89ad 100644
+--- a/build.gradle.kts
++++ b/build.gradle.kts
+@@ -69,6 +69,39 @@ repositories {
+     maven("https://repo.maven.apache.org/maven2/") { name = "MavenCentralFallback" }
+ }
+ 
++// SPIKE: server GameTest headless, un task per variante (runGameTestServer), cartella versions/<variante>/run.
++// Il server esce con System.exit(numero di test obbligatori falliti), quindi il JavaExec fallisce se un test fallisce.
++loom {
++    runs {
++        create("gameTestServer") {
++            server()
++            name("GameTest Server")
++            ideConfigGenerated(false)
++            when (loader) {
++                "fabric" -> {
++                    property("fabric-api.gametest")
++                    property("fabric-api.gametest.report-file", project.layout.buildDirectory.file("gametest/report.xml").get().asFile.absolutePath)
++                }
++                "forge" -> {
++                    forgeTemplate("gameTestServer")
++                    property("forge.enabledGameTestNamespaces", project.property("mod.id").toString())
++                    // server() impone il launch target forgeserveruserdev (il template forgegametestserveruserdev non
++                    // passa): senza questa proprieta' parte un server normale, che senza eula esce con 0 e zero test
++                    property("forge.enableGameTest", "true")
++                    property("forge.gameTestServer", "true")
++                }
++                "neoforge" -> {
++                    forgeTemplate("gameTestServer")
++                    property("neoforge.enabledGameTestNamespaces", project.property("mod.id").toString())
++                    // il template di userdev non arriva al task di Loom: senza questa proprieta' parte un server normale
++                    property("neoforge.enableGameTest", "true")
++                    property("neoforge.gameTestServer", "true")
++                }
++            }
++        }
++    }
++}
++
+ dependencies {
+     minecraft("com.mojang:minecraft:$mc")
+     mappings(loom.officialMojangMappings())
+diff --git a/src/main/java/com/toxineren/exoframes/gametest/ExoframesGameTests.java b/src/main/java/com/toxineren/exoframes/gametest/ExoframesGameTests.java
+new file mode 100644
+index 0000000..68ee633
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/gametest/ExoframesGameTests.java
+@@ -0,0 +1,70 @@
++package com.toxineren.exoframes.gametest;
++
++import com.toxineren.exoframes.compat.Compat;
++import com.toxineren.exoframes.core.frame.FrameState;
++import com.toxineren.exoframes.platform.GameTestPlayers;
++import java.util.ArrayList;
++import java.util.Collection;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import java.util.function.Consumer;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTestGenerator;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.gametest.framework.TestFunction;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.world.level.block.Blocks;
++
++/**
++ * SPIKE: GameTest in gioco condivisi dalle quattro varianti, senza direttive Stonecutter. I test sono prodotti da
++ * un {@link GameTestGenerator} con il costruttore a 7 argomenti di {@link TestFunction}, identico su 1.20.1 e
++ * 1.21.1, cosi' nome della struttura e namespace sono espliciti e uguali su tutti i loader. Registrazione: su Fabric
++ * l'entrypoint {@code fabric-gametest} (fabric.mod.json) punta a questa classe (serve il costruttore pubblico); su
++ * Forge e NeoForge l'entrypoint in platform/ la registra con {@code RegisterGameTestsEvent}.
++ */
++public final class ExoframesGameTests {
++    /** Struttura vuota 8x8x8 fornita dalla mod: data/redstone_exoframes/structure(s)/empty.nbt. */
++    public static final String EMPTY_STRUCTURE = "redstone_exoframes:empty";
++
++    public static final String NAMESPACE = "redstone_exoframes";
++
++    public ExoframesGameTests() {
++    }
++
++    @GameTestGenerator
++    public static Collection<TestFunction> generate() {
++        List<TestFunction> functions = new ArrayList<>();
++        // nome con namespace: Forge 1.20.1 filtra i test generati per namespace del nome, NeoForge per quello della struttura
++        all().forEach((name, test) -> functions.add(
++                new TestFunction(NAMESPACE, NAMESPACE + ":" + name, EMPTY_STRUCTURE, 100, 0L, true, test)));
++        return functions;
++    }
++
++    /** I test, per nome (senza namespace), nell'ordine di esecuzione. */
++    public static Map<String, Consumer<GameTestHelper>> all() {
++        Map<String, Consumer<GameTestHelper>> tests = new LinkedHashMap<>();
++        tests.put("trivial_block", ExoframesGameTests::trivialBlock);
++        tests.put("frame_state_mock_player", ExoframesGameTests::frameStateMockPlayer);
++        return tests;
++    }
++
++    /** Prova del cablaggio: piazza un blocco e verifica che ci sia. */
++    public static void trivialBlock(GameTestHelper helper) {
++        BlockPos pos = new BlockPos(1, 1, 1);
++        helper.setBlock(pos, Blocks.REDSTONE_BLOCK);
++        helper.assertBlockPresent(Blocks.REDSTONE_BLOCK, pos);
++        helper.succeed();
++    }
++
++    /** Stato del telaio per giocatore su un giocatore finto: update, poi get. */
++    public static void frameStateMockPlayer(GameTestHelper helper) {
++        ServerPlayer player = GameTestPlayers.mockServerPlayer(helper);
++        Compat.frameState().update(player, state -> state.setReinforced(true));
++        Optional<FrameState> state = Compat.frameState().get(player);
++        helper.assertTrue(state.isPresent(), "frame state missing after update");
++        helper.assertTrue(state.get().reinforced(), "frame state not reinforced after update");
++        helper.succeed();
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/platform/GameTestPlayers.java b/src/main/java/com/toxineren/exoframes/platform/GameTestPlayers.java
+new file mode 100644
+index 0000000..2731543
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/platform/GameTestPlayers.java
+@@ -0,0 +1,46 @@
++package com.toxineren.exoframes.platform;
++
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.server.level.ServerPlayer;
++//? if <1.21 {
++/*import com.mojang.authlib.GameProfile;
++import io.netty.channel.embedded.EmbeddedChannel;
++import java.util.UUID;
++import net.minecraft.network.Connection;
++import net.minecraft.network.protocol.PacketFlow;
++*///?}
++
++/**
++ * SPIKE: giocatore finto per i GameTest. Su 1.20.1 la Connection finta di {@code makeMockServerPlayerInLevel()} non ha
++ * canale: su Forge lancia un NPE dentro Forge ({@code NetworkHooks.sendMCRegistryPackets} ->
++ * {@code NetworkFilters.injectIfNecessary} legge {@code connection.channel().pipeline()}), su Fabric ogni invio resta
++ * in coda senza mai essere scritto. Su 1.20.1 si rifa' quindi lo stesso giocatore con la Connection agganciata a un
++ * {@code EmbeddedChannel}, come fa gia' 1.21.1; su 1.21.1 si usa il metodo vanilla.
++ */
++public final class GameTestPlayers {
++    private GameTestPlayers() {
++    }
++
++    public static ServerPlayer mockServerPlayer(GameTestHelper helper) {
++        //? if <1.21 {
++        /*ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
++                new GameProfile(UUID.randomUUID(), "test-mock-player")) {
++            @Override
++            public boolean isSpectator() {
++                return false;
++            }
++
++            @Override
++            public boolean isCreative() {
++                return true;
++            }
++        };
++        Connection connection = new Connection(PacketFlow.SERVERBOUND);
++        new EmbeddedChannel(connection); // channelActive imposta connection.channel
++        helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player);
++        return player;
++        *///?} else {
++        return helper.makeMockServerPlayerInLevel();
++        //?}
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesForge.java b/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesForge.java
+index 0d5fee6..7c72c90 100644
+--- a/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesForge.java
++++ b/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesForge.java
+@@ -3,9 +3,11 @@ package com.toxineren.exoframes.platform;
+ //? if forge {
+ /*import com.toxineren.exoframes.RedstoneExoframes;
+ import com.toxineren.exoframes.compat.Compat;
++import com.toxineren.exoframes.gametest.ExoframesGameTests;
+ import dev.architectury.platform.forge.EventBuses;
+ import dev.architectury.utils.Env;
+ import dev.architectury.utils.EnvExecutor;
++import net.minecraftforge.event.RegisterGameTestsEvent;
+ import net.minecraftforge.fml.common.Mod;
+ import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+ 
+@@ -18,6 +20,8 @@ public final class RedstoneExoframesForge {
+         EventBuses.registerModEventBus(RedstoneExoframes.MOD_ID, FMLJavaModLoadingContext.get().getModEventBus());
+         RedstoneExoframes.init();
+         EnvExecutor.runInEnv(Env.CLIENT, () -> () -> Compat.frameState().registerClient());
++        // SPIKE: GameTest (l'evento parte solo con forge.enableGameTest / gameTestServer, mai in produzione)
++        FMLJavaModLoadingContext.get().getModEventBus().addListener((RegisterGameTestsEvent event) -> event.register(ExoframesGameTests.class));
+     }
+ }
+ *///?}
+diff --git a/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesNeoForge.java b/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesNeoForge.java
+index d93e6f2..5da073e 100644
+--- a/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesNeoForge.java
++++ b/src/main/java/com/toxineren/exoframes/platform/RedstoneExoframesNeoForge.java
+@@ -3,10 +3,12 @@ package com.toxineren.exoframes.platform;
+ //? if neoforge {
+ import com.toxineren.exoframes.RedstoneExoframes;
+ import com.toxineren.exoframes.compat.Compat;
++import com.toxineren.exoframes.gametest.ExoframesGameTests;
+ import dev.architectury.utils.Env;
+ import dev.architectury.utils.EnvExecutor;
+ import net.neoforged.bus.api.IEventBus;
+ import net.neoforged.fml.common.Mod;
++import net.neoforged.neoforge.event.RegisterGameTestsEvent;
+ 
+ // Entrypoint NeoForge: Architectury 13 non richiede la registrazione del bus del mod; le registrazioni solo
+ // client girano solo sul client.
+@@ -15,6 +17,8 @@ public final class RedstoneExoframesNeoForge {
+     public RedstoneExoframesNeoForge(IEventBus modBus) {
+         RedstoneExoframes.init();
+         EnvExecutor.runInEnv(Env.CLIENT, () -> () -> Compat.frameState().registerClient());
++        // SPIKE: GameTest (l'evento parte solo con neoforge.enableGameTest / gameTestServer, mai in produzione)
++        modBus.addListener(RegisterGameTestsEvent.class, event -> event.register(ExoframesGameTests.class));
+     }
+ }
+ //?}
+diff --git a/src/main/resources/data/redstone_exoframes/structure/empty.nbt b/src/main/resources/data/redstone_exoframes/structure/empty.nbt
+new file mode 100644
+index 0000000000000000000000000000000000000000..fe3a78e246b901d2f57ed53ef5c55dc214fdedb3
+GIT binary patch
+literal 1398
+zcmd7G&r4Hr008j)RHt)-nlKSwkTHyvhe<=I_w@&~Jj6Q;4_=xCv4qM@qgFk>+bS<n
+zI~W*9ezy+oA}B}%k!=%UhaJ98hS;Ij>kxY|vL`;bx98jUTYtv;96!v<mKM{07JBo}
+zy@kkyyEhh0ufA`+KD*~$+&yaG>ACTp9oIX*bo!&yckA<+gY3gUW=G)4+WE<i$@O!O
+z-k;j@CjytrVWV(T$gGA+*8zNd>1zY$1DP#SUCaL+WD*^aWtdu}fN`x>_J`IFf9=wz
+z_1|^1y1dU}Ci6vC$d5v0IiJrH`KZj$M)kp)(Cl%g{0V^LOfV670wa*j)#*y~+V+R(
+z;)eU1_x8c;MKf>FY>Gqb5<E$61Vvc~->LO06Vj64NpWN7Icw)zwQglV3JU2YH;UqH
+zJKw7fDKk=0NT;}Qw8&cdCe5k1C7%#Z;t>>M+xQ;Mt4v9oLO6xT&<nPicWHgfurx1}
+zlXw)JtgvR{khv(d=v^W*QJd<?0z;I8OvqducIrzaveACklLLk*I~kC<7;M#pBC^nK
+zHJt^9sCF_VbI)L}UKCLi9a7UdV2H93w~V8(N%x7!Or2^t3k*?hWJ<<y*rRWX$WFa#
+wI0p<-&16`{G3e6gMP#LYYB>uGP-Gi0tEd$E8A2J_Ayw*w;Zp4F{i`O^KYgI|0RR91
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/main/resources/data/redstone_exoframes/structures/empty.nbt b/src/main/resources/data/redstone_exoframes/structures/empty.nbt
+new file mode 100644
+index 0000000000000000000000000000000000000000..fe3a78e246b901d2f57ed53ef5c55dc214fdedb3
+GIT binary patch
+literal 1398
+zcmd7G&r4Hr008j)RHt)-nlKSwkTHyvhe<=I_w@&~Jj6Q;4_=xCv4qM@qgFk>+bS<n
+zI~W*9ezy+oA}B}%k!=%UhaJ98hS;Ij>kxY|vL`;bx98jUTYtv;96!v<mKM{07JBo}
+zy@kkyyEhh0ufA`+KD*~$+&yaG>ACTp9oIX*bo!&yckA<+gY3gUW=G)4+WE<i$@O!O
+z-k;j@CjytrVWV(T$gGA+*8zNd>1zY$1DP#SUCaL+WD*^aWtdu}fN`x>_J`IFf9=wz
+z_1|^1y1dU}Ci6vC$d5v0IiJrH`KZj$M)kp)(Cl%g{0V^LOfV670wa*j)#*y~+V+R(
+z;)eU1_x8c;MKf>FY>Gqb5<E$61Vvc~->LO06Vj64NpWN7Icw)zwQglV3JU2YH;UqH
+zJKw7fDKk=0NT;}Qw8&cdCe5k1C7%#Z;t>>M+xQ;Mt4v9oLO6xT&<nPicWHgfurx1}
+zlXw)JtgvR{khv(d=v^W*QJd<?0z;I8OvqducIrzaveACklLLk*I~kC<7;M#pBC^nK
+zHJt^9sCF_VbI)L}UKCLi9a7UdV2H93w~V8(N%x7!Or2^t3k*?hWJ<<y*rRWX$WFa#
+wI0p<-&16`{G3e6gMP#LYYB>uGP-Gi0tEd$E8A2J_Ayw*w;Zp4F{i`O^KYgI|0RR91
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/main/resources/fabric.mod.json b/src/main/resources/fabric.mod.json
+index cc854c1..a3aa1ec 100644
+--- a/src/main/resources/fabric.mod.json
++++ b/src/main/resources/fabric.mod.json
+@@ -10,7 +10,8 @@
+   "environment": "*",
+   "entrypoints": {
+     "main": ["com.toxineren.exoframes.platform.RedstoneExoframesFabric"],
+-    "client": ["com.toxineren.exoframes.platform.RedstoneExoframesFabricClient"]
++    "client": ["com.toxineren.exoframes.platform.RedstoneExoframesFabricClient"],
++    "fabric-gametest": ["com.toxineren.exoframes.gametest.ExoframesGameTests"]
+   },
+   "depends": {
+     "fabricloader": "${loader_range}",
