@@ -7,6 +7,7 @@ import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -15,7 +16,8 @@ import java.util.Set;
  *
  * <p>La quota primaria ({@code primaryShare}) va in parti uguali ai pezzi primari del tipo di danno
  * che sono montati e non rotti; il resto va agli altri pezzi montati e non rotti in proporzione a
- * {@link PieceSlot#protectionShare()}. Se nessun primario puo' assorbire, la quota primaria si somma al
+ * {@code pieces.shares} della config (una posizione assente dalla mappa vale 0; se le quote dei
+ * destinatari sommano a 0 il resto si divide in parti uguali). Se nessun primario puo' assorbire, la quota primaria si somma al
  * resto; se puo' assorbire solo qualche primario, il resto va ai primari. I pezzi rotti o assenti non
  * ricevono nulla. Gli interi si ottengono con il metodo dei resti maggiori (a parita' di resto vince il
  * pezzo che viene prima in {@link PieceSlot}), cosi' la somma e' esattamente {@code amount}.
@@ -36,17 +38,31 @@ public final class DamageRouter {
     }
 
     private final double primaryShare;
+    private final Map<PieceSlot, Double> shares;
 
-    /** Router con la quota primaria della sezione danno della config ({@code damage.primaryShare}). */
-    public DamageRouter(ExoframesConfig.Damage damage) {
-        this(damage.primaryShare);
-    }
-
-    public DamageRouter(double primaryShare) {
-        if (!(primaryShare >= 0.0 && primaryShare <= 1.0)) {
-            throw new IllegalArgumentException("primaryShare must be in [0, 1]: " + primaryShare);
+    /**
+     * Router costruito dalla config: quota primaria da {@code damage.primaryShare}, quote dei pezzi da
+     * {@code pieces.shares} (copiate alla costruzione).
+     *
+     * @throws IllegalArgumentException se la quota primaria non e' in [0, 1] o una quota e' negativa o non finita
+     */
+    public DamageRouter(ExoframesConfig.Damage damage, ExoframesConfig.Pieces pieces) {
+        double primary = Objects.requireNonNull(damage, "damage").primaryShare;
+        if (!(primary >= 0.0 && primary <= 1.0)) {
+            throw new IllegalArgumentException("primaryShare must be in [0, 1]: " + primary);
         }
-        this.primaryShare = primaryShare;
+        Map<PieceSlot, Double> configured = Objects.requireNonNull(Objects.requireNonNull(pieces, "pieces").shares, "shares");
+        Map<PieceSlot, Double> copy = new EnumMap<>(PieceSlot.class);
+        for (PieceSlot slot : PieceSlot.values()) {
+            Double share = configured.get(slot);
+            double value = share == null ? 0.0 : share;
+            if (!(Double.isFinite(value) && value >= 0.0)) {
+                throw new IllegalArgumentException("share of " + slot + " must be finite and >= 0: " + share);
+            }
+            copy.put(slot, value);
+        }
+        this.primaryShare = primary;
+        this.shares = copy;
     }
 
     public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted) {
@@ -72,7 +88,7 @@ public final class DamageRouter {
         double otherPart = amount - primaryPart;
         double otherShares = 0.0;
         for (PieceSlot slot : others) {
-            otherShares += slot.protectionShare();
+            otherShares += shares.get(slot);
         }
 
         // Quote esatte, nell'ordine di dichiarazione di PieceSlot.
@@ -84,7 +100,9 @@ public final class DamageRouter {
                 quotas.add(primaryPart / primary.size());
             } else if (others.contains(slot)) {
                 slots.add(slot);
-                quotas.add(otherPart * slot.protectionShare() / otherShares);
+                quotas.add(otherShares > 0.0
+                        ? otherPart * shares.get(slot) / otherShares
+                        : otherPart / others.size());
             }
         }
 

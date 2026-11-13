@@ -11,7 +11,11 @@ import org.junit.jupiter.api.Test;
 
 class DamageRouterTest {
 
-    private final DamageRouter router = new DamageRouter(ExoframesConfig.defaults().damage);
+    private final DamageRouter router = newRouter(ExoframesConfig.defaults());
+
+    private static DamageRouter newRouter(ExoframesConfig cfg) {
+        return new DamageRouter(cfg.damage, cfg.pieces);
+    }
 
     private static Map<PieceSlot, Piece> fullSet() {
         Map<PieceSlot, Piece> mounted = new EnumMap<>(PieceSlot.class);
@@ -93,5 +97,25 @@ class DamageRouterTest {
                 assertEquals(0, split.unabsorbed(), kind + " " + amount);
             }
         }
+    }
+
+    @Test
+    void routerFollowsConfiguredShares() {
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        cfg.pieces.shares.put(PieceSlot.HELMET, 0.10);
+        cfg.pieces.shares.put(PieceSlot.TORSO, 0.50);
+        cfg.pieces.shares.put(PieceSlot.LEFT_ARM, 0.05);
+        cfg.pieces.shares.put(PieceSlot.RIGHT_ARM, 0.05);
+        cfg.pieces.shares.put(PieceSlot.LEFT_LEG, 0.15);
+        cfg.pieces.shares.put(PieceSlot.RIGHT_LEG, 0.15);
+        DamageRouter.Split split = newRouter(cfg).route(DamageKind.GENERIC, 100, fullSet());
+        Map<PieceSlot, Integer> p = split.perPiece();
+        assertEquals(10, p.get(PieceSlot.HELMET));
+        assertEquals(50, p.get(PieceSlot.TORSO));
+        assertEquals(5, p.get(PieceSlot.LEFT_ARM));
+        assertEquals(5, p.get(PieceSlot.RIGHT_ARM));
+        assertEquals(15, p.get(PieceSlot.LEFT_LEG));
+        assertEquals(15, p.get(PieceSlot.RIGHT_LEG));
+        assertEquals(0, split.unabsorbed());
     }
 }
