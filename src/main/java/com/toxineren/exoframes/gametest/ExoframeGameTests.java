@@ -1,5 +1,7 @@
 package com.toxineren.exoframes.gametest;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.Ids;
@@ -14,13 +16,17 @@ import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
+import com.toxineren.exoframes.frame.DebugWear;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestGenerator;
@@ -28,9 +34,11 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -51,6 +59,8 @@ public final class ExoframeGameTests {
     /** Struttura vuota 8x8x8 della mod: data/redstone_exoframes/structures/empty.nbt (1.20.1) e structure/ (1.21). */
     private static final String EMPTY_STRUCTURE = RedstoneExoframes.MOD_ID + ":empty";
     private static final int MAX_TICKS = 100;
+    private static final List<EquipmentSlot> ARMOR_SLOTS =
+            List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
 
     /** Costruttore pubblico senza argomenti: GameTestRegistry vanilla istanzia la classe per chiamare il generatore. */
     public ExoframeGameTests() {
@@ -63,6 +73,9 @@ public final class ExoframeGameTests {
         add(tests, "frameStateOnMockPlayer", ExoframeGameTests::frameStateOnMockPlayer);
         add(tests, "itemDataRoundTripsOnARealStack", ExoframeGameTests::itemDataRoundTripsOnARealStack);
         add(tests, "placeholdersAreArmorItems", ExoframeGameTests::placeholdersAreArmorItems);
+        add(tests, "debugWearPutsPlaceholdersAndSummary", ExoframeGameTests::debugWearPutsPlaceholdersAndSummary);
+        add(tests, "debugWearRemoveClearsEverything", ExoframeGameTests::debugWearRemoveClearsEverything);
+        add(tests, "debugWearWithStateAndColors", ExoframeGameTests::debugWearWithStateAndColors);
         return tests;
     }
 
@@ -129,6 +142,124 @@ public final class ExoframeGameTests {
             helper.assertTrue(max == 1, "max stack size of " + id + " is " + max + ", expected 1");
         });
         helper.succeed();
+    }
+
+    /**
+     * {@link DebugWear#wear} su un giocatore con un elmo di ferro: i quattro slot armatura hanno i segnaposto, il
+     * torso porta il riassunto (sei pezzi SCRAP INTACT non dipinti) e l'elmo di ferro e' finito nell'inventario.
+     */
+    private static void debugWearPutsPlaceholdersAndSummary(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        Map<PieceSlot, PieceLook> pieces = new EnumMap<>(PieceSlot.class);
+        for (PieceSlot slot : PieceSlot.values()) {
+            pieces.put(slot, new PieceLook(Tier.SCRAP, PieceCondition.INTACT, Appearance.DEFAULT));
+        }
+        SuitSummary summary = new SuitSummary(pieces);
+
+        DebugWear.wear(player, summary);
+
+        assertPlaceholdersWorn(helper, player);
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(Optional.of(summary).equals(written), "wrong suit summary on the torso: " + written);
+        helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 1,
+                "iron helmet not moved to the inventory");
+        helper.succeed();
+    }
+
+    /**
+     * {@link DebugWear#remove} toglie i segnaposto dagli slot armatura e dal resto dell'inventario. Un secondo
+     * {@code wear} sostituisce i segnaposto gia' indossati senza metterli nell'inventario.
+     */
+    private static void debugWearRemoveClearsEverything(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        DebugWear.wear(player, SuitSummary.BARE);
+        helper.assertTrue(countPlaceholders(player) == 4,
+                "wearing twice left " + countPlaceholders(player) + " placeholders, expected 4");
+        player.getInventory().items.set(5, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+
+        DebugWear.remove(player);
+
+        helper.assertTrue(countPlaceholders(player) == 0,
+                countPlaceholders(player) + " placeholders left after remove");
+        for (EquipmentSlot slot : ARMOR_SLOTS) {
+            helper.assertTrue(player.getItemBySlot(slot).isEmpty(), "armor slot not empty after remove: " + slot);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Il comando {@code /exoframe debug wear rottame 2 <primario> <secondario>}: sei pezzi SCRAP CRITICAL con i
+     * colori dati. Prima un colore malformato fa fallire il comando senza cambiare nulla.
+     */
+    private static void debugWearWithStateAndColors(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+        CommandSourceStack source = player.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+
+        boolean failed = false;
+        try {
+            dispatcher.execute("exoframe debug wear rottame 2 12345G 00ff00", source);
+        } catch (CommandSyntaxException e) {
+            failed = true;
+        }
+        helper.assertTrue(failed, "a malformed color did not fail the command");
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.CHEST).is(Items.IRON_CHESTPLATE),
+                "a failed command changed the armor slots");
+
+        try {
+            dispatcher.execute("exoframe debug wear rottame 2 Ab12Ef 00ff00", source);
+        } catch (CommandSyntaxException e) {
+            throw new IllegalStateException("command failed: " + e.getMessage(), e);
+        }
+        assertPlaceholdersWorn(helper, player);
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(written.isPresent(), "no suit summary on the torso");
+        helper.assertTrue(written.get().pieces().keySet().equals(EnumSet.allOf(PieceSlot.class)),
+                "summary does not cover the six slots: " + written.get());
+        Appearance painted = new Appearance(0xAB12EF, 0x00FF00, List.of());
+        written.get().pieces().forEach((slot, look) -> helper.assertTrue(
+                look.equals(new PieceLook(Tier.SCRAP, PieceCondition.CRITICAL, painted)),
+                "wrong look for " + slot + ": " + look));
+        helper.assertTrue(countInMainInventory(player, Items.IRON_CHESTPLATE) == 1,
+                "iron chestplate not moved to the inventory");
+        helper.succeed();
+    }
+
+    /** Verifica che i quattro slot armatura abbiano ciascuno il proprio segnaposto. */
+    private static void assertPlaceholdersWorn(GameTestHelper helper, ServerPlayer player) {
+        Map<EquipmentSlot, Item> expected = Map.of(
+                EquipmentSlot.HEAD, ModItems.EXOFRAME_HELMET.get(),
+                EquipmentSlot.CHEST, ModItems.EXOFRAME_TORSO.get(),
+                EquipmentSlot.LEGS, ModItems.EXOFRAME_LEGS.get(),
+                EquipmentSlot.FEET, ModItems.EXOFRAME_BOOTS.get());
+        expected.forEach((slot, item) -> helper.assertTrue(player.getItemBySlot(slot).is(item),
+                "slot " + slot + " holds " + player.getItemBySlot(slot) + ", expected " + item));
+    }
+
+    /** Quanti segnaposto ha il giocatore in tutto l'inventario (slot armatura e mano secondaria compresi). */
+    private static int countPlaceholders(ServerPlayer player) {
+        int count = 0;
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            if (DebugWear.isPlaceholder(player.getInventory().getItem(i))) {
+                count += player.getInventory().getItem(i).getCount();
+            }
+        }
+        return count;
+    }
+
+    /** Quanti item del tipo dato ci sono nell'inventario principale (senza slot armatura e mano secondaria). */
+    private static int countInMainInventory(ServerPlayer player, Item item) {
+        int count = 0;
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.is(item)) {
+                count += stack.getCount();
+            }
+        }
+        return count;
     }
 
     /**

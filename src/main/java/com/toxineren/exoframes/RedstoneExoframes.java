@@ -1,5 +1,6 @@
 package com.toxineren.exoframes;
 
+import com.toxineren.exoframes.command.ExoframeCommand;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModItems;
@@ -25,6 +26,7 @@ public final class RedstoneExoframes {
         ModItems.register();
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
+        ExoframeCommand.register();
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
     }
 

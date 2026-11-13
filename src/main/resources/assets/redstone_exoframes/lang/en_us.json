@@ -4,5 +4,9 @@
   "item.redstone_exoframes.exoframe_torso": "Exoframe Torso Mount",
   "item.redstone_exoframes.exoframe_legs": "Exoframe Leg Mount",
   "item.redstone_exoframes.exoframe_boots": "Exoframe Boot Mount",
-  "itemGroup.redstone_exoframes.main": "Redstone Exoframes"
+  "itemGroup.redstone_exoframes.main": "Redstone Exoframes",
+  "commands.redstone_exoframes.debug.wear.bare": "Wearing the bare exoframe",
+  "commands.redstone_exoframes.debug.wear.scrap": "Wearing the scrap exoframe",
+  "commands.redstone_exoframes.debug.wear.removed": "Removed %s exoframe placeholders",
+  "commands.redstone_exoframes.debug.invalid_color": "Invalid color '%s': expected six hexadecimal digits RRGGBB"
 }

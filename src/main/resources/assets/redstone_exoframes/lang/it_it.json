@@ -4,5 +4,9 @@
   "item.redstone_exoframes.exoframe_torso": "Attacco torso del telaio",
   "item.redstone_exoframes.exoframe_legs": "Attacco gambe del telaio",
   "item.redstone_exoframes.exoframe_boots": "Attacco stivali del telaio",
-  "itemGroup.redstone_exoframes.main": "Redstone Exoframes"
+  "itemGroup.redstone_exoframes.main": "Redstone Exoframes",
+  "commands.redstone_exoframes.debug.wear.bare": "Indossi il telaio nudo",
+  "commands.redstone_exoframes.debug.wear.scrap": "Indossi il telaio di rottame",
+  "commands.redstone_exoframes.debug.wear.removed": "Segnaposto del telaio rimossi: %s",
+  "commands.redstone_exoframes.debug.invalid_color": "Colore non valido '%s': servono sei cifre esadecimali RRGGBB"
 }
