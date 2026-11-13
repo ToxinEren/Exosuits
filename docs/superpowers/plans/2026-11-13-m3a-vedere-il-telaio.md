@@ -254,21 +254,28 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 
 ### Task 11: Telaio ridisegnato (scheletro grande con testa e gambe meccaniche)
 
-> **Da dettagliare (Revisione 1)** quando Luigi approva le tavole della seconda passata della prova d'arte e l'elenco delle modifiche al generatore (`PORTING.md` della prova) è pronto. Fin qui è deciso questo.
-
 **Files:**
-- Modify: `tools/art/exo.py`, `tools/art/paint.py`, `tools/art/build.py`, `tools/art/designs/frame.py`, `tools/art/preview/*`, `tools/art/README.md`, `tools/check_art.sh`, i file di risorse generati, `ExoframeGeometryTest.java`, `docs/arte/README.md`, `docs/arte/anteprime/`
-- Create: `textures/entity/exoframe_glowmask.png` (generata)
+- Modify: `tools/art/exo.py`, `tools/art/paint.py`, `tools/art/build.py`, `tools/art/designs/__init__.py`, `tools/art/designs/frame.py`, `tools/art/preview/`, `tools/art/README.md`, `tools/check_art.sh`, i tre file di risorse generati, `src/test/java/com/toxineren/exoframes/art/ExoframeGeometryTest.java`, `docs/arte/README.md`
+- Create: `assets/redstone_exoframes/textures/entity/exoframe_glowmask.png` (generata), `docs/arte/anteprime/telaio-v2/`
+- Delete: `tools/art/spike/` (il primo spike: il Task 6 ora parte dalla prova d'arte 2)
 
 **Interfaces:**
-- Consumes: generatore del Task 5 (con `HashRng`); disegno e pittura della prova d'arte approvata; design §4.7 e §5.1.
+- Consumes: generatore del Task 5 nel repo (`HashRng`, `compare_png.py`, errore del packer per la faccia più larga della regione: restano); la prova d'arte 2, fuori dal repo, con `designs/frame.py`, `exo.py`, `paint.py`, `build.py`, `designs/__init__.py`, `preview/scene.html`, `preview/shot.js`, `PORTING.md` (elenco delle modifiche) e `NOTES.md`; design §4.7 e §5.1. Tavole viste da Luigi: seconda passata del 13 novembre.
 - Produces:
-  - telaio nudo come solo scheletro, con punti di aggancio per i pezzi: testa vera (calotta, guance, mento, visiera aperta), busto a gabbia, cella sulla schiena, bacino a secchio e cosce chiuse che nascondono il volume delle gambe del pilota, ginocchia, stinchi e piedi meccanici, avambracci con impugnature dei comandi e mani meccaniche;
-  - stessi nomi e perni delle ossa di oggi (Global Constraints); nessuna scatola ruotata, salvo decisione scritta nel rapporto;
-  - ingombro: x ±9,5, y 0..30,7, z −7..9 in pixel del modello;
-  - densità di due texel per pixel e atlante più grande, con le regioni dei pezzi riservate;
-  - nel generatore la costante della scala (1,4) e la figura del pilota ridotta di 1/S attorno a (0, 24, 0), senza gambe, usata dal controllo delle distanze e dalle anteprime;
-  - anteprime nuove in `docs/arte/anteprime/` e `docs/arte/README.md` aggiornato.
+  - `exo.py`: costanti di modulo `SUIT_SCALE = 1.4` e `PILOT_LIFT_PX = 24 * (SUIT_SCALE - 1)`; `DENSITY = 2` e `texels(length)`; `ATLAS_SIZE = (512, 512)` con regioni `frame` righe 0..127, `piece_s0` 128..223, `piece_s1` 224..319, `piece_s2` 320..415, `piece_s3` 416..511; limiti `FRAME_MIN/FRAME_MAX` (x ±9,5, y 0..30,7, z −7..9) per le ossa del telaio e `SUIT_MIN/SUIT_MAX` (x ±10,75, y 0..31,5, z −8..9,5) per i pezzi; `Model.check()` misura le distanze tra il modello scalato di `SUIT_SCALE` attorno ai piedi e la figura del pilota a grandezza normale sollevata di `PILOT_LIFT_PX`, gambe escluse, con i margini di oggi (0,25 px corpo e braccia, 0,5 px testa).
+  - `paint.py`: la pittura da metallo della prova (materiali `gun`, `steel`, `brass`, `chrome`, `cable`, `rubber`, `vent`, `cell`, `lamp`, `paint`, `pipe`, `glass`); ogni scelta casuale passa da `HashRng`, che su intervallo o lista vuoti solleva `ValueError`; `paint_model` restituisce atlante e maschera luminosa.
+  - `build.py`: scrive anche `textures/entity/exoframe_glowmask.png`; `--out` predefinito come oggi; nel repo entra solo `designs/frame.py` (i pezzi di `scrap.py` sono il Task 6).
+  - `designs/frame.py`: lo scheletro della prova, senza scatole ruotate: testa con visiera aperta, busto a gabbia, cella sulla schiena, bacino e cosce chiuse che nascondono il volume delle gambe del pilota, ginocchia, stinchi e piedi meccanici, avambracci con impugnature e mani meccaniche, punti di aggancio per i pezzi. Stessi nomi e perni delle ossa (Global Constraints).
+  - `tools/check_art.sh`: confronta anche la maschera luminosa, per pixel come l'atlante.
+  - `ExoframeGeometryTest`: atlante 512×512; riquadro delle ossa del telaio x ±9,5, y 0..30,7, z −7..9; il resto invariato.
+  - anteprime: visore che disegna la tuta in scala con il pilota sollevato e senza gambe, griglia a blocchi (17,07 px), porta e box di collisione; un comando documentato nel README rifà le viste standard. Le tavole composte della prova (`make.py`) non entrano nel repo.
+  - `docs/arte/README.md`: telaio v2, divisione tra scheletro e pezzi, misure in blocchi; anteprime in `docs/arte/anteprime/telaio-v2/` (fronte, retro, lato, confronto con porta), PNG senza metadati. Le anteprime del primo telaio restano come storico.
+
+- [ ] **Step 1: test** — in `ExoframeGeometryTest` portare a 512×512 la dimensione dell'atlante e al nuovo riquadro i limiti del telaio. Expected: FAIL contro i file committati (primo telaio, 256×256).
+- [ ] **Step 2: portare** generatore e disegno seguendo `PORTING.md`, partendo dai file del repo (non sovrascriverli con quelli della prova: la prova è partita da una copia più vecchia); rigenerare; due esecuzioni di `build.py --out` devono dare cartelle identiche; `bash tools/check_art.sh` stampa `OK art`, e fallisce se si cambia un texel della maschera luminosa committata.
+- [ ] **Step 3: anteprime** — generarle, guardarle (fronte, retro, lato, primo piano di testa e gamba), correggere parti sospese o compenetrate; salvarle in `docs/arte/anteprime/telaio-v2/`.
+- [ ] **Step 4: verificare** — test PASS su `1.21.1-neoforge` e `1.20.1-forge`; build delle quattro varianti; `OK jars` (i PNG nei jar senza metadati), `OK sources`.
+- [ ] **Step 5:** `tools/art/README.md` e `docs/arte/README.md`; commit `art: telaio ridisegnato, scheletro in scala 1,4 con testa e gambe meccaniche`.
 
 ### Task 12: Pilota dentro la tuta (due mixin client)
 
@@ -290,7 +297,7 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
   - Configurazione dei mixin per versione (`compatibilityLevel` `JAVA_17` su 1.20.1, `JAVA_21` su 1.21.1), sezione `client`, `defaultRequire` 1; dichiarata nei metadati di ogni loader.
   - Regola 7 di `check_sources.sh` estesa: `mixin.client` è un package solo client. `check_jars.sh`: ogni jar contiene la configurazione, le due classi che elenca, il refmap dove il loader lo richiede, e il riferimento alla configurazione nei metadati del loader.
 
-- [ ] **Step 1: test** — `PilotPoseTest` (in `src/test/java/.../client/`): `legsAreAlwaysHidden`, `bareFrameHidesOnlyTheLegs`, `eachMountedPieceHidesItsPart`, `brokenPieceStillHidesItsPart`; in `SuitScaleTest`: `suitArmPivotOffsetMatchesTheScale` (il perno del braccio della tuta, scalato attorno ai piedi e abbassato del sollevamento, dista (2, 0,8) px da quello del pilota).
+- [ ] **Step 1: test** — `PilotPoseTest` (in `src/test/java/.../client/`): `legsAreAlwaysHidden`, `bareFrameHidesOnlyTheLegs`, `eachMountedPieceHidesItsPart`, `brokenPieceStillHidesItsPart`; in `SuitScaleTest`: `suitArmPivotOffsetMatchesTheScale` (il perno del braccio della tuta, scalato attorno ai piedi e abbassato del sollevamento, dista (2, 0,8) px da quello del pilota). Se il Task 11 è già unito: `SuitScaleTest.matchesTheArtGenerator` (legge `SUIT_SCALE` da `tools/art/exo.py` e lo confronta con `SuitScale.S`); altrimenti quel test lo aggiunge il task che arriva per secondo.
 - [ ] **Step 2: Run** — Expected: FAIL.
 - [ ] **Step 3: implementare**; prima verificare con `javap` sulle due versioni del gioco le firme di `PlayerRenderer.render`, `setModelProperties`, `ItemInHandLayer.renderArmWithItem` e il proprietario della chiamata a `translateToHand`, e scriverle nel rapporto.
 - [ ] **Step 4: verificare** — build delle quattro varianti; test PASS; test in mondo sulle quattro varianti (il server dedicato parte con i mixin client dichiarati); `OK sources`, `OK jars` con una prova negativa (configurazione tolta da un jar: deve fallire); se esiste lo script del client senza schermo (`docs/` o rapporto della prova), avviare il client di ogni variante e allegare gli screenshot di fronte, retro e lato con `/exoframe debug wear nudo` e con `rottame`.
