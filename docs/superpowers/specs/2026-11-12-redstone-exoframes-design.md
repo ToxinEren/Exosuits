@@ -135,18 +135,18 @@ Da stabilire con l'audit del repo (task 2). Candidati: struttura degli item arma
 ## 7. Decisioni prese il 12 novembre (correggibili da Luigi)
 
 1. **Nome provvisorio confermato per iniziare:** "Redstone Exoframes", mod id `redstone_exoframes`. Repo di destinazione creato da Luigi: `ToxinEren/Exosuits` (privato, branch `main`); il nome del repo non vincola il nome del mod. La ricerca web non trova mod con questo nome (i più vicini: EXO-Craft, Exotronics); l'API di Modrinth non era raggiungibile dalla sessione cloud: Luigi verifica dal browser prima della pubblicazione. Rinominare dopo è possibile ma tocca tutto il progetto.
-2. **Licenza:** codice MIT, asset (texture, modelli, suoni, animazioni) "Tutti i diritti riservati". Facilita l'ingresso nei modpack e la fiducia, protegge la parte che costa di più. Il repo nasce **privato**; si rende pubblico quando Luigi decide.
+2. **Licenza:** tutti i diritti riservati, per il codice e per gli asset (deciso da Luigi il 13 novembre: MIT gli sembrava troppo aperta). Resta consentito giocare con il mod, mostrarlo in video e includerlo nei modpack distribuiti tramite CurseForge e Modrinth; il testo è in `LICENSE`. Il repo resta **privato**.
 3. **Base di codice:** nuovo repo con storia pulita; i sistemi riusabili di Mjolnir Armor vengono copiati con attribuzione nel README, non "forkati" (la storia di Mjolnir contiene asset Halo che non devono finire in un repo pubblico monetizzato).
 4. **Compatibilità FE/Energy:** dopo la 1.0, dietro interfaccia già prevista nel caricatore.
 5. **Telaio sui server:** default solo il proprietario; opzione di config per sbloccare.
-6. **Stile visivo:** rimandato alla milestone 3 (serve prima vedere i modelli riusabili da Mjolnir); nel frattempo i modelli di prova sono grigi/neutri.
+6. **Stile visivo:** industriale pesante: sagoma massiccia, piastre rivettate, pistoni a vista (deciso il 13 novembre, vedi il punto 11).
 7. **Multiloader/multiversione:** approccio B del §4.
 8. **Divisione del lavoro:** sessione cloud = codice, build, test unitari, documentazione; Jarvis e le sessioni locali = test in gioco, screenshot, bilanciamento, pubblicazione. Ogni milestone chiude con una checklist in `docs/test-in-gioco/`.
 9. **Accesso al telaio nell'alpha (M5 arriva prima del mondo, M6):** il telaio e i pezzi Rottame si craftano al banco da lavoro (telaio: ferro + rame + redstone; pezzi T1 come da doc "crafting base"); il villaggio in rovina in M6 diventa una via alternativa, non l'unica.
-10. **Personalizzazione per milestone:** vernici primaria/secondaria e preset in M4 (quindi nell'alpha); decalcomanie da stendardo in M7 (richiedono composizione delle texture a runtime). In attesa di conferma di Luigi.
-11. **Asset:** si riusa da Mjolnir solo il codice (renderer, classi modello, controller di animazione, HUD); geometrie, texture, animazioni e suoni sono nuovi perché le forme MJOLNIR sono IP Halo. La sessione cloud produce modelli e texture placeholder puliti e una specifica asset (nomi dei bone, UV, maschere di tinta) per chi farà quelli definitivi. Chi li fa e se l'alpha può uscire con i placeholder: in attesa di Luigi (§10).
+10. **Personalizzazione per milestone:** vernici primaria/secondaria e preset in M4; decalcomanie da stendardo **nell'alpha** (deciso da Luigi il 13 novembre): entrano entro M5, prima della pubblicazione. Richiedono la composizione delle texture a runtime, quindi il renderer di M3 nasce già con un layer per la decalcomania su spalla e torso.
+11. **Asset:** si riusa da Mjolnir solo il codice (renderer, classi modello, controller di animazione, HUD); geometrie, texture, animazioni e suoni sono nuovi perché le forme MJOLNIR sono IP Halo. **Li realizza la sessione cloud** (deciso da Luigi il 13 novembre): modelli GeckoLib e texture generati via codice, con immagini di anteprima da mostrare a Luigi prima dell'integrazione. Direzione artistica indicata da Luigi: ispirazione alle power armor di Fallout 4 e a Iron Monger (Iron Man, 2008). Dell'ispirazione si prende l'idea generale (esoscheletro industriale ingombrante), non le forme: nessun elemento riconoscibile di quei design, come chiede il vincolo IP del documento di gioco e come serve per non rischiare la rimozione da CurseForge e Modrinth. L'alpha esce con questi asset, che restano sostituibili da un artista.
 12. **Automazione in M1:** workflow GitHub Actions che compila i quattro jar a ogni push, così Jarvis scarica gli artefatti senza che la sessione cloud debba restare viva.
-13. **Il telaio non cambia le dimensioni del giocatore** (nessuna dipendenza da Pehkui); da confermare entro la fine di M2 perché il sì cambierebbe M3 (mixin su dimensioni, camera e collisioni).
+13. **Il telaio non cambia le dimensioni del giocatore** (nessuna dipendenza da Pehkui). Nessuna obiezione di Luigi alla fine di M2: si procede così.
 14. **Stato del telaio per giocatore** in SavedData del server + sync al client (una sola implementazione sui quattro target), non attachment per loader.
 
 ## 8. Milestone e criteri di accettazione
@@ -155,9 +155,9 @@ Da stabilire con l'audit del repo (task 2). Candidati: struttura degli item arma
 |---|---|---|---|
 | 1 | Setup | Le 4 varianti compilano da zero (`clean chiseledBuild`) e producono 4 jar con un item di prova registrato, icona e nome; i 4 jar si avviano su client e server dedicati fino a "Done" | build: cloud · avvio: PC |
 | 2 | Core | `core/` implementa energia, consumo per azione, danni per pezzo, stati, moduli, tier, con test unitari verdi (JUnit 5) e config model serializzabile; `compat/` implementato per 1.20.1 e 1.21.1 | cloud |
-| 3 | Telaio | Entità telaio piazzabile, ingresso/uscita, pezzi negli slot bloccati, effetti base, tier Rottame completo con modelli GeckoLib (riuso Mjolnir), cella e caricatore | cloud + test PC |
+| 3 | Telaio | Entità telaio piazzabile, ingresso/uscita, pezzi negli slot bloccati, effetti base, tier Rottame completo con modelli GeckoLib nuovi generati in sessione (codice di rendering riusato da Mjolnir), cella e caricatore | cloud + test PC |
 | 4 | Stazione e HUD | Blocco stazione con GUI, riparazione, verniciatura, HUD, tasti | cloud + test PC |
-| 5 | Alpha pubblica | Tier 1–3, cinque moduli (jetpack, onda d'urto, visore, lama, servomotori), caricatore e celle; pubblicazione su Modrinth e CurseForge, Rewards attivi, Discord aperto | PC (pubblicazione) |
+| 5 | Alpha pubblica | Tier 1–3, cinque moduli (jetpack, onda d'urto, visore, lama, servomotori), caricatore e celle, decalcomanie da stendardo; pubblicazione su Modrinth e CurseForge, Rewards attivi, Discord aperto | PC (pubblicazione) |
 | 6 | Mondo | Villaggio in rovina, Illager Corazzato, bottino | cloud + test PC |
 | 7 | Release 1.0 | Tier 4–5, moduli restanti, Laboratorio sepolto, bilanciamento, config completa | cloud + test PC |
 
@@ -174,13 +174,15 @@ Regola trasversale (dal Claude Doc): ogni milestone si compila e si avvia su tut
 
 ## 10. Domande aperte (per Luigi)
 
-- [ ] **Arte:** chi realizza geometrie, texture, animazioni e suoni definitivi (Luigi con Blockbench, un artista esterno)? L'alpha può uscire con i placeholder della sessione cloud? Proposta in attesa: placeholder nell'alpha, asset definitivi entro la 1.0.
-- [ ] **Decalcomanie:** nell'alpha o nella 1.0? Proposta: 1.0 (§7.10).
-- [ ] **Provenienza del codice di Mjolnir:** tutto di Luigi, o contiene parti da template/tutorial/altri mod con licenza (GPL/LGPL) incompatibile con MIT? Verifica anche nell'audit.
-- [ ] **Scadenze:** c'è una data obiettivo per l'alpha o un contest? Senza, le milestone restano come sono.
+- [x] **Arte:** la realizza la sessione cloud, con la direzione artistica del §7.11; l'alpha esce con quegli asset (Luigi, 13 novembre).
+- [x] **Decalcomanie:** nell'alpha (Luigi, 13 novembre; §7.10).
+- [x] **Provenienza del codice di Mjolnir:** tutto di Luigi (13 novembre).
+- [x] **Scadenze:** nessuna (Luigi, 13 novembre): si procede una milestone alla volta.
 - [ ] Conferma del nome definitivo (vedi §7.1).
 - [ ] Il telaio cambia le dimensioni del giocatore (come Mjolnir con Pehkui) o no? Proposta: no, nessuna dipendenza (§7.13).
-- [ ] Repo privato all'inizio e MIT/ARR come licenza: va bene?
-- [ ] Account/organizzazione GitHub di destinazione per `redstone-exoframes` (decide anche il package Java `it.<group>.exoframes`).
+- [x] Repo privato; licenza tutti i diritti riservati per codice e asset (Luigi, 13 novembre; §7.2).
+- [x] Repo di destinazione: `ToxinEren/Exosuits`; package Java `com.toxineren.exoframes`.
+- [x] **Dati personali:** nei jar pubblicati non devono esserci dati personali (Luigi, 13 novembre): controllo automatico in `tools/check_jars.sh`, eseguito dalla CI a ogni build.
+- [x] **Test in gioco sul PC:** dal 14 novembre (Jarvis), con `docs/test-in-gioco/m1-setup.md` e `m2b-compat.md`; il server dedicato è già stato provato nel cloud sulle quattro varianti.
 
 Il Claude Doc del 4 novembre è esportato integralmente in `docs/superpowers/specs/claude-doc-2026-11-04-redstone-exoframes.md`, così chi costruisce non dipende dall'accesso al doc originale.
