@@ -1,0 +1,12 @@
+{
+  "name": "exoframe-preview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anteprime locali della grafica del telaio (three.js in Chromium senza schermo)",
+  "scripts": {
+    "render": "node render.js"
+  },
+  "dependencies": {
+    "three": "0.169.0"
+  }
+}
