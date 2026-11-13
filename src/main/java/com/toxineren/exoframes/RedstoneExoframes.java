@@ -5,7 +5,9 @@ import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
+import dev.architectury.event.events.common.TickEvent;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,6 +29,7 @@ public final class RedstoneExoframes {
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
         ExoframeCommand.register();
+        TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
     }
 

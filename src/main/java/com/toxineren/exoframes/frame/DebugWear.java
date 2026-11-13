@@ -17,7 +17,8 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Vestizione di prova del telaio: mette i quattro segnaposto negli slot armatura vanilla e scrive il riassunto visivo
  * sullo stack del torso, cosi' il layer di rendering ha qualcosa da disegnare. Non tocca lo stato del telaio
- * ({@link Compat#frameState()}): serve solo a vedere la tuta. Lo usa il comando di debug.
+ * ({@link Compat#frameState()}): serve solo a vedere la tuta. Lo usa il comando di debug. Dopo aver messo o tolto i
+ * segnaposto ricalcola le dimensioni del giocatore ({@link SuitSize}): la grandezza reale cambia subito.
  */
 public final class DebugWear {
     /** Il segnaposto di ciascuno slot armatura vanilla. */
@@ -52,6 +53,7 @@ public final class DebugWear {
             }
             player.setItemSlot(slot, placeholder);
         }
+        player.refreshDimensions(); // grandezza reale nello stesso tick, senza aspettare SuitSize.tick
         Inventory inventory = player.getInventory();
         for (ItemStack stack : displaced) {
             // Uno slot libero intero e non Inventory.add, che in creativa cancella cio' che non entra.
@@ -78,6 +80,7 @@ public final class DebugWear {
                 inventory.setItem(i, ItemStack.EMPTY);
             }
         }
+        player.refreshDimensions(); // grandezza vanilla nello stesso tick, senza aspettare SuitSize.tick
         return removed;
     }
 

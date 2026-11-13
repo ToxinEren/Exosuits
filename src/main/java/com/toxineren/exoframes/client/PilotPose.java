@@ -22,7 +22,8 @@ import net.minecraft.world.entity.LivingEntity;
  * Il sollevamento e' nello spazio del modello, dopo le rotazioni della posa (sdraiato, nuoto, caduta della morte) e
  * dopo l'attributo {@code scale} di 1.21.1: pilota e tuta (che lo annulla in {@link SuitLayer}, nello stesso spazio)
  * restano allineati tra loro e con il corpo a terra in ogni posa. L'etichetta del nome si disegna fuori da quello
- * spazio e non sale con il pilota.
+ * spazio e il sollevamento non la sposta: la porta sopra la testa della tuta la grandezza reale
+ * ({@link com.toxineren.exoframes.frame.SuitSize}), perche' sta all'altezza dell'ingombro piu' 0,5, cioe' a 3,47.
  * <p>
  * Tutta la logica sta qui. I due mixin client ({@code mixin/client/PlayerRendererMixin} e
  * {@code mixin/client/ItemInHandLayerMixin}) non hanno stato e fanno una sola chiamata per aggancio ai metodi

@@ -18,6 +18,7 @@ import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -37,12 +38,15 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoItem;
 
 /**
@@ -84,6 +88,8 @@ public final class ExoframeGameTests {
                 ExoframeGameTests::debugWearHandlesTorsoWithoutValidSummary);
         add(tests, "debugWearDropsArmorWhenInventoryIsFull", ExoframeGameTests::debugWearDropsArmorWhenInventoryIsFull);
         add(tests, "suitModelItemIsRegistered", ExoframeGameTests::suitModelItemIsRegistered);
+        add(tests, "suitGrowsBoxAndEyes", ExoframeGameTests::suitGrowsBoxAndEyes);
+        add(tests, "suitCrawlsUnderLowCeiling", ExoframeGameTests::suitCrawlsUnderLowCeiling);
         return tests;
     }
 
@@ -330,6 +336,100 @@ public final class ExoframeGameTests {
         helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
                 "expected one dropped iron helmet next to the player, found " + dropped.size());
         helper.succeed();
+    }
+
+    /**
+     * Grandezza reale (design, par. 4.8): {@link DebugWear#wear} porta subito ingombro e occhi a quelli della tuta
+     * (0,8 x 2,97, occhi 1,62 * 1,65 e, accovacciati, 1,27 * 1,65), con il riquadro ricostruito e quello di culling
+     * allargato ai lati; {@link DebugWear#remove} li riporta a quelli vanilla. Un segnaposto messo nello slot senza
+     * passare da DebugWear cambia la grandezza solo al tick ({@link SuitSize#tick}), e cosi' toglierlo.
+     */
+    private static void suitGrowsBoxAndEyes(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        SuitSize.tick(player);
+        assertSize(helper, player, "without the suit", 0.6f, 1.8f, 1.62f, 1.27f);
+        helper.assertTrue(SuitSize.cullingBox(player, player.getBoundingBox()).equals(player.getBoundingBox()),
+                "culling box widened without the suit");
+
+        DebugWear.wear(player, SuitSummary.BARE);
+        assertSize(helper, player, "after wear", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+        AABB box = player.getBoundingBox();
+        AABB standing = SuitSize.standingBox(player.position());
+        helper.assertTrue(near(box, standing), "bounding box not rebuilt after wear: " + box + ", expected " + standing);
+        helper.assertTrue(near(SuitSize.cullingBox(player, box), box.inflate(0.5, 0, 0.5)),
+                "culling box not widened by 0.5 on the sides: " + SuitSize.cullingBox(player, box));
+        SuitSize.tick(player);
+        assertSize(helper, player, "after wear and a tick", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+
+        DebugWear.remove(player);
+        assertSize(helper, player, "after remove", 0.6f, 1.8f, 1.62f, 1.27f);
+        helper.assertTrue(near((float) player.getBoundingBox().getYsize(), 1.8f),
+                "bounding box not rebuilt after remove: " + player.getBoundingBox());
+        SuitSize.tick(player);
+
+        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        SuitSize.tick(player);
+        assertSize(helper, player, "torso placed in the slot, after a tick", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f,
+                1.27f * 1.65f);
+        player.setItemSlot(EquipmentSlot.CHEST, ItemStack.EMPTY);
+        SuitSize.tick(player);
+        assertSize(helper, player, "torso taken from the slot, after a tick", 0.6f, 1.8f, 1.62f, 1.27f);
+        helper.succeed();
+    }
+
+    /**
+     * In uno spazio alto 2 la tuta non sta ne' in piedi (2,97) ne' accovacciata (2,475): il gioco la mette da solo a
+     * carponi (0,8 x 0,99). Il segnaposto va nello slot senza DebugWear, che ricalcolerebbe da solo: qui il ricalcolo
+     * deve arrivare dal tick del giocatore (TickEvent.PLAYER_PRE). I giocatori finti non li fa girare il server.
+     */
+    private static void suitCrawlsUnderLowCeiling(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        for (int x = 2; x <= 6; x++) {
+            for (int z = 2; z <= 6; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+                helper.setBlock(new BlockPos(x, 4, z), Blocks.STONE);
+            }
+        }
+        Vec3 feet = helper.absoluteVec(new Vec3(4.5, 2.0, 4.5));
+        player.moveTo(feet.x, feet.y, feet.z, 0f, 0f);
+        player.doTick();
+        helper.assertTrue(player.getPose() == Pose.STANDING, "player without the suit not standing: " + size(player));
+
+        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        player.doTick();
+        player.doTick();
+        helper.assertTrue(player.getPose() == Pose.SWIMMING, "suit under a ceiling at 2 not crawling: " + size(player));
+        helper.assertTrue(near(player.getBbHeight(), 0.6f * 1.65f) && near(player.getBbWidth(), 0.8f),
+                "wrong crawling box: " + size(player));
+        helper.assertTrue(near((float) player.getBoundingBox().getYsize(), 0.6f * 1.65f),
+                "crawling bounding box not rebuilt: " + player.getBoundingBox());
+        helper.succeed();
+    }
+
+    /** Verifica larghezza, altezza, occhi e occhi da accovacciato del giocatore. */
+    private static void assertSize(GameTestHelper helper, ServerPlayer player, String when, float width,
+            float height, float eyes, float crouchingEyes) {
+        helper.assertTrue(near(player.getBbWidth(), width) && near(player.getBbHeight(), height)
+                && near(player.getEyeHeight(), eyes) && near(player.getEyeHeight(Pose.CROUCHING), crouchingEyes),
+                "wrong size " + when + ": " + size(player) + ", expected w=" + width + " h=" + height + " eye="
+                        + eyes + " crouchEye=" + crouchingEyes);
+    }
+
+    /** Posa, ingombro e occhi del giocatore, per i messaggi dei test. */
+    private static String size(ServerPlayer player) {
+        return String.format(Locale.ROOT, "pose=%s w=%.4f h=%.4f eye=%.4f crouchEye=%.4f", player.getPose(),
+                player.getBbWidth(), player.getBbHeight(), player.getEyeHeight(),
+                player.getEyeHeight(Pose.CROUCHING));
+    }
+
+    private static boolean near(float a, float b) {
+        return Math.abs(a - b) < 1e-3f;
+    }
+
+    private static boolean near(AABB a, AABB b) {
+        return Math.abs(a.minX - b.minX) < 1e-3 && Math.abs(a.minY - b.minY) < 1e-3 && Math.abs(a.minZ - b.minZ) < 1e-3
+                && Math.abs(a.maxX - b.maxX) < 1e-3 && Math.abs(a.maxY - b.maxY) < 1e-3
+                && Math.abs(a.maxZ - b.maxZ) < 1e-3;
     }
 
     /** Esegue un comando che deve riuscire; un errore di sintassi o di esecuzione fa fallire il test. */

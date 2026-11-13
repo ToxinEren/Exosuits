@@ -105,15 +105,17 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
     refmaps=$(echo "$listing" | grep -E '\.refmap\.json$' || true)
     [ -z "$refmaps" ] || err "$name" "refmap presente: $refmaps"
 
-    # (e2) mixin client: la configurazione e' alla radice, e' quella della versione (compatibilityLevel), richiesta,
-    #      con defaultRequire 1, elenca i mixin solo nella sezione client, senza refmap; ogni classe che elenca e'
-    #      nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge); i
-    #      metadati del loader la dichiarano (fabric.mod.json "mixins", MixinConfigs nel manifest su Forge, [[mixins]]
-    #      in neoforge.mods.toml).
+    # (e2) mixin: la configurazione e' alla radice, e' quella della versione (compatibilityLevel), richiesta, con
+    #      defaultRequire 1, senza refmap; la sezione mixins (comune ai due lati) elenca esattamente la classe della
+    #      grandezza reale della versione del jar (PlayerSize120Mixin o PlayerSize121Mixin: quella dell'altra versione
+    #      e' nel jar ma non si elenca), la sezione server e' vuota, la sezione client non lo e'; ogni classe elencata
+    #      e' nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge),
+    #      riconosciuti dai nomi Mojang dei bersagli; i metadati del loader la dichiarano (fabric.mod.json "mixins",
+    #      MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
     mixins=redstone_exoframes.mixins.json
     case "$mc" in
-        1.20.1) level=JAVA_17 ;;
-        *) level=JAVA_21 ;;
+        1.20.1) level=JAVA_17; size_mixin=PlayerSize120Mixin ;;
+        *) level=JAVA_21; size_mixin=PlayerSize121Mixin ;;
     esac
     case "$loader" in
         fabric) names=intermediary ;;
@@ -123,9 +125,12 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
     if ! echo "$listing" | grep -qx "$mixins"; then
         err "$name" "manca $mixins alla radice"
     else
-        problems=$(python3 - "$jar" "$mixins" "$level" "$names" <<'PY'
+        problems=$(python3 - "$jar" "$mixins" "$level" "$names" "$size_mixin" <<'PY'
 import json, re, sys, zipfile
-jar, cfg_name, level, names = sys.argv[1:]
+jar, cfg_name, level, names, size_mixin = sys.argv[1:]
+# Nomi Mojang dei bersagli dei mixin: nel jar restano solo su NeoForge, altrove li sostituisce remapJar.
+MOJANG = (b"setModelProperties", b"renderArmWithItem", b"getDimensions(", b"getStandingEyeHeight(",
+          b"getDefaultDimensions(", b"getBoundingBoxForCulling(")
 with zipfile.ZipFile(jar) as z:
     files = set(z.namelist())
     try:
@@ -139,22 +144,24 @@ with zipfile.ZipFile(jar) as z:
         print(f"{cfg_name}: injectors.defaultRequire deve essere 1")
     if cfg.get("compatibilityLevel") != level:
         print(f"{cfg_name}: compatibilityLevel {cfg.get('compatibilityLevel')} invece di {level}")
-    for section in ("mixins", "server"):
-        if cfg.get(section):
-            print(f"{cfg_name}: sezione {section} non vuota (i mixin sono solo client)")
+    common = cfg.get("mixins") or []
+    if common != [size_mixin]:
+        print(f"{cfg_name}: sezione mixins {common} invece di ['{size_mixin}'] (solo la grandezza reale della versione)")
+    if cfg.get("server"):
+        print(f"{cfg_name}: sezione server non vuota")
     if "refmap" in cfg:
         print(f"{cfg_name}: dichiara il refmap {cfg['refmap']}, che nessun loader richiede (vedi (e))")
     client = cfg.get("client") or []
     if not client:
         print(f"{cfg_name}: sezione client vuota")
     package = cfg.get("package", "")
-    for mixin in client:
+    for mixin in common + client:
         path = (package + "." + mixin).replace(".", "/") + ".class"
         if path not in files:
             print(f"classe {path} elencata in {cfg_name} ma assente dal jar")
             continue
         data = z.read(path)
-        mojang = b"setModelProperties" in data or b"renderArmWithItem" in data
+        mojang = any(marker in data for marker in MOJANG)
         if names == "mojang" and not mojang:
             print(f"{path}: nomi Mojang attesi nelle annotazioni (NeoForge 1.21.1 gira con i nomi Mojang)")
         if names != "mojang" and mojang:
