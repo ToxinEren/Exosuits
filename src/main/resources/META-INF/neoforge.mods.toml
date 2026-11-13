@@ -10,6 +10,10 @@ authors="ToxinEren"
 description='''Power armor originale: telaio, celle di redstone, moduli e stazione di manutenzione.'''
 logoFile="icon.png"
 
+# Mixin solo client (la configurazione li elenca nella sezione "client"): vedi docs/compat.md, "Mixin client".
+[[mixins]]
+config="redstone_exoframes.mixins.json"
+
 [[dependencies.redstone_exoframes]]
 modId="neoforge"
 type="required"

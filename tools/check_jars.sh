@@ -100,9 +100,86 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
             || err "$name" "classe d'ingresso $cls dichiarata nei metadati ma assente dal jar"
     done
 
-    # (e) nessun refmap.
+    # (e) nessun refmap: con questa Loom il processore di annotazioni dei mixin e' spento e remapJar riscrive i nomi
+    #     direttamente nelle annotazioni dei mixin (vedi (e2)), quindi nessun loader ne richiede uno.
     refmaps=$(echo "$listing" | grep -E '\.refmap\.json$' || true)
     [ -z "$refmaps" ] || err "$name" "refmap presente: $refmaps"
+
+    # (e2) mixin client: la configurazione e' alla radice, e' quella della versione (compatibilityLevel), richiesta,
+    #      con defaultRequire 1, elenca i mixin solo nella sezione client, senza refmap; ogni classe che elenca e'
+    #      nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge); i
+    #      metadati del loader la dichiarano (fabric.mod.json "mixins", MixinConfigs nel manifest su Forge, [[mixins]]
+    #      in neoforge.mods.toml).
+    mixins=redstone_exoframes.mixins.json
+    case "$mc" in
+        1.20.1) level=JAVA_17 ;;
+        *) level=JAVA_21 ;;
+    esac
+    case "$loader" in
+        fabric) names=intermediary ;;
+        forge) names=srg ;;
+        neoforge) names=mojang ;;
+    esac
+    if ! echo "$listing" | grep -qx "$mixins"; then
+        err "$name" "manca $mixins alla radice"
+    else
+        problems=$(python3 - "$jar" "$mixins" "$level" "$names" <<'PY'
+import json, re, sys, zipfile
+jar, cfg_name, level, names = sys.argv[1:]
+with zipfile.ZipFile(jar) as z:
+    files = set(z.namelist())
+    try:
+        cfg = json.loads(z.read(cfg_name))
+    except ValueError as e:
+        print(f"{cfg_name} non e' JSON valido: {e}")
+        sys.exit()
+    if cfg.get("required") is not True:
+        print(f"{cfg_name}: required deve essere true")
+    if cfg.get("injectors", {}).get("defaultRequire") != 1:
+        print(f"{cfg_name}: injectors.defaultRequire deve essere 1")
+    if cfg.get("compatibilityLevel") != level:
+        print(f"{cfg_name}: compatibilityLevel {cfg.get('compatibilityLevel')} invece di {level}")
+    for section in ("mixins", "server"):
+        if cfg.get(section):
+            print(f"{cfg_name}: sezione {section} non vuota (i mixin sono solo client)")
+    if "refmap" in cfg:
+        print(f"{cfg_name}: dichiara il refmap {cfg['refmap']}, che nessun loader richiede (vedi (e))")
+    client = cfg.get("client") or []
+    if not client:
+        print(f"{cfg_name}: sezione client vuota")
+    package = cfg.get("package", "")
+    for mixin in client:
+        path = (package + "." + mixin).replace(".", "/") + ".class"
+        if path not in files:
+            print(f"classe {path} elencata in {cfg_name} ma assente dal jar")
+            continue
+        data = z.read(path)
+        mojang = b"setModelProperties" in data or b"renderArmWithItem" in data
+        if names == "mojang" and not mojang:
+            print(f"{path}: nomi Mojang attesi nelle annotazioni (NeoForge 1.21.1 gira con i nomi Mojang)")
+        if names != "mojang" and mojang:
+            print(f"{path}: nomi Mojang nelle annotazioni, non rimappati in {names}")
+        if names == "intermediary" and not re.search(rb"method_\d+", data):
+            print(f"{path}: nessun nome intermediary (method_N) nelle annotazioni")
+        if names == "srg" and not re.search(rb"m_\d+_", data):
+            print(f"{path}: nessun nome SRG (m_N_) nelle annotazioni")
+PY
+) || problems="controllo della configurazione dei mixin non eseguito"
+        [ -z "$problems" ] || while IFS= read -r p; do err "$name" "$p"; done <<< "$problems"
+    fi
+    case "$loader" in
+        fabric)
+            unzip -p "$jar" fabric.mod.json 2>/dev/null | python3 -c 'import json, sys
+sys.exit(0 if sys.argv[1] in json.load(sys.stdin).get("mixins", []) else 1)' "$mixins" \
+                || err "$name" "fabric.mod.json non dichiara $mixins in \"mixins\"" ;;
+        forge)
+            unzip -p "$jar" META-INF/MANIFEST.MF 2>/dev/null | tr -d '\r' | grep -E '^MixinConfigs: ' | grep -qw "$mixins" \
+                || err "$name" "il manifest non dichiara $mixins in MixinConfigs" ;;
+        neoforge)
+            unzip -p "$jar" META-INF/neoforge.mods.toml 2>/dev/null | python3 -c 'import sys, tomllib
+sys.exit(0 if any(m.get("config") == sys.argv[1] for m in tomllib.load(sys.stdin.buffer).get("mixins", [])) else 1)' "$mixins" \
+                || err "$name" "neoforge.mods.toml non dichiara $mixins in [[mixins]]" ;;
+    esac
 
     # (f) icona del mod alla radice del jar (referenziata da icon/logoFile).
     echo "$listing" | grep -qx 'icon.png' || err "$name" "manca icon.png alla radice"

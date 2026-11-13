@@ -52,33 +52,60 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
             if (view == null) {
                 return;
             }
-            pose.pushPose();
-            try {
-                // Tuta S volte piu' grande attorno ai piedi: il pilota resta dov'e'.
-                pose.translate(0f, FEET_Y, 0f);
-                pose.scale(SuitScale.S, SuitScale.S, SuitScale.S);
-                pose.translate(0f, -FEET_Y, 0f);
-                ClientCompat.suitRenderer().render(player, getParentModel(), pose, buffers, packedLight, partialTick,
-                        view);
-            } finally {
-                pose.popPose();
-            }
-        } catch (RuntimeException e) {
-            // Un'eccezione da un layer farebbe chiudere il client: si salta la tuta e si avvisa una volta sola.
-            if (!failureLogged) {
-                failureLogged = true;
-                RedstoneExoframes.LOGGER.error("Suit layer failed; the suit is not drawn (logged once per session)",
-                        e);
-            }
+            // Stack privato che parte dalla posa corrente: GeckoLib fa push e pop propri solo sul percorso normale, e
+            // se lancia a meta' disegno le sue pose restano su questo stack, che si butta, invece che su quello del
+            // chiamante (LevelRenderer.checkPoseStack fa chiudere il client se a fine fotogramma non e' vuoto).
+            // Su 1.21.1 la copia ha trustedNormals = true come ogni posa nuova (il campo non e' pubblico): le scale del
+            // renderer del giocatore sono uniformi in valore assoluto e non lo spengono, e se lo fossero l'unico
+            // effetto sarebbero normali non rinormalizzate, cioe' una luce appena diversa.
+            PoseStack local = new PoseStack();
+            local.last().pose().set(pose.last().pose());
+            local.last().normal().set(pose.last().normal());
+            // Il disegno del giocatore e' sollevato dal mixin del renderer (PilotPose): si annulla il sollevamento
+            // (nello spazio del modello y cresce verso il basso), cosi' i piedi della tuta restano a terra.
+            local.translate(0f, SuitScale.PILOT_RAISE_PX / 16f, 0f);
+            // Tuta S volte piu' grande attorno ai piedi.
+            local.translate(0f, FEET_Y, 0f);
+            local.scale(SuitScale.S, SuitScale.S, SuitScale.S);
+            local.translate(0f, -FEET_Y, 0f);
+            ClientCompat.suitRenderer().render(player, getParentModel(), local, buffers, packedLight, partialTick,
+                    view);
+        } catch (RuntimeException | LinkageError e) {
+            // Un'eccezione da un layer farebbe chiudere il client, e cosi' un GeckoLib di versione diversa da quella
+            // attesa (LinkageError): si salta la tuta e si avvisa una volta sola.
+            logFailureOnce(e);
         }
     }
 
     /**
-     * True se l'entita' indossa la tuta, cioe' se questo layer la disegnerebbe: nello slot del torso c'e'
-     * {@link ModItems#EXOFRAME_TORSO} e il suo riassunto visivo e' leggibile. L'unico posto che lo decide.
+     * True se nello slot del torso dell'entita' c'e' {@link ModItems#EXOFRAME_TORSO} con un riassunto visivo leggibile.
+     * Vale per qualunque entita' vivente (anche un supporto per armature), quindi e' piu' ampio di "questo layer la
+     * disegnerebbe": il layer sta solo sul renderer del giocatore. L'unico posto che lo decide. Non lancia mai: i
+     * mixin del pilota lo chiamano a ogni fotogramma di ogni giocatore, e un errore vale "non la indossa" (scritto
+     * nel log una volta sola).
      */
     public static boolean wearsSuit(LivingEntity entity) {
-        return view(entity) != null;
+        return suitView(entity) != null;
+    }
+
+    /**
+     * La vista in cache dell'entita', o null se non indossa la tuta (vedi {@link #wearsSuit}). Non lancia mai: un
+     * errore vale null. Per {@link PilotPose}, che non decodifica il riassunto una seconda volta.
+     */
+    static SuitView suitView(LivingEntity entity) {
+        try {
+            return view(entity);
+        } catch (RuntimeException | LinkageError e) {
+            logFailureOnce(e);
+            return null;
+        }
+    }
+
+    private static void logFailureOnce(Throwable e) {
+        if (!failureLogged) {
+            failureLogged = true;
+            RedstoneExoframes.LOGGER.error("Suit layer failed; the suit is not drawn (logged once per session)", e);
+        }
     }
 
     /**

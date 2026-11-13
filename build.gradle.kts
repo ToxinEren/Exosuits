@@ -103,6 +103,15 @@ loom {
     }
 }
 
+// Mixin (solo client, vedi docs/compat.md "Mixin client"). Fabric e NeoForge leggono la configurazione dai metadati
+// (fabric.mod.json, neoforge.mods.toml); Forge 1.20.1 dall'attributo MixinConfigs del manifest, che Loom scrive nel jar
+// da forge.mixinConfigs e passa anche alle esecuzioni di sviluppo. Nessun refmap: con questa Loom il processore di
+// annotazioni dei mixin e' spento (useLegacyMixinAp = false), e remapJar riscrive direttamente i nomi nelle
+// annotazioni dei mixin (estensione mixin di tiny-remapper) verso intermediary su Fabric e SRG su Forge.
+if (loader == "forge") {
+    loom.forge.mixinConfig("${project.property("mod.id")}.mixins.json")
+}
+
 // Mondo nuovo a ogni esecuzione: su Forge 1.20.1 il server GameTest usa il mondo normale della cartella, che
 // altrimenti resta tra un'esecuzione e l'altra.
 val cleanGameTestWorld = tasks.register<Delete>("cleanGameTestWorld") {
@@ -124,6 +133,11 @@ dependencies {
         "forge" -> {
             "forge"("net.minecraftforge:forge:$mc-${dep("forge")}")
             modImplementation("dev.architectury:architectury-forge:${dep("architectury")}")
+            // Solo per le esecuzioni di sviluppo (runClient): GeckoLib 4.8.4 per Forge porta mclib dentro il proprio
+            // jar e Loom non lo mette nel classpath di sviluppo, quindi il client crolla al caricamento delle risorse
+            // (NoClassDefFoundError com/eliotlash/mclib/math/IValue). Non finisce nel jar della mod; in produzione
+            // mclib arriva dal jar di GeckoLib, e il server di sviluppo non carica i modelli e non ne ha bisogno.
+            "forgeRuntimeLibrary"("com.eliotlash.mclib:mclib:20")
         }
         "neoforge" -> {
             "neoForge"("net.neoforged:neoforge:${dep("neoforge")}")

@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.toxineren.exoframes.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "client.ItemInHandLayerMixin",
+    "client.PlayerRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

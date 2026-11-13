@@ -12,6 +12,7 @@
     "main": ["com.toxineren.exoframes.platform.RedstoneExoframesFabric"],
     "client": ["com.toxineren.exoframes.platform.RedstoneExoframesFabricClient"]
   },
+  "mixins": ["redstone_exoframes.mixins.json"],
   "depends": {
     "fabricloader": "${loader_range}",
     "fabric-api": ">=${fabric_api_version}",

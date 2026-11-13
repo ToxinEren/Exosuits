@@ -91,13 +91,20 @@ if [ -n "$bad" ]; then
     fail=1
 fi
 
-# 7. Il codice solo client (package client, compat.client e compat.impl.client) si referenzia (import, anche static,
-#    o nome qualificato) solo da file di quei package e di platform/ (gli entrypoint client), in src/main/java e
-#    src/test/java: un server dedicato non deve mai caricarlo, e RedstoneExoframes.init() ne resta fuori.
-bad=$(grep -rlE 'com\.toxineren\.exoframes\.(compat\.(impl\.)?)?client\.' src/main/java src/test/java \
-    | grep -vE '^src/(main|test)/java/com/toxineren/exoframes/(client|compat/client|compat/impl/client|platform)/' || true)
+# 7. Il codice solo client (package client, compat.client, compat.impl.client e mixin.client) si referenzia (import,
+#    anche static, o nome qualificato) solo da file di quei package e dai file di platform/ elencati qui sotto, in
+#    src/main/java e src/test/java: un server dedicato non deve mai caricarlo, e RedstoneExoframes.init() ne resta
+#    fuori. Ogni file elencato e' sicuro sul server dedicato per il motivo scritto in docs/compat.md ("Cuciture client").
+CLIENT_ENTRYPOINTS=(
+    "$JAVA/platform/RedstoneExoframesFabricClient.java"
+    "$JAVA/platform/RedstoneExoframesForge.java"
+    "$JAVA/platform/RedstoneExoframesNeoForge.java"
+)
+bad=$(grep -rlE 'com\.toxineren\.exoframes\.(compat\.(impl\.)?|mixin\.)?client\.' src/main/java src/test/java \
+    | grep -vE '^src/(main|test)/java/com/toxineren/exoframes/(client|compat/client|compat/impl/client|mixin/client)/' \
+    | grep -vxF -f <(printf '%s\n' "${CLIENT_ENTRYPOINTS[@]}") || true)
 if [ -n "$bad" ]; then
-    echo "FAIL: riferimenti al codice solo client fuori da client/, compat/client/, compat/impl/client/ e platform/:" >&2
+    echo "FAIL: riferimenti al codice solo client fuori da client/, compat/client/, compat/impl/client/, mixin/client/ e dagli entrypoint client di platform/:" >&2
     echo "$bad" >&2
     fail=1
 fi
