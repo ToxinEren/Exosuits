@@ -28,7 +28,7 @@ EXO_ACCEPT_EULA=true bash tools/client/m3a_shots.sh <variante> <cartella>
 
 Varianti: `1.20.1-forge`, `1.20.1-fabric`, `1.21.1-fabric`, `1.21.1-neoforge`.
 
-**`client_shot.sh`** fa un'esecuzione: server e client della variante, giocatore dentro (in creativa, mondo piatto, mezzogiorno, sereno, rivolto a sud), poi i comandi, in ordine, via RCON, senza la barra iniziale; il giocatore si chiama `Exo` salvo `EXO_SHOT_USER`. Esempio:
+**`client_shot.sh`** fa un'esecuzione: server e client della variante, giocatore dentro (in creativa, mondo piatto, mezzogiorno, sereno, rivolto a sud in 0,5 -60 0,5), un passo avanti e ritorno per allineare il corpo alla testa (il client crea il giocatore con il corpo girato a caso, e da fermo il corpo resta indietro fino a 50 gradi: senza il passo, su 1.20.1 metà degli scatti "davanti" venivano di tre quarti), poi i comandi, in ordine, via RCON, senza la barra iniziale; il giocatore si chiama `Exo` salvo `EXO_SHOT_USER`. Esempio:
 
 ```
 EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh 1.21.1-fabric /tmp/scatti/rottame "execute as Exo run exoframe debug wear rottame 2"
@@ -43,7 +43,7 @@ Nella cartella lascia:
 
 Ogni comando dell'utente passa da `execute store success`: se il server lo rifiuta (sintassi, bersaglio inesistente, colore non valido di `/exoframe`...) lo script si ferma. Serve perché un errore dentro `execute as ... run` non arriva nella risposta RCON.
 
-**`m3a_shots.sh`** fa l'insieme standard della parte 3a, una esecuzione e una sottocartella per scatto: `01-nudo`, `02-rottame-s0` … `05-rottame-s3`, `06-colori` (`3A6EA5` e `D9D9D9`), `07-mani` (piccone di ferro nella mano principale, scudo nell'altra), `08-sdraiato` (telaio nudo, posa strisciante forzata da un blocco di vetro sopra la testa). Negli scatti 01 e 02 c'è una colonna di tre blocchi di lana bianca a tre blocchi dal giocatore, come metro per l'altezza. Alla fine monta `stati-fronte.png` (le quattro viste frontali degli stati affiancate) e stampa un riepilogo. Una esecuzione per scatto invece di una lunga: ogni scatto parte dallo stesso stato e un errore resta nel suo scatto; costa un minuto in più a scatto.
+**`m3a_shots.sh`** fa l'insieme standard della parte 3a, una esecuzione e una sottocartella per scatto: `01-nudo`, `02-rottame-s0` … `05-rottame-s3`, `06-colori` (`3A6EA5` e `D9D9D9`), `07-mani` (piccone di ferro nella mano principale, scudo nell'altra), `08-sdraiato` (telaio nudo, posa strisciante forzata da un blocco di vetro sopra la testa; qui `front.png` non serve, perché la telecamera davanti finisce contro la testa: contano `back.png` e `quarter.png`). Negli scatti 01 e 02 c'è una colonna di tre blocchi di lana bianca a tre blocchi dal giocatore, verso ovest, come metro per l'altezza. Alla fine monta `stati-fronte.png` (le quattro viste frontali degli stati affiancate) e stampa un riepilogo. Una esecuzione per scatto invece di una lunga: ogni scatto parte dallo stesso stato e un errore resta nel suo scatto; costa un minuto in più a scatto.
 
 Variabili d'ambiente:
 
@@ -65,10 +65,11 @@ Uno scatto non si salva se il client non è più vivo o il giocatore ha lasciato
 
 ## Quanto dura
 
-Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 9-13 minuti per variante (tempi misurati nel rapporto del Task 10 della parte 3a). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
+Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 9-11 minuti per variante (misurati 528-659 s). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
 
 ## Cosa non copre
 
+- **Davanti da sdraiati.** Con la posa strisciante la telecamera davanti finisce contro la testa: lo scatto non mostra nulla di utile.
 - **Vista laterale vera.** Si gira solo la testa (mouse finto); il corpo la segue in ritardo, fino a 50 gradi, quindi `quarter.png` è una vista a tre quarti più o meno di lato. Per un lato esatto servirebbe un secondo client come telecamera.
 - **Audio** (non c'è un dispositivo audio), **fluidità** e animazioni nel tempo (si scattano fotogrammi fermi, a 30 fps in rendering software), **un secondo giocatore** che guarda il primo.
 - Il **jar di produzione**: qui gira l'ambiente di sviluppo di Loom. Che i mixin si applichino nel jar finale lo prova solo la checklist sul PC.
@@ -79,5 +80,6 @@ Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un min
 - `UnknownHostException` o errori di connessione verso `sessionserver.mojang.com` e `api.minecraftservices.com`, `Failed to request yggdrasil public key`, `Couldn't look up profile properties`, `Ignoring chat session ... missing Services public key`: account offline di sviluppo.
 - `Error starting SoundSystem. Turning off sounds & music`, `Failed to open OpenAL device`, `Missing sound for event`: niente audio.
 - `Reference map 'geckolib.refmap.json' for geckolib.mixins.json could not be read. If this is a development environment you can ignore this message`: GeckoLib in sviluppo; `log-check.txt` la esclude.
+- Su NeoForge: `Attempted to select a dependency jar for JarJar which was passed in as source: library:mixinextras.neoforge`: ambiente di sviluppo; `log-check.txt` la esclude.
 - `Shader rendertype_entity_translucent_emissive could not find sampler named Sampler2`: avviso del gioco base su 1.21.1.
 - Sul server: `No key layers in MapLike[{}]` (impostazioni del mondo piatto lasciate vuote) e gli avvisi `SERVER IS RUNNING IN OFFLINE/INSECURE MODE`.
