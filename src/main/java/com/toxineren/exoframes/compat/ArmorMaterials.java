@@ -27,7 +27,8 @@ public interface ArmorMaterials {
 
     /**
      * Un {@link ArmorItem} del tipo dato con il materiale "frame" (difesa 0): chiude la differenza di costruttore.
-     * Imposta {@code stacksTo(1)} sulle proprieta' date; la durabilita' resta compito del chiamante.
+     * L'item ha sempre la pila a 1, su entrambe le versioni; le proprieta' date possono avere o no una durabilita'
+     * vanilla.
      */
     ArmorItem newPlaceholder(ArmorItem.Type type, Item.Properties props);
 }

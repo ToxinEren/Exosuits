@@ -17,7 +17,9 @@ import java.util.UUID;*/
  * Implementazione di {@link FrameAttributes}.
  * <p>
  * Ogni modificatore ha un id stabile ({@code redstone_exoframes:frame_*}): cosi' una nuova applicazione rimuove
- * esattamente quella precedente, anche dopo un login o un cambio di dimensione, e i valori non si sommano mai.
+ * esattamente quella precedente e i valori non si sommano mai. Vanno riapplicati al login, al respawn (compresa
+ * l'uscita dall'End: il nuovo ServerPlayer riceve solo i valori base degli attributi) e a ogni cambio del telaio; un
+ * semplice cambio di dimensione conserva l'entita' e i modificatori.
  * I modificatori sono transitori perche' sono derivati dallo stato del telaio, che viene salvato altrove: un
  * modificatore permanente sopravviverebbe al salvataggio dell'entita' anche dopo aver tolto il telaio.
  * <p>

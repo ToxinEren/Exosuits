@@ -30,8 +30,10 @@ import net.minecraft.core.registries.Registries;
  * il nome e' "frame" senza namespace perche' su Fabric il percorso vanilla della texture non ne accetta uno, e il
  * codice e' lo stesso per Fabric e Forge. Nessuna texture e' fornita qui: il rendering dei pezzi passera' da GeckoLib.
  * <p>
- * {@code newPlaceholder} imposta {@code stacksTo(1)} sulle proprieta' su entrambe le versioni; la durabilita' resta
- * compito del chiamante.
+ * Gli item di {@code newPlaceholder} hanno sempre la pila a 1 su entrambe le versioni, e le proprieta' date possono
+ * avere o no una durabilita' vanilla. Su 1.21.1 si imposta {@code stacksTo(1)}; su 1.20.1 le proprieta' passano
+ * invariate, perche' li' {@code stacksTo} lancia se e' gia' impostata una durabilita' e il costruttore di
+ * {@link ArmorItem} porta comunque la pila a 1.
  */
 public final class ArmorMaterialsImpl implements ArmorMaterials {
     //? if >=1.21 {
@@ -79,7 +81,7 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
 
     @Override
     public ArmorItem newPlaceholder(ArmorItem.Type type, Item.Properties props) {
-        return new ArmorItem(FrameMaterial.FRAME, type, props.stacksTo(1));
+        return new ArmorItem(FrameMaterial.FRAME, type, props);
     }
 
     // Il materiale "frame" su 1.20.1: tutto a zero. Durabilita' 0 vuol dire item non danneggiabile per vanilla,

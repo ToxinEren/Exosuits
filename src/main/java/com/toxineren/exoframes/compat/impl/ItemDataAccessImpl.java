@@ -3,11 +3,8 @@ package com.toxineren.exoframes.compat.impl;
 import com.toxineren.exoframes.compat.ItemDataAccess;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.armor.PieceSlot;
-import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.module.ModuleType;
-import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +20,9 @@ import net.minecraft.world.item.ItemStack;
  * e delega a {@link ItemPayload} lettura e scrittura del tag radice. Qui non c'e' nessuna condizione di versione:
  * lo schema e' lo stesso su 1.20.1 e 1.21.1.
  * <p>
+ * Pezzi ed energia si leggono con il lettore condiviso con lo stato del telaio ({@link PieceTags}), che garantisce
+ * gli intervalli dichiarati in {@link ItemDataAccess}.
+ * <p>
  * Le scritture partono dal tag radice esistente e sovrascrivono solo le chiavi del record, cosi' le altre chiavi
  * (per esempio {@link NbtKeys#STOWED}) restano intatte.
  */
@@ -30,7 +30,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
     @Override
     public int cellEnergy(ItemStack stack) {
         CompoundTag root = ItemPayload.read(stack);
-        return root == null ? 0 : root.getInt(NbtKeys.ENERGY);
+        return root == null ? 0 : PieceTags.readEnergy(root);
     }
 
     @Override
@@ -43,7 +43,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
     @Override
     public Optional<PieceData> piece(ItemStack stack) {
         CompoundTag root = ItemPayload.read(stack);
-        return root == null ? Optional.empty() : readPiece(root);
+        return root == null ? Optional.empty() : PieceTags.readPiece(root);
     }
 
     @Override
@@ -61,7 +61,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         }
         Optional<UUID> owner = SchemaIds.readUuid(root, NbtKeys.OWNER);
         Optional<Integer> cellEnergy = root.contains(NbtKeys.CELL, Tag.TAG_COMPOUND)
-                ? Optional.of(root.getCompound(NbtKeys.CELL).getInt(NbtKeys.ENERGY))
+                ? Optional.of(PieceTags.readEnergy(root.getCompound(NbtKeys.CELL)))
                 : Optional.empty();
         Map<PieceSlot, PieceData> pieces = new EnumMap<>(PieceSlot.class);
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
@@ -70,7 +70,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
             if (slot == null) {
                 SchemaIds.warnUnknown("piece slot", key);
             } else if (piecesTag.contains(key, Tag.TAG_COMPOUND)) {
-                readPiece(piecesTag.getCompound(key)).ifPresent(piece -> pieces.put(slot, piece));
+                PieceTags.readPiece(piecesTag.getCompound(key)).ifPresent(piece -> pieces.put(slot, piece));
             }
         }
         return Optional.of(new FrameItemData(owner, root.getBoolean(NbtKeys.UNLOCKED),
@@ -113,27 +113,6 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
     private static CompoundTag rootOrEmpty(ItemStack stack) {
         CompoundTag root = ItemPayload.read(stack);
         return root == null ? new CompoundTag() : root;
-    }
-
-    /** Legge un pezzo da un tag (il tag radice di un pezzo o una voce di {@link NbtKeys#PIECES}). */
-    private static Optional<PieceData> readPiece(CompoundTag tag) {
-        if (!tag.contains(NbtKeys.TIER, Tag.TAG_STRING)) {
-            return Optional.empty();
-        }
-        Tier tier = SchemaIds.tierById(tag.getString(NbtKeys.TIER));
-        if (tier == null) {
-            return Optional.empty();
-        }
-        List<ModuleType> modules = new ArrayList<>();
-        ListTag list = tag.getList(NbtKeys.MODULES, Tag.TAG_STRING);
-        for (int i = 0; i < list.size(); i++) {
-            ModuleType module = SchemaIds.moduleById(list.getString(i));
-            if (module != null) {
-                modules.add(module);
-            }
-        }
-        return Optional.of(new PieceData(tier, tag.getInt(NbtKeys.DURABILITY), tag.getInt(NbtKeys.MAX_DURABILITY),
-                List.copyOf(modules), tag.getInt(NbtKeys.COLOR_PRIMARY), tag.getInt(NbtKeys.COLOR_SECONDARY)));
     }
 
     /** Scrive tutti i campi di un pezzo nel tag dato. */

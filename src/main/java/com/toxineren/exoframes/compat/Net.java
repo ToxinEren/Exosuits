@@ -33,7 +33,8 @@ public interface Net {
     <T> void registerC2S(ResourceLocation id, Class<T> type, PacketCodec<T> codec, BiConsumer<T, ServerPlayer> handler);
 
     /**
-     * Invia al giocatore un messaggio su un canale S2C registrato.
+     * Invia al giocatore un messaggio su un canale S2C registrato. Se il client del giocatore non ha registrato il
+     * canale (per esempio un client senza la mod che ha superato la negoziazione), l'invio si salta in silenzio.
      *
      * @throws IllegalStateException se l'id non e' registrato, o e' registrato per la direzione opposta (C2S)
      * @throws IllegalArgumentException se il messaggio non e' del tipo registrato per l'id

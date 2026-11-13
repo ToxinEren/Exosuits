@@ -1,9 +1,11 @@
 package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiFunction;
@@ -26,7 +28,14 @@ import net.minecraft.core.HolderLookup;
  * il {@code DataFixTypes} della factory e' null (nessun datafixer per i dati della mod): Fabric API e NeoForge
  * saltano il datafix in quel caso.
  * <p>
- * In lettura ogni voce e' isolata: una voce corrotta viene scartata con un avviso, le altre restano.
+ * In lettura ogni voce e' isolata: una voce che non si legge (valore non compound, chiave non UUID, eccezione del
+ * lettore) viene saltata con un avviso che ne nomina la chiave, e le altre restano. La voce saltata non si perde:
+ * resta come tag grezzo e {@code save} la riscrive identica, finche' lo stato di quel giocatore non viene creato o
+ * sostituito con {@code update()} o rimosso con {@code clear()} ({@link #dropUnread}).
+ * <p>
+ * Accanto a {@code frames} c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link #CURRENT_SCHEMA}; assente vale 1). Se il
+ * file viene da uno schema piu' recente di quello noto, si scrive un solo ERROR nel log e tutte le voci restano
+ * grezze: nessuna viene letta e nessuna si perde, e alla scrittura si conserva il marcatore letto.
  * <p>
  * Solo sul thread del server; chi modifica una voce deve chiamare {@link #setDirty()}.
  */
@@ -34,8 +43,14 @@ final class FrameStateSavedData extends SavedData {
     static final String NAME = "redstone_exoframes_frames";
     /** Tag con una voce per giocatore, chiave = UUID in forma testuale. */
     private static final String FRAMES = "frames";
+    /** Versione dello schema delle voci che questo codice sa leggere e scrive. */
+    static final int CURRENT_SCHEMA = 1;
 
     private final Map<UUID, FrameState> frames = new HashMap<>();
+    /** Voci non lette, per chiave originale, riscritte identiche in {@link #write}. */
+    private final Map<String, Tag> unread = new LinkedHashMap<>();
+    /** Il marcatore da scrivere: quello corrente, o quello piu' recente letto dal file. */
+    private int schema = CURRENT_SCHEMA;
 
     private FrameStateSavedData() {
     }
@@ -62,31 +77,66 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Legge il dato con il lettore di voce dato (nel codice e' sempre {@link FrameStateCodec#read}; il parametro
-     * esiste per i test). Ogni voce e' isolata: se la sua lettura lancia, si scarta solo quella voce con un avviso.
-     * Un'eccezione che uscisse da qui farebbe ricreare il dato vuoto e il salvataggio successivo cancellerebbe gli
-     * stati di tutti i giocatori.
+     * esiste per i test). Ogni voce e' isolata: una voce che non si legge viene saltata con un avviso e conservata
+     * grezza. Un'eccezione che uscisse da qui farebbe ricreare il dato vuoto e il salvataggio successivo
+     * cancellerebbe gli stati di tutti i giocatori.
      */
     static FrameStateSavedData load(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader) {
         FrameStateSavedData data = new FrameStateSavedData();
         CompoundTag framesTag = tag.getCompound(FRAMES);
+        int schema = tag.contains(NbtKeys.SCHEMA, Tag.TAG_ANY_NUMERIC) ? tag.getInt(NbtKeys.SCHEMA) : CURRENT_SCHEMA;
+        if (schema > CURRENT_SCHEMA) {
+            RedstoneExoframes.LOGGER.error("Frame states saved with schema {} (known: {}): keeping {} entries "
+                    + "unread and unchanged", schema, CURRENT_SCHEMA, framesTag.size());
+            data.schema = schema;
+            for (String key : framesTag.getAllKeys()) {
+                data.unread.put(key, framesTag.get(key).copy());
+            }
+            return data;
+        }
         for (String key : framesTag.getAllKeys()) {
             if (!framesTag.contains(key, Tag.TAG_COMPOUND)) {
+                RedstoneExoframes.LOGGER.warn("Skipping frame state that is not a compound, kept unread: {}",
+                        SchemaIds.safeId(key));
+                data.unread.put(key, framesTag.get(key).copy());
                 continue;
             }
             UUID player;
             try {
                 player = UUID.fromString(key);
             } catch (IllegalArgumentException e) {
-                RedstoneExoframes.LOGGER.warn("Ignoring frame state with invalid player id: {}", key);
+                RedstoneExoframes.LOGGER.warn("Skipping frame state with invalid player id, kept unread: {}",
+                        SchemaIds.safeId(key));
+                data.unread.put(key, framesTag.get(key).copy());
                 continue;
             }
             try {
                 data.frames.put(player, reader.apply(framesTag.getCompound(key), RedstoneExoframes.config()));
             } catch (RuntimeException e) {
-                RedstoneExoframes.LOGGER.warn("Skipping corrupt frame state of player {}: {}", key, e.toString());
+                RedstoneExoframes.LOGGER.warn("Skipping corrupt frame state of player {}, kept unread: {}",
+                        SchemaIds.safeId(key), e.toString());
+                data.unread.put(key, framesTag.get(key).copy());
             }
         }
         return data;
+    }
+
+    /**
+     * Dimentica le voci grezze non lette del giocatore (chiamato quando il suo stato viene creato o sostituito con
+     * {@code update()} o rimosso con {@code clear()}): la chiave e' confrontata come UUID, cosi' vale anche per una
+     * chiave scritta in forma non canonica.
+     */
+    void dropUnread(UUID player) {
+        if (unread.isEmpty()) {
+            return;
+        }
+        unread.keySet().removeIf(key -> {
+            try {
+                return UUID.fromString(key).equals(player);
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        });
     }
 
     //? if >=1.21 {
@@ -101,9 +151,12 @@ final class FrameStateSavedData extends SavedData {
     }*/
     //?}
 
-    private CompoundTag write(CompoundTag tag) {
+    /** Scrive il marcatore di schema e le voci: prima quelle grezze non lette, identiche, poi quelle vive. */
+    CompoundTag write(CompoundTag tag) {
         CompoundTag framesTag = new CompoundTag();
+        unread.forEach((key, raw) -> framesTag.put(key, raw.copy()));
         frames.forEach((player, state) -> framesTag.put(player.toString(), FrameStateCodec.write(state)));
+        tag.putInt(NbtKeys.SCHEMA, schema);
         tag.put(FRAMES, framesTag);
         return tag;
     }

@@ -5,7 +5,9 @@ package com.toxineren.exoframes.compat;
  * <p>
  * E' l'unica fonte delle chiavi: 1.20.1 (tag dello stack) e 1.21.1 (componente vanilla custom_data) leggono e
  * scrivono lo stesso CompoundTag con queste chiavi, cosi' un mondo 1.20.1 aggiornato a 1.21.1 (il DFU di vanilla
- * migra il tag dello stack in custom_data) conserva energia, durabilita' e il resto dei dati.
+ * copia il tag dello stack in custom_data cosi' com'e') conserva energia, durabilita' e il resto dei dati primitivi.
+ * Gli stack annidati (gli item riposti di {@link #STOWED}) non vengono convertiti da vanilla e avranno bisogno di una
+ * migrazione esplicita.
  * <p>
  * Lo stato del telaio per giocatore (FrameStateCodec in compat/impl) riusa le stesse chiavi e gli stessi tipi per
  * pezzi, cella, proprietario e flag, cosi' i due codec restano allineati; le chiavi {@link #CAPACITY},
@@ -55,6 +57,12 @@ public final class NbtKeys {
      * {@link #PIECES} dello stato del telaio; assente vale 0.
      */
     public static final String CARRY_MILLI = "carry_milli";
+
+    /**
+     * Versione dello schema delle voci (int), accanto a {@code frames} nel dato salvato degli stati del telaio;
+     * assente vale 1. Non c'e' marcatore sugli item.
+     */
+    public static final String SCHEMA = "schema";
 
     private NbtKeys() {
     }

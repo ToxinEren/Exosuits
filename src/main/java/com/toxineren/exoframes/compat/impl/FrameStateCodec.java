@@ -1,13 +1,12 @@
 package com.toxineren.exoframes.compat.impl;
 
-import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
-import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
+import com.toxineren.exoframes.core.module.Activation;
 import com.toxineren.exoframes.core.module.ModuleInstaller;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.EnumMap;
@@ -22,7 +21,7 @@ import net.minecraft.nbt.Tag;
 /**
  * Serializzazione di un {@link FrameState} in un CompoundTag con le chiavi di {@link NbtKeys}, usata sia dal dato
  * salvato sia dal pacchetto di sincronizzazione. Nessuna condizione di versione: lo schema e' lo stesso su 1.20.1 e
- * 1.21.1, e i pezzi usano le stesse chiavi e gli stessi tipi di {@link ItemDataAccessImpl}.
+ * 1.21.1, e i pezzi e l'energia della cella si leggono con lo stesso lettore degli item ({@link PieceTags}).
  * <p>
  * Schema: {@link NbtKeys#PIECES} con una voce per slot (id in minuscolo) che contiene {@link NbtKeys#TIER},
  * {@link NbtKeys#DURABILITY}, {@link NbtKeys#MAX_DURABILITY}, {@link NbtKeys#MODULES} e
@@ -32,7 +31,9 @@ import net.minecraft.nbt.Tag;
  * <p>
  * La lettura e' tollerante: id sconosciuti di slot, livello o modulo vengono ignorati con un solo avviso per id
  * (conversioni condivise con gli item in {@link SchemaIds}); un proprietario malformato vale assente;
- * valori fuori intervallo vengono riportati nell'intervallo valido o, se non recuperabili, scartati con un avviso.
+ * valori fuori intervallo vengono riportati nell'intervallo valido o, se non recuperabili, scartati con un avviso
+ * (una volta per chiave, come gli id sconosciuti). Un toggle acceso si ripristina solo se il modulo ha attivazione
+ * {@link Activation#TOGGLE} ed e' installato in qualche slot.
  */
 final class FrameStateCodec {
     private FrameStateCodec() {
@@ -72,36 +73,33 @@ final class FrameStateCodec {
 
     /**
      * Ricostruisce lo stato. Ordine: pezzi montati, poi i loro moduli, poi i riporti del danno (montare un pezzo
-     * azzera il riporto e toglie moduli e toggle dello slot), infine i toggle accesi.
+     * azzera il riporto e toglie moduli e toggle dello slot), infine i toggle accesi dei moduli toggle installati.
      */
     static FrameState read(CompoundTag root, ExoframesConfig cfg) {
         FrameState state = new FrameState(cfg);
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
         Map<PieceSlot, CompoundTag> mounted = new EnumMap<>(PieceSlot.class);
+        Map<PieceSlot, List<ModuleType>> pieceModules = new EnumMap<>(PieceSlot.class);
         for (String key : piecesTag.getAllKeys()) {
             PieceSlot slot = SchemaIds.slotById(key);
             if (slot == null) {
                 SchemaIds.warnUnknown("piece slot", key);
             } else if (piecesTag.contains(key, Tag.TAG_COMPOUND)) {
                 CompoundTag pieceTag = piecesTag.getCompound(key);
-                Piece piece = readPiece(slot, pieceTag);
-                if (piece != null) {
-                    state.mount(piece);
+                PieceTags.readPiece(pieceTag).ifPresent(data -> {
+                    state.mount(new Piece(slot, data.tier(), data.maxDurability(), data.durability()));
                     mounted.put(slot, pieceTag);
-                }
+                    pieceModules.put(slot, data.modules());
+                });
             }
         }
         for (Map.Entry<PieceSlot, CompoundTag> entry : mounted.entrySet()) {
             PieceSlot slot = entry.getKey();
-            ListTag list = entry.getValue().getList(NbtKeys.MODULES, Tag.TAG_STRING);
-            for (int i = 0; i < list.size(); i++) {
-                ModuleType module = SchemaIds.moduleById(list.getString(i));
-                if (module != null) {
-                    ModuleInstaller.Reason reason = state.installModule(slot, module);
-                    if (reason != ModuleInstaller.Reason.OK) {
-                        RedstoneExoframes.LOGGER.warn("Dropping module {} from frame slot {}: {}", module.id(),
-                                SchemaIds.slotId(slot), reason);
-                    }
+            for (ModuleType module : pieceModules.get(slot)) {
+                ModuleInstaller.Reason reason = state.installModule(slot, module);
+                if (reason != ModuleInstaller.Reason.OK) {
+                    SchemaIds.warnOnce("drop module:" + module.id() + ":" + SchemaIds.slotId(slot) + ":" + reason,
+                            "Dropping module {} from frame slot {}: {}", module.id(), SchemaIds.slotId(slot), reason);
                 }
             }
             int carry = clampCarry(entry.getValue().getInt(NbtKeys.CARRY_MILLI));
@@ -114,16 +112,17 @@ final class FrameStateCodec {
             CompoundTag cellTag = root.getCompound(NbtKeys.CELL);
             int capacity = cellTag.getInt(NbtKeys.CAPACITY);
             if (capacity > 0) {
-                int stored = Math.max(0, Math.min(capacity, cellTag.getInt(NbtKeys.ENERGY)));
+                int stored = Math.min(capacity, PieceTags.readEnergy(cellTag));
                 state.insertCell(new EnergyCell(capacity, stored));
             } else {
-                RedstoneExoframes.LOGGER.warn("Dropping frame cell with invalid capacity {}", capacity);
+                SchemaIds.warnOnce("drop cell capacity:" + capacity, "Dropping frame cell with invalid capacity {}",
+                        capacity);
             }
         }
         ListTag active = root.getList(NbtKeys.ACTIVE, Tag.TAG_STRING);
         for (int i = 0; i < active.size(); i++) {
             ModuleType module = SchemaIds.moduleById(active.getString(i));
-            if (module != null) {
+            if (module != null && module.activation() == Activation.TOGGLE && isInstalled(state, module)) {
                 // activeToggles() e' l'insieme vivo dello stato: si scrive direttamente
                 state.activeToggles().add(module);
             }
@@ -139,23 +138,14 @@ final class FrameStateCodec {
         return Math.max(0, Math.min(999, carry));
     }
 
-    /** Legge il pezzo di una voce di {@link NbtKeys#PIECES}, o null se il livello o la durabilita' non sono validi. */
-    private static Piece readPiece(PieceSlot slot, CompoundTag tag) {
-        if (!tag.contains(NbtKeys.TIER, Tag.TAG_STRING)) {
-            return null;
+    /** Vero se il modulo e' installato in almeno uno slot dello stato. */
+    private static boolean isInstalled(FrameState state, ModuleType module) {
+        for (List<ModuleType> installed : state.modules().values()) {
+            if (installed.contains(module)) {
+                return true;
+            }
         }
-        Tier tier = SchemaIds.tierById(tag.getString(NbtKeys.TIER));
-        if (tier == null) {
-            return null;
-        }
-        int max = tag.getInt(NbtKeys.MAX_DURABILITY);
-        if (max <= 0) {
-            RedstoneExoframes.LOGGER.warn("Dropping frame piece in slot {} with invalid max durability {}",
-                    SchemaIds.slotId(slot), max);
-            return null;
-        }
-        int durability = Math.max(0, Math.min(max, tag.getInt(NbtKeys.DURABILITY)));
-        return new Piece(slot, tier, max, durability);
+        return false;
     }
 
     private static ListTag idList(Iterable<ModuleType> modules) {

@@ -114,6 +114,40 @@ class FrameStateCodecTest {
     }
 
     @Test
+    void togglesAreRestoredOnlyForInstalledToggleModules() {
+        CompoundTag tag = FrameStateCodec.write(populated());
+        ListTag active = tag.getList(NbtKeys.ACTIVE, 8);
+        active.add(StringTag.valueOf(ModuleType.SCANNER.id()));
+        active.add(StringTag.valueOf(ModuleType.SERVOS.id()));
+        active.add(StringTag.valueOf(ModuleType.JETPACK.id()));
+        FrameState read = FrameStateCodec.read(tag, cfg);
+        // SCANNER e' un toggle installato; SERVOS e' installato ma passivo; JETPACK non e' installato
+        assertEquals(Set.of(ModuleType.NIGHT_VISION, ModuleType.ENERGY_SHIELD, ModuleType.SCANNER),
+                read.activeToggles());
+
+        CompoundTag bare = FrameStateCodec.write(new FrameState(cfg));
+        bare.getList(NbtKeys.ACTIVE, 8).add(StringTag.valueOf(ModuleType.NIGHT_VISION.id()));
+        assertTrue(FrameStateCodec.read(bare, cfg).activeToggles().isEmpty());
+    }
+
+    @Test
+    void pieceEntriesUseTheSharedReader() {
+        CompoundTag tag = FrameStateCodec.write(populated());
+        CompoundTag pieces = tag.getCompound(NbtKeys.PIECES);
+        pieces.getCompound("helmet").putInt(NbtKeys.DURABILITY, 9_999);
+        pieces.getCompound("torso").putInt(NbtKeys.MAX_DURABILITY, 0);
+        ListTag legModules = pieces.getCompound("left_leg").getList(NbtKeys.MODULES, 8);
+        legModules.add(StringTag.valueOf(ModuleType.SERVOS.id()));
+        legModules.add(StringTag.valueOf(ModuleType.SHOCKWAVE.id()));
+        FrameState read = FrameStateCodec.read(tag, cfg);
+        assertEquals(400, read.pieces().get(PieceSlot.HELMET).durability());
+        assertFalse(read.pieces().containsKey(PieceSlot.TORSO));
+        List<ModuleType> leg = read.modules().get(PieceSlot.LEFT_LEG);
+        assertEquals(leg.size(), leg.stream().distinct().count());
+        assertEquals(ModuleType.SERVOS, leg.get(0));
+    }
+
+    @Test
     void malformedOwnerIsAbsent() {
         CompoundTag tag = FrameStateCodec.write(populated());
         tag.put(NbtKeys.OWNER, new IntArrayTag(new int[] {1, 2, 3}));

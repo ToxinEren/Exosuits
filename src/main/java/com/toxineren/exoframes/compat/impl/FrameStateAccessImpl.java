@@ -16,15 +16,20 @@ import net.minecraft.world.entity.player.Player;
  * Implementazione di {@link FrameStateAccess}: il server tiene gli stati in {@link FrameStateSavedData}, il client
  * la copia ricevuta in {@link FrameStateClientCache}; il pacchetto e' {@link FrameStateSyncPacket}.
  * <p>
- * Ogni mutazione ({@link #update}, {@link #clear}) segna il dato come da salvare e risincronizza il giocatore. Il
+ * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare; {@link #update} e
+ * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. {@link #update} e {@link #clear} tolgono le
+ * voci grezze non lette del giocatore (vedi {@link FrameStateSavedData}). Il
  * riferimento a {@link ClientPlayerEvent} sta solo nel corpo di {@link #registerClient()}, chiamato solo dagli
  * entrypoint client: un server dedicato non carica mai classi del client.
  */
 public final class FrameStateAccessImpl implements FrameStateAccess {
     @Override
     public Optional<FrameState> get(Player p) {
-        if (!p.level().isClientSide() && p instanceof ServerPlayer serverPlayer) {
-            return Optional.ofNullable(FrameStateSavedData.get(serverPlayer.server).frames().get(p.getUUID()));
+        if (!p.level().isClientSide()) {
+            // sul server logico un Player che non e' un ServerPlayer non ha stato: mai la copia del client
+            return p instanceof ServerPlayer serverPlayer
+                    ? Optional.ofNullable(FrameStateSavedData.get(serverPlayer.server).frames().get(p.getUUID()))
+                    : Optional.empty();
         }
         return clientView(p);
     }
@@ -34,6 +39,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
         FrameState state = data.frames().computeIfAbsent(p.getUUID(),
                 uuid -> new FrameState(RedstoneExoframes.config()));
+        data.dropUnread(p.getUUID());
         try {
             change.accept(state);
         } finally {
@@ -44,9 +50,26 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     }
 
     @Override
+    public boolean mutate(ServerPlayer p, Consumer<FrameState> change) {
+        FrameStateSavedData data = FrameStateSavedData.get(p.server);
+        FrameState state = data.frames().get(p.getUUID());
+        if (state == null) {
+            return false;
+        }
+        try {
+            change.accept(state);
+        } finally {
+            // anche se la modifica lancia a meta': il disco resta allineato alla memoria (nessuna sincronizzazione)
+            data.setDirty();
+        }
+        return true;
+    }
+
+    @Override
     public void clear(ServerPlayer p) {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
         data.frames().remove(p.getUUID());
+        data.dropUnread(p.getUUID());
         data.setDirty();
         syncTo(p);
     }

@@ -16,17 +16,31 @@ import net.minecraft.world.item.ItemStack;
  * I dati stanno nel tag {@link NbtKeys#ROOT} con le chiavi di {@link NbtKeys}: su 1.20.1 nel tag dello stack, su
  * 1.21.1 nel componente vanilla custom_data (nessun componente registrato). Il contenuto del tag e' lo stesso sulle
  * due versioni, cosi' i dati sopravvivono all'aggiornamento del mondo. In lettura le chiavi mancanti assumono valori
- * di default e gli id sconosciuti sono ignorati (con un avviso nel log per id). Le scritture su uno stack vuoto non
- * fanno nulla.
+ * di default (anche quando la chiave ha un tipo di tag sbagliato) e gli id sconosciuti sono ignorati (con un avviso
+ * nel log per id). Le scritture su uno stack vuoto non fanno nulla.
+ * <p>
+ * Intervalli garantiti in lettura (i dati degli item non sono fidati: /give, inventario creativo, altre mod):
+ * <ul>
+ * <li>un pezzo letto ha {@code maxDurability > 0} (con durabilita' massima assente o non positiva non c'e' pezzo) e
+ * {@code durability} in [0, maxDurability];</li>
+ * <li>i moduli di un pezzo sono noti, senza duplicati, nell'ordine in cui sono salvati e al massimo
+ * {@code ModuleType.values().length};</li>
+ * <li>i colori sono in [0, 0xFFFFFF];</li>
+ * <li>l'energia della cella ({@link #cellEnergy} e {@link FrameItemData#cellEnergy}) e' sempre {@code >= 0}; il
+ * limite superiore (la capacita' della cella) resta al chiamante.</li>
+ * </ul>
  */
 public interface ItemDataAccess {
-    /** Energia della cella ({@link NbtKeys#ENERGY} nel tag radice); 0 se assente. */
+    /** Energia della cella ({@link NbtKeys#ENERGY} nel tag radice), mai negativa; 0 se assente. */
     int cellEnergy(ItemStack stack);
 
     /** Scrive l'energia della cella, conservando le altre chiavi del tag radice. */
     void setCellEnergy(ItemStack stack, int energy);
 
-    /** I dati del pezzo; vuoto se manca il tag radice o se il livello manca o e' sconosciuto. */
+    /**
+     * I dati del pezzo; vuoto se manca il tag radice, se il livello manca o e' sconosciuto o se la durabilita' massima
+     * non e' positiva.
+     */
     Optional<PieceData> piece(ItemStack stack);
 
     /** Scrive tutti i campi del pezzo, conservando le altre chiavi del tag radice. */
