@@ -6,7 +6,9 @@ La grafica (modelli, texture, animazioni) è generata da script nella sessione c
 
 Esoscheletro industriale pesante: sagoma massiccia, piastre rivettate, pistoni e tubi a vista, una fonte di energia sulla schiena. L'ispirazione generale indicata da Luigi sono le armature potenziate di Fallout 4 e Iron Monger (Iron Man, 2008). Si prende l'idea, non le forme: nessun elmo, piastra, simbolo o scritta riconoscibile di design esistenti.
 
-Stile Minecraft: scatole allineate agli assi, texture a pixel senza sfumature morbide, 16 pixel per blocco. Il telaio si disegna attorno a un giocatore di dimensioni normali e non ne cambia l'ingombro.
+Stile Minecraft: scatole allineate agli assi, texture a pixel senza sfumature morbide.
+
+**Richiesta di Luigi del 13 novembre 2026, viste le anteprime del primo telaio:** «il telaio ci sta ma lo voglio più dettagliato e metallico, poi lo scheletro della tuta dovrebbe essere più grande del player, tipo mecha». Da qui: la tuta è più grande di chi la pilota, che resta a grandezza normale e vi sta agganciato dentro (piedi su pedane negli stinchi, testa nella gabbia); più componenti; texture a densità doppia; resa da metallo. Il perché e il come sono nel design della milestone 3, §4.7. Il telaio descritto più sotto è la prima versione e viene sostituito quando Luigi approva le nuove anteprime.
 
 ## Livello Rottame: tre direzioni proposte (13 novembre 2026)
 

@@ -146,7 +146,7 @@ Da stabilire con l'audit del repo (task 2). Candidati: struttura degli item arma
 10. **Personalizzazione per milestone:** vernici primaria/secondaria e preset in M4; decalcomanie da stendardo **nell'alpha** (deciso da Luigi il 13 novembre): entrano entro M5, prima della pubblicazione. Richiedono la composizione delle texture a runtime, quindi il renderer di M3 nasce già con un layer per la decalcomania su spalla e torso.
 11. **Asset:** si riusa da Mjolnir solo il codice (renderer, classi modello, controller di animazione, HUD); geometrie, texture, animazioni e suoni sono nuovi perché le forme MJOLNIR sono IP Halo. **Li realizza la sessione cloud** (deciso da Luigi il 13 novembre): modelli GeckoLib e texture generati via codice, con immagini di anteprima da mostrare a Luigi prima dell'integrazione. Direzione artistica indicata da Luigi: ispirazione alle power armor di Fallout 4 e a Iron Monger (Iron Man, 2008). Dell'ispirazione si prende l'idea generale (esoscheletro industriale ingombrante), non le forme: nessun elemento riconoscibile di quei design, come chiede il vincolo IP del documento di gioco e come serve per non rischiare la rimozione da CurseForge e Modrinth. L'alpha esce con questi asset, che restano sostituibili da un artista.
 12. **Automazione in M1:** workflow GitHub Actions che compila i quattro jar a ogni push, così Jarvis scarica gli artefatti senza che la sessione cloud debba restare viva.
-13. **Il telaio non cambia le dimensioni del giocatore** (nessuna dipendenza da Pehkui). Nessuna obiezione di Luigi alla fine di M2: si procede così.
+13. **Superata il 13 novembre 2026.** Diceva: "il telaio non cambia le dimensioni del giocatore". Viste le prime anteprime, Luigi vuole la tuta più grande del pilota: vedi `2026-11-13-m3-telaio-design.md`, §4.7 e §8. Resta valido il resto: nessuna dipendenza da Pehkui.
 14. **Stato del telaio per giocatore** in SavedData del server + sync al client (una sola implementazione sui quattro target), non attachment per loader.
 
 ## 8. Milestone e criteri di accettazione
@@ -179,7 +179,7 @@ Regola trasversale (dal Claude Doc): ogni milestone si compila e si avvia su tut
 - [x] **Provenienza del codice di Mjolnir:** tutto di Luigi (13 novembre).
 - [x] **Scadenze:** nessuna (Luigi, 13 novembre): si procede una milestone alla volta.
 - [ ] Conferma del nome definitivo (vedi §7.1).
-- [x] Il telaio non cambia le dimensioni del giocatore, nessuna dipendenza da Pehkui: nessuna obiezione di Luigi alla fine di M2, si procede così (§7.13).
+- [x] Dimensioni del giocatore nel telaio: la scelta di non cambiarle è superata dal 13 novembre 2026 (§7.13); nessuna dipendenza da Pehkui resta valido.
 - [x] Repo privato; licenza tutti i diritti riservati per codice e asset (Luigi, 13 novembre; §7.2).
 - [x] Repo di destinazione: `ToxinEren/Exosuits`; package Java `com.toxineren.exoframes`.
 - [x] **Dati personali:** nei jar pubblicati non devono esserci dati personali (Luigi, 13 novembre): controllo automatico in `tools/check_jars.sh`, eseguito dalla CI a ogni build.

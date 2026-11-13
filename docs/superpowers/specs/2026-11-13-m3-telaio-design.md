@@ -32,7 +32,7 @@ Perché ora: è il pezzo tecnicamente nuovo rispetto a Mjolnir e quello da cui d
 - Quattro varianti da un solo sorgente (Stonecutter + Architectury Loom); condizioni solo in `compat/impl`, `platform/` e `compat/Ids.java` (`tools/check_sources.sh`).
 - `core/` resta Java 17 puro e testato con JUnit.
 - Lo stato del telaio per giocatore vive nel `SavedData` (`FrameStateAccess`); le scritture a ogni tick passano da `mutate` e la sincronizzazione al proprietario resta sotto le 5 volte al secondo.
-- Niente mixin in questa milestone (scelta del costruttore, vedi §4.3): tutto passa da eventi Architectury o da hook per loader in `platform/`.
+- I mixin si usano solo dove nessun evento copre il bisogno (scelta del costruttore, vedi §4.3 e §4.7). Oggi ce n'è uno, lato client, sul disegno del giocatore; tutto il resto passa da eventi Architectury o da hook per loader in `platform/`.
 - La grafica è generata da script: i file generati sono committati, lo script li rigenera identici e la CI lo verifica.
 - Licenza "tutti i diritti riservati"; il controllo di privacy sui jar resta verde (i PNG generati non hanno metadati).
 - Nel cloud si può provare solo il server dedicato; client e resa grafica si provano sul PC di Luigi.
@@ -81,12 +81,29 @@ Una milestone unica sarebbe di oltre trenta task. Divisa in tre parti, ognuna co
 | **3b — Entrare e uscire** | Aspetto (colori, decalcomanie riservate) nello stato; codec esposto; entità telaio; montaggio a mano; ingresso, uscita, morte; slot bloccati; riassunto visivo per gli altri giocatori | In gioco si piazza il telaio, lo si arma, ci si entra e se ne esce; alla morte resta nel mondo; un secondo giocatore lo vede |
 | **3c — Giocarci** | Tick dell'energia e sincronizzazione; attributi ed effetti; danno sui pezzi; item e ricette Rottame; cella con carica; cambio cella; caricatore; checklist per il PC | Una partita completa: costruire, caricare, entrare, consumare energia, prendere danno, cambiare cella, ricaricare |
 
+### 4.7 Tuta più grande del pilota (revisione del 13 novembre)
+
+Luigi, viste le anteprime del primo telaio: «il telaio ci sta ma lo voglio più dettagliato e metallico, poi lo scheletro della tuta dovrebbe essere più grande del player, tipo mecha». Questo sostituisce la decisione 13 del design operativo ("il telaio non cambia le dimensioni del giocatore").
+
+- **A. Ingrandire tutto insieme, giocatore e tuta.** È ciò che fa Pehkui e, su 1.21.1, l'attributo `scale`. Il pilota cresce con la tuta: resta una persona più grande in un'imbracatura, non uno scheletro più grande di chi lo pilota.
+- **B. Tuta più massiccia senza scala.** Stessi perni del giocatore, pezzi più spessi, spalle più alte. Le gambe non possono allungarsi, perché i piedi del pilota sono a terra: risulta tozza, non più grande.
+- **C. Tuta in scala attorno al pilota a terra.** La tuta si disegna S volte più grande attorno ai piedi e il pilota resta dov'è. Anche e mani della tuta finiscono più in alto di quelle del pilota, le due paia di gambe ruotano attorno a perni diversi e l'attrezzo impugnato compare sotto il pugno della tuta.
+- **D. Tuta in scala, pilota sollevato (scelto).** Come C, ma il pilota è disegnato più in alto di 12·(S−1) pixel del modello. La linea delle anche e quella delle mani coincidono con quelle della tuta, le gambe ruotano attorno allo stesso perno e i piedi poggiano su pedane dentro gli stinchi. È la disposizione di un'armatura potenziata: si sta agganciati dentro la macchina.
+
+**Costo di D.** Per sollevare il pilota e per non disegnare le parti del corpo coperte dai pezzi bisogna intervenire prima che il gioco disegni il giocatore. Forge e NeoForge hanno un evento, Fabric no. Si usa un solo mixin comune, lato client, su `PlayerRenderer.render`, che ha la stessa firma su 1.20.1 e 1.21.1. È la prima eccezione al "niente mixin" di §4.3.
+
+**Scala.** S = 1,25 è la proposta del costruttore; 1,4 è l'alternativa mostrata nelle anteprime. Sceglie Luigi.
+
+**Grandezza reale o apparente.** Domanda aperta per Luigi (§8). Riguarda ingombro e visuale, quindi la parte 3b; la 3a disegna soltanto.
+
 ## 5. Il progetto
 
 ### 5.1 Grafica e generatore (3a)
 
 - **Direzione artistica:** scelta da Luigi fra tre anteprime (spike in corso). Qualunque sia, valgono le convenzioni sotto.
 - **Convenzioni della geometria** (dalla ricognizione, obbligatorie per `GeoArmorRenderer`): ossa di primo livello `armorHead`, `armorBody`, `armorRightArm`, `armorLeftArm`, `armorRightLeg`, `armorLeftLeg`, con i perni del modello armatura di GeckoLib (testa e corpo 0,24,0; braccia ∓5,22,0; gambe ∓2,12,0). Sotto ciascuna: `frame<Parte>` (telaio nudo, sempre visibile) e il pezzo, diviso per stato visivo e per regione di colore.
+- **Proporzioni (revisione del 13 novembre, §4.7):** la geometria resta nelle coordinate standard del modello armatura, con i perni invariati, e viene resa in scala S attorno ai piedi. In quelle coordinate il pilota è una figura ridotta di 1/S con la linea delle anche a y = 12: con S = 1,25 i piedi stanno a y 2,4 e la testa tra 21,6 e 28. Pedane, gabbia della testa e guardie delle mani si disegnano attorno a quella figura; i montanti degli arti corrono sul lato esterno.
+- **Densità e resa (revisione del 13 novembre):** due texel per pixel del modello, quindi un atlante più grande; pittura da metallo: spazzolatura, bordi chiari consumati, incavi scuri, bulloni con punto luce.
 - **Stati visivi senza passate multiple (scelta del costruttore):** ogni pezzo ha quattro copie della sua geometria, una per stato (integro, danneggiato, critico, rotto), che puntano a quattro zone diverse dello stesso atlante; il renderer mostra una sola copia. Una sola texture e una sola passata per il telaio intero.
 - **Colori:** dentro ogni copia, tre ossa per regione: primaria, secondaria (texture in toni di grigio, colorate dal renderer) e neutra (metallo, cavi, non colorata). Nomi: `piece<Parte>_s<0-3>_p1`, `_p2`, `_n`.
 - **Decalcomanie (riservate):** un rettangolo piatto sul davanti del torso e uno sulla spalla sinistra, con ossa `pieceTorso_decal` e `pieceLeftArm_decal` presenti ma nascoste fino a M5.
@@ -103,7 +120,7 @@ Dalla ricognizione, opzione (a): un `RenderLayer` vanilla sul renderer del gioca
 - `compat/impl/client/SuitModelItem`: l'unico `GeoItem`, mai equipaggiato, registrato ma fuori dalla scheda creativa.
 - `client/SuitLayer`: codice comune; costruisce la `SuitView` dal riassunto visivo e chiama `SuitRenderer`.
 - `compat/ClientRenderHooks`: `addPlayerLayer` (Fabric `LivingEntityFeatureRendererRegistrationCallback`; Forge `AddLayers` con le skin per nome; NeoForge `AddLayers` con `PlayerSkin.Model`) e la registrazione del renderer dell'entità (Architectury).
-- **Pelle del giocatore:** non si nasconde in 3a. I pezzi sporgono di almeno un pixel dal corpo e dal secondo strato della skin; col telaio nudo il giocatore si vede dentro, ed è voluto. Se le anteprime in gioco mostrano compenetrazioni, l'hook `onPlayerPreRender` descritto nella ricognizione entra in 3b.
+- **Scala e pilota (revisione del 13 novembre, §4.7):** `client/SuitScale` tiene S e il sollevamento del pilota. `client/SuitLayer` disegna la tuta in scala S attorno ai piedi. Un mixin client su `PlayerRenderer.render`, comune alle quattro varianti, fa due cose per chi indossa il telaio: sposta in alto il disegno del giocatore di 12·(S−1) pixel del modello e, subito dopo `setModelProperties`, toglie dal disegno le parti del corpo coperte da un pezzo montato (testa con l'elmo, busto con il torso, ogni braccio e ogni gamba con il suo pezzo, secondo strato della skin compreso). Con il telaio nudo il pilota si vede intero dentro lo scheletro, ed è voluto. La prima persona non cambia: il braccio resta quello vanilla fino a M4.
 - **Segnaposto invisibili:** su 1.21.1 il materiale `frame` passa a `layers = List.of()`; su 1.20.1 si aggiungono due texture trasparenti `frame_layer_1.png` e `frame_layer_2.png` nel namespace `minecraft` (il nome del materiale resta senza namespace).
 - **Comando di debug (3a):** `/exoframe debug wear [rottame|nudo|via]` mette o toglie al giocatore uno stato di prova e i segnaposto, per vedere il risultato sul PC prima che esista l'entità.
 
@@ -185,10 +202,14 @@ Forme esatte delle ricette; valori di ritmo del caricatore e soglie di movimento
 10. L'armatura civile rimasta in un telaio dopo una morte torna al proprietario quando rientra o quando la ritira accovacciandosi a mano vuota; se entra un altro giocatore, cade a terra accanto al telaio.
 11. Chi muore nel vuoto ritrova il telaio nell'ultimo punto sicuro in cui era a terra.
 12. Le parti 3b e 3c non aspettano le prove sul PC: si procede nel cloud e ciò che il PC trova si corregge all'inizio della parte successiva.
+13. La tuta è più grande del pilota, che vi sta agganciato dentro, sollevato su pedane (§4.7). Scala proposta 1,25.
+14. Un mixin lato client sul disegno del giocatore: prima eccezione al "niente mixin".
+15. Le parti del corpo coperte da un pezzo montato non vengono disegnate.
 
-## 8. Domanda aperta per Luigi
+## 8. Domande aperte per Luigi
 
-La direzione artistica: tre anteprime in arrivo, sceglie lui. Se non risponde, si procede con quella che il costruttore raccomanda dopo averle viste, e resta sostituibile.
+1. **La direzione artistica dei pezzi Rottame.** Tre anteprime mostrate il 13 novembre sul primo telaio; con il telaio ridisegnato (§4.7) i pezzi si ripropongono sulla nuova forma. Se non risponde, si procede con quella che il costruttore raccomanda, e resta sostituibile.
+2. **Grandezza reale o apparente** (chiesto il 13 novembre). Reale: chi è nella tuta occupa più spazio e vede da più in alto; con S = 1,25 l'ingombro è 0,75 × 2,25 blocchi in piedi e 1,875 di altezza accovacciati, quindi da un'apertura alta due blocchi si passa solo accovacciati. Apparente: ingombro e visuale restano quelli del giocatore, ma testa e spalle della tuta attraversano soffitti bassi e stipiti. Proposta del costruttore, e scelta predefinita se non risponde: reale, con 1,25. Senza dipendenze esterne: su 1.21.1 l'attributo `scale` del gioco, su 1.20.1 l'evento di Forge e due mixin su Fabric (ingombro e altezza degli occhi). Con 1,4 la tuta non passerebbe da una porta nemmeno accovacciata.
 
 ## 9. Rischi
 
@@ -196,4 +217,5 @@ La direzione artistica: tre anteprime in arrivo, sceglie lui. Se non risponde, s
 - **GameTest su quattro varianti:** se una variante non regge, lì restano test JUnit, server dedicato e checklist.
 - **Riallineamento tra registro ed entità:** è la parte più delicata di 3b; un errore lì può creare proprio i doppioni o le perdite che vuole evitare. Mitigazione: test in mondo dedicati prima di costruirci sopra ingresso e uscita.
 - **Movimento deciso dal client** (scatto, nuoto): serve codice sui due lati e prova sul PC.
+- **Mixin client su quattro varianti (§4.7):** nel cloud non si può avviare un client, e un bersaglio sbagliato fa crollare il gioco all'avvio. Mitigazione: firma del metodo verificata sui jar delle due versioni, controllo in `tools/check_jars.sh` che configurazione e refmap del mixin siano nei jar, avvio del client come primo punto della checklist di 3a sul PC.
 - **Qualità della grafica generata:** è sufficiente per un'alpha in stile Minecraft; resta sostituibile da un artista senza toccare il codice, perché i nomi delle ossa e la disposizione sono fissati qui.
