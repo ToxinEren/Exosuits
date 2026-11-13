@@ -14,7 +14,9 @@ import net.minecraft.world.entity.player.Player;
  * decide da se' cosa registrare sul lato in cui gira (vedi i singoli metodi). Ogni id si registra una sola volta.
  * <p>
  * Thread: i gestori sono sempre eseguiti sul thread di gioco del lato che riceve (client per S2C, server per C2S),
- * mai sul thread di rete, quindi possono toccare il mondo direttamente.
+ * mai sul thread di rete, quindi possono toccare il mondo direttamente. Le eccezioni lanciate da un gestore sono
+ * registrate nel log dall'esecutore del thread di gioco della piattaforma e non si propagano a chi ha inviato il
+ * pacchetto.
  */
 public interface Net {
     /**
@@ -33,7 +35,7 @@ public interface Net {
     /**
      * Invia al giocatore un messaggio su un canale S2C registrato.
      *
-     * @throws IllegalStateException se l'id non e' registrato
+     * @throws IllegalStateException se l'id non e' registrato, o e' registrato per la direzione opposta (C2S)
      * @throws IllegalArgumentException se il messaggio non e' del tipo registrato per l'id
      */
     <T> void sendToPlayer(ServerPlayer player, ResourceLocation id, T msg);
@@ -41,7 +43,7 @@ public interface Net {
     /**
      * Invia al server un messaggio su un canale C2S registrato (solo dal client).
      *
-     * @throws IllegalStateException se l'id non e' registrato
+     * @throws IllegalStateException se l'id non e' registrato, o e' registrato per la direzione opposta (S2C)
      * @throws IllegalArgumentException se il messaggio non e' del tipo registrato per l'id
      */
     <T> void sendToServer(ResourceLocation id, T msg);

@@ -23,7 +23,7 @@ import java.util.UUID;*/
  * <p>
  * Le differenze di versione sono chiuse in {@code key} e {@code modifier}: su 1.21.1 l'id del modificatore e' il
  * ResourceLocation stesso; su 1.20.1 e' un UUID derivato dal ResourceLocation con {@code UUID.nameUUIDFromBytes},
- * quindi uguale a ogni avvio.
+ * quindi uguale a ogni avvio, calcolato una volta sola in un campo statico per ciascuno dei quattro modificatori.
  */
 public final class FrameAttributesImpl implements FrameAttributes {
     private static final ResourceLocation SPEED = Ids.of("frame_speed");
@@ -76,9 +76,29 @@ public final class FrameAttributesImpl implements FrameAttributes {
                 multiplyTotal ? AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL : AttributeModifier.Operation.ADD_VALUE);
     }
     //?} else {
-    /*// L'id con cui l'istanza dell'attributo conosce il modificatore: su 1.20.1 un UUID stabile derivato dal nome.
-    private static UUID key(ResourceLocation id) {
+    /*// Gli UUID dei quattro modificatori su 1.20.1, derivati una volta sola dai ResourceLocation.
+    private static final UUID SPEED_UUID = uuidOf(SPEED);
+    private static final UUID KNOCKBACK_UUID = uuidOf(KNOCKBACK);
+    private static final UUID ARMOR_UUID = uuidOf(ARMOR);
+    private static final UUID TOUGHNESS_UUID = uuidOf(TOUGHNESS);
+
+    // Un UUID stabile derivato dal nome: uguale a ogni avvio.
+    private static UUID uuidOf(ResourceLocation id) {
         return UUID.nameUUIDFromBytes(id.toString().getBytes(StandardCharsets.UTF_8));
+    }
+
+    // L'id con cui l'istanza dell'attributo conosce il modificatore: su 1.20.1 l'UUID precalcolato dell'id.
+    private static UUID key(ResourceLocation id) {
+        if (id == SPEED) {
+            return SPEED_UUID;
+        } else if (id == KNOCKBACK) {
+            return KNOCKBACK_UUID;
+        } else if (id == ARMOR) {
+            return ARMOR_UUID;
+        } else if (id == TOUGHNESS) {
+            return TOUGHNESS_UUID;
+        }
+        throw new IllegalArgumentException("Unknown frame attribute id: " + id);
     }
 
     // Il modificatore: "moltiplica totale" se richiesto, altrimenti addendo; il nome e' l'id testuale.

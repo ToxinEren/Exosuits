@@ -33,8 +33,10 @@ final class ItemPayload {
         //?}
     }
 
-    /** Sostituisce il tag radice dello stack con quello dato. */
+    /** Sostituisce il tag radice dello stack con quello dato; su uno stack vuoto non fa nulla. */
     static void write(ItemStack stack, CompoundTag tag) {
+        // stack vuoto: niente da scrivere (su 1.20.1 getOrCreateTag modificherebbe l'ItemStack.EMPTY condiviso)
+        if (stack.isEmpty()) return;
         //? if >=1.21 {
         CustomData.update(DataComponents.CUSTOM_DATA, stack, t -> t.put(NbtKeys.ROOT, tag));
         //?} else {

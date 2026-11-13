@@ -66,7 +66,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         if (root == null) {
             return Optional.empty();
         }
-        UUID owner = root.contains(NbtKeys.OWNER, Tag.TAG_INT_ARRAY) ? NbtUtils.loadUUID(root.get(NbtKeys.OWNER)) : null;
+        Optional<UUID> owner = readOwner(root);
         Optional<Integer> cellEnergy = root.contains(NbtKeys.CELL, Tag.TAG_COMPOUND)
                 ? Optional.of(root.getCompound(NbtKeys.CELL).getInt(NbtKeys.ENERGY))
                 : Optional.empty();
@@ -87,10 +87,10 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
     @Override
     public void setFrame(ItemStack stack, FrameItemData data) {
         CompoundTag root = rootOrEmpty(stack);
-        if (data.owner() == null) {
-            root.remove(NbtKeys.OWNER);
+        if (data.owner().isPresent()) {
+            root.put(NbtKeys.OWNER, NbtUtils.createUUID(data.owner().get()));
         } else {
-            root.put(NbtKeys.OWNER, NbtUtils.createUUID(data.owner()));
+            root.remove(NbtKeys.OWNER);
         }
         root.putBoolean(NbtKeys.UNLOCKED, data.unlocked());
         root.putBoolean(NbtKeys.REINFORCED, data.reinforced());
@@ -120,6 +120,18 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
     private static CompoundTag rootOrEmpty(ItemStack stack) {
         CompoundTag root = ItemPayload.read(stack);
         return root == null ? new CompoundTag() : root;
+    }
+
+    /** Il proprietario del telaio; vuoto se la chiave manca o non e' un UUID valido (int array di 4 elementi). */
+    private static Optional<UUID> readOwner(CompoundTag root) {
+        if (!root.contains(NbtKeys.OWNER, Tag.TAG_INT_ARRAY)) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(NbtUtils.loadUUID(root.get(NbtKeys.OWNER)));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     /** Legge un pezzo da un tag (il tag radice di un pezzo o una voce di {@link NbtKeys#PIECES}). */

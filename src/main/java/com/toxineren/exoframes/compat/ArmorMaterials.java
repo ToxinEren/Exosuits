@@ -14,7 +14,8 @@ import net.minecraft.world.item.Item;
 public interface ArmorMaterials {
     /**
      * Registra il materiale dove la versione lo richiede (su 1.21.1 il registro dei materiali d'armatura; su 1.20.1
-     * non fa nulla). Va chiamato nell'init comune, prima della registrazione degli item.
+     * non fa nulla). Va chiamato esattamente una volta, nell'init comune, prima della registrazione degli item: su
+     * 1.21.1 una seconda chiamata lancia un'eccezione.
      */
     void register();
 
@@ -24,6 +25,9 @@ public interface ArmorMaterials {
      */
     Object frameMaterialHandle();
 
-    /** Un {@link ArmorItem} del tipo dato con il materiale "frame" (difesa 0): chiude la differenza di costruttore. */
+    /**
+     * Un {@link ArmorItem} del tipo dato con il materiale "frame" (difesa 0): chiude la differenza di costruttore.
+     * Imposta {@code stacksTo(1)} sulle proprieta' date; la durabilita' resta compito del chiamante.
+     */
     ArmorItem newPlaceholder(ArmorItem.Type type, Item.Properties props);
 }

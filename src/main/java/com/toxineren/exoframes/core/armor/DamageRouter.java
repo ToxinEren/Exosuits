@@ -26,8 +26,9 @@ import java.util.Set;
  * le frazioni di punto in millesimi. Invarianti:
  * <ul>
  *   <li>l'usura non e' mai negativa e i riporti restano in [0, 999]; un colpo da 0 non cambia nulla;</li>
- *   <li>per ogni slot l'usura cumulata e' floor(quota esatta cumulata in millesimi / 1000): ogni pezzo segue la
- *       sua quota con meno di un punto di scarto in ogni momento;</li>
+ *   <li>per ogni slot l'usura cumulata e' floor(somma delle quote in millesimi di ogni colpo / 1000), dove la
+ *       quota in millesimi di un colpo e' arrotondata con i resti maggiori: la garanzia vale rispetto a queste
+ *       quote intere in millesimi, non rispetto alla quota reale;</li>
  *   <li>l'usura totale cumulata e' in (danno totale - 6, danno totale]: il telaio non si usura mai piu' del danno
  *       ricevuto e la parte in sospeso e' al massimo 999 millesimi per slot;</li>
  *   <li>l'usura di un singolo colpo puo' differire dal suo danno, perche' le frazioni in sospeso si realizzano o

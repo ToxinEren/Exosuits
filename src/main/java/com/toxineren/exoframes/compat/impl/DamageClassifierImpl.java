@@ -18,7 +18,7 @@ import net.minecraft.world.phys.Vec3;
  * {@code victim.getEyeY() + 1.0}. Si usa di proposito la posizione del tiratore, e precisamente {@code getY()},
  * cioe' i suoi piedi: conta da dove e' partito il colpo (proiettili dall'alto: elmo e torso), non il punto in cui la
  * freccia ha toccato la vittima. Senza entita' causante si ripiega sulla posizione sorgente.</li>
- * <li>HEAD: posizione sorgente (punto d'impatto o posizione dell'entita' diretta) con
+ * <li>HEAD: posizione sorgente (posizione esplicita, es. centro dell'esplosione, o posizione dell'entita' diretta) con
  * {@code y >= victim.getEyeY() - 0.25}.</li>
  * </ul>
  * {@code getEntity()} e {@code getSourcePosition()} possono essere null: senza posizione la condizione e' falsa.

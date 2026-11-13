@@ -16,6 +16,9 @@ public interface FrameAttributes {
      * Imposta i quattro modificatori del telaio dagli effetti dati: velocita' come "moltiplica totale" di
      * {@code speedMultiplier - 1}; contraccolpo, armatura ({@link FrameEffects#armorPoints()}) e robustezza come
      * addendi. Un modificatore gia' presente con lo stesso id viene prima rimosso.
+     * <p>
+     * Va chiamato ai cambi di stato (login, cambio di dimensione, cambio del telaio), non a ogni tick: ogni chiamata
+     * fa reinviare gli attributi al client.
      */
     void apply(LivingEntity e, FrameEffects fx);
 

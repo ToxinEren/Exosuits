@@ -56,7 +56,7 @@ if [ -z "$bus_line" ] || [ -z "$init_line" ] || [ "$bus_line" -ge "$init_line" ]
 fi
 
 # 4. Le implementazioni di compat/impl si importano solo da compat/ (il resto passa da Compat e dalle interfacce).
-bad=$(grep -rl 'import com.toxineren.exoframes.compat.impl' src/main/java src/test/java | grep -vE "^$JAVA/compat/" || true)
+bad=$(grep -rlE '^[[:space:]]*import[[:space:]]+(static[[:space:]]+)?com\.toxineren\.exoframes\.compat\.impl\.' src/main/java src/test/java | grep -vE "^$JAVA/compat/" || true)
 if [ -n "$bad" ]; then
     echo "FAIL: import di compat.impl fuori da compat/:" >&2
     echo "$bad" >&2
@@ -70,6 +70,15 @@ bad=$(grep -rl 'registerC2S(' src/main/java | grep -vE "^$JAVA/compat/(Net|impl/
 done)
 if [ -n "$bad" ]; then
     echo "FAIL: registrazione C2S senza Compat.frameState() (validazione lato server):" >&2
+    echo "$bad" >&2
+    fail=1
+fi
+
+# 6. Regola finale sulle condizioni Stonecutter: oltre a compat/impl/ e platform/ le ammette solo compat/Ids.java,
+#    la fabbrica degli id usata direttamente dal codice dei contenuti. Le interfacce di compat/ restano senza versione.
+bad=$(grep -rl '//? if' "$JAVA" | grep -vE "^$JAVA/(compat/impl|platform)/" | grep -vxF "$JAVA/compat/Ids.java" || true)
+if [ -n "$bad" ]; then
+    echo "FAIL: condizioni Stonecutter fuori da compat/impl/, platform/ e compat/Ids.java:" >&2
     echo "$bad" >&2
     fail=1
 fi

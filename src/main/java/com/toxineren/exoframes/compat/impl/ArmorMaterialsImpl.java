@@ -29,6 +29,9 @@ import net.minecraft.core.registries.Registries;
  * (che legge il materiale pigramente) anche prima che la voce sia legata. Su 1.20.1 il materiale e' un enum privato:
  * il nome e' "frame" senza namespace perche' su Fabric il percorso vanilla della texture non ne accetta uno, e il
  * codice e' lo stesso per Fabric e Forge. Nessuna texture e' fornita qui: il rendering dei pezzi passera' da GeckoLib.
+ * <p>
+ * {@code newPlaceholder} imposta {@code stacksTo(1)} sulle proprieta' su entrambe le versioni; la durabilita' resta
+ * compito del chiamante.
  */
 public final class ArmorMaterialsImpl implements ArmorMaterials {
     //? if >=1.21 {
@@ -37,7 +40,9 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
 
     private static final RegistrySupplier<ArmorMaterial> FRAME = MATERIALS.register("frame", ArmorMaterialsImpl::frame);
 
-    /** Il materiale "frame": difesa 0 per ogni tipo, nessuna riparazione, texture {@code redstone_exoframes:frame}. */
+    /**
+     * Il materiale "frame": difesa 0 per ogni tipo, nessuna riparazione, id del layer {@code redstone_exoframes:frame}.
+     */
     private static ArmorMaterial frame() {
         Map<ArmorItem.Type, Integer> defense = new EnumMap<>(ArmorItem.Type.class);
         for (ArmorItem.Type type : ArmorItem.Type.values()) {
@@ -59,7 +64,7 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
 
     @Override
     public ArmorItem newPlaceholder(ArmorItem.Type type, Item.Properties props) {
-        return new ArmorItem(FRAME, type, props);
+        return new ArmorItem(FRAME, type, props.stacksTo(1));
     }
     //?} else {
     /*@Override
@@ -74,7 +79,7 @@ public final class ArmorMaterialsImpl implements ArmorMaterials {
 
     @Override
     public ArmorItem newPlaceholder(ArmorItem.Type type, Item.Properties props) {
-        return new ArmorItem(FrameMaterial.FRAME, type, props);
+        return new ArmorItem(FrameMaterial.FRAME, type, props.stacksTo(1));
     }
 
     // Il materiale "frame" su 1.20.1: tutto a zero. Durabilita' 0 vuol dire item non danneggiabile per vanilla,
