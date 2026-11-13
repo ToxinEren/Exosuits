@@ -2,6 +2,7 @@ package com.toxineren.exoframes.core.frame;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.core.armor.Piece;
@@ -13,9 +14,11 @@ import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.energy.EnergyMeter;
 import com.toxineren.exoframes.core.energy.EnergyRates;
 import com.toxineren.exoframes.core.energy.EnergyState;
+import com.toxineren.exoframes.core.module.ModuleCondition;
 import com.toxineren.exoframes.core.module.ModuleInstaller;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class FrameRulesTest {
@@ -59,6 +62,149 @@ class FrameRulesTest {
             total += rules.tick(s, a, meter);
         }
         return total;
+    }
+
+    private static int run(FrameRules rules, FrameState s, Activity a, EnergyMeter meter, FrameContext ctx,
+            Set<ModuleType> held, int ticks) {
+        int total = 0;
+        for (int i = 0; i < ticks; i++) {
+            total += rules.tick(s, a, meter, ctx, held);
+        }
+        return total;
+    }
+
+    private EnergyMeter meter() {
+        return new EnergyMeter(EnergyRates.from(cfg.energy));
+    }
+
+    /** Telaio con cella piena e onda d'urto installata su entrambe le gambe. */
+    private FrameState shockwaveFrame() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.LEFT_LEG));
+        s.mount(scrap(PieceSlot.RIGHT_LEG));
+        s.installModule(PieceSlot.LEFT_LEG, ModuleType.SHOCKWAVE);
+        s.installModule(PieceSlot.RIGHT_LEG, ModuleType.SHOCKWAVE);
+        return s;
+    }
+
+    private FrameState jetpackFrame() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.TORSO));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.TORSO, ModuleType.JETPACK));
+        return s;
+    }
+
+    @Test
+    void rebreatherCostsOnlyUnderwater() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.HELMET));
+        s.installModule(PieceSlot.HELMET, ModuleType.REBREATHER);
+        assertEquals(ModuleCondition.SUBMERGED, ModuleType.REBREATHER.condition());
+        assertFalse(rules.evaluate(s).enabledModules().contains(ModuleType.REBREATHER));
+        assertFalse(rules.evaluate(s, FrameContext.NONE).enabledModules().contains(ModuleType.REBREATHER));
+        FrameContext underwater = new FrameContext(true);
+        assertTrue(rules.evaluate(s, underwater).enabledModules().contains(ModuleType.REBREATHER));
+
+        assertEquals(2, run(rules, s, Activity.IDLE, meter(), 20));
+        assertEquals(2, run(rules, s, Activity.IDLE, meter(), FrameContext.NONE, Set.of(), 20));
+        assertEquals(6, run(rules, s, Activity.IDLE, meter(), underwater, Set.of(), 20));
+        assertEquals(cfg.energy.cellCapacity - 10, s.cell().stored());
+    }
+
+    @Test
+    void heldJetpackCostsSixtyPerSecond() {
+        FrameState s = jetpackFrame();
+        assertEquals(62, run(rules, s, Activity.IDLE, meter(), FrameContext.NONE, Set.of(ModuleType.JETPACK), 20));
+        // senza tenerlo premuto costa solo l'attivita'
+        assertEquals(2, run(rules, s, Activity.IDLE, meter(), FrameContext.NONE, Set.of(), 20));
+    }
+
+    @Test
+    void heldIgnoresNonHoldAndUnmountedModules() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.HELMET));
+        s.installModule(PieceSlot.HELMET, ModuleType.NIGHT_VISION);
+        // NIGHT_VISION e' un toggle spento: tenerlo non costa; JETPACK non e' installato
+        Set<ModuleType> held = Set.of(ModuleType.NIGHT_VISION, ModuleType.JETPACK, ModuleType.SHOCKWAVE);
+        assertEquals(2, run(rules, s, Activity.IDLE, meter(), FrameContext.NONE, held, 20));
+    }
+
+    @Test
+    void lowEnergyBlocksActivation() {
+        FrameState s = jetpackFrame();
+        assertTrue(rules.canActivate(s, ModuleType.JETPACK));
+        s.insertCell(new EnergyCell(cfg.energy.cellCapacity, 999));
+        assertFalse(rules.canActivate(s, ModuleType.JETPACK));
+        // il jetpack tenuto non costa nulla: restano i 2 RE dell'attivita'
+        assertEquals(2, run(rules, s, Activity.IDLE, meter(), FrameContext.NONE, Set.of(ModuleType.JETPACK), 20));
+        s.insertCell(new EnergyCell(cfg.energy.cellCapacity, 1_000));
+        assertTrue(rules.canActivate(s, ModuleType.JETPACK));
+        s.removeCell();
+        assertFalse(rules.canActivate(s, ModuleType.JETPACK));
+        assertFalse(rules.canActivate(poweredFrame(), ModuleType.JETPACK)); // non installato
+    }
+
+    @Test
+    void useDrainsPerUseCostOnce() {
+        FrameState s = shockwaveFrame();
+        assertTrue(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(cfg.energy.cellCapacity - 200, s.cell().stored());
+
+        // 150 RE su 10 000: sotto il 10 %, stato LOW
+        s.insertCell(new EnergyCell(cfg.energy.cellCapacity, 150));
+        assertFalse(rules.canActivate(s, ModuleType.SHOCKWAVE));
+        assertFalse(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(150, s.cell().stored());
+
+        // 150 RE su 1 000: stato NORMAL ma meno del costo per uso
+        s.insertCell(new EnergyCell(1_000, 150));
+        assertFalse(rules.canActivate(s, ModuleType.SHOCKWAVE));
+        assertFalse(rules.use(s, ModuleType.SHOCKWAVE));
+        assertEquals(150, s.cell().stored());
+
+        // modulo non operativo: nessun costo
+        FrameState noBlade = poweredFrame();
+        assertFalse(rules.use(noBlade, ModuleType.HYDRAULIC_BLADE));
+        assertEquals(cfg.energy.cellCapacity, noBlade.cell().stored());
+    }
+
+    @Test
+    void useRejectsModulesThatAreNotPerUse() {
+        FrameState s = jetpackFrame();
+        IllegalArgumentException e =
+                assertThrows(IllegalArgumentException.class, () -> rules.use(s, ModuleType.JETPACK));
+        assertEquals("not a per-use module: JETPACK", e.getMessage());
+        assertEquals(cfg.energy.cellCapacity, s.cell().stored());
+    }
+
+    @Test
+    void brokenTorsoRaisesJumpCost() {
+        FrameState s = poweredFrame();
+        assertEquals(15, rules.jump(s, meter()));
+        s.mount(scrap(PieceSlot.TORSO));
+        breakPiece(s, PieceSlot.TORSO);
+        assertEquals(19, rules.jump(s, meter()));
+        assertEquals(cfg.energy.cellCapacity - 15 - 19, s.cell().stored());
+    }
+
+    @Test
+    void jumpWithoutCellIsFree() {
+        assertEquals(0, rules.jump(new FrameState(cfg), meter()));
+    }
+
+    @Test
+    void unmountResetsDamageCarry() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.TORSO));
+        s.damageCarryMilli().put(PieceSlot.TORSO, 700);
+        s.damageCarryMilli().put(PieceSlot.HELMET, -200);
+        s.unmount(PieceSlot.TORSO);
+        assertEquals(0, s.damageCarryMilli().getOrDefault(PieceSlot.TORSO, 0));
+        assertEquals(-200, s.damageCarryMilli().get(PieceSlot.HELMET));
+
+        // sostituire il pezzo con mount equivale a smontarlo: il nuovo pezzo parte senza riporto
+        s.mount(scrap(PieceSlot.HELMET));
+        assertEquals(0, s.damageCarryMilli().getOrDefault(PieceSlot.HELMET, 0));
     }
 
     @Test

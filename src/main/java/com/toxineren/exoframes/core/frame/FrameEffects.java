@@ -5,7 +5,7 @@ import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.Set;
 
 /**
- * Effetti del telaio sul portatore, calcolati da {@link FrameRules#evaluate(FrameState)}.
+ * Effetti del telaio sul portatore, calcolati da {@link FrameRules#evaluate(FrameState, FrameContext)}.
  * {@code enabledModules} contiene solo i moduli attivi per tick (passivi e toggle accesi); i moduli a evento
  * ({@code HOLD}, {@code ON_LANDING}, {@code ON_ATTACK}) non compaiono mai.
  */

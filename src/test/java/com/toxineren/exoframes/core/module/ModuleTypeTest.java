@@ -60,6 +60,14 @@ class ModuleTypeTest {
     }
 
     @Test
+    void rebreatherIsSubmergedOnly() {
+        for (ModuleType type : ModuleType.values()) {
+            ModuleCondition expected = type == ModuleType.REBREATHER ? ModuleCondition.SUBMERGED : ModuleCondition.ALWAYS;
+            assertEquals(expected, type.condition(), type.id());
+        }
+    }
+
+    @Test
     void byIdRoundTrips() {
         for (ModuleType type : ModuleType.values()) {
             assertEquals(type, ModuleType.byId(type.id()));

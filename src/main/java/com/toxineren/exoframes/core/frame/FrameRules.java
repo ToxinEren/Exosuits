@@ -11,6 +11,7 @@ import com.toxineren.exoframes.core.energy.EnergyPenalties;
 import com.toxineren.exoframes.core.energy.EnergyRates;
 import com.toxineren.exoframes.core.energy.EnergyState;
 import com.toxineren.exoframes.core.module.Activation;
+import com.toxineren.exoframes.core.module.ModuleCondition;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.EnumSet;
 import java.util.List;
@@ -35,15 +36,24 @@ public final class FrameRules {
         this.cfg = Objects.requireNonNull(cfg, "cfg");
     }
 
-    /** Calcola gli effetti attuali del telaio. Senza cella lo stato energetico e' EMPTY. */
+    /** Scorciatoia per {@link #evaluate(FrameState, FrameContext)} con {@link FrameContext#NONE}. */
     public FrameEffects evaluate(FrameState s) {
+        return evaluate(s, FrameContext.NONE);
+    }
+
+    /**
+     * Calcola gli effetti attuali del telaio. Senza cella lo stato energetico e' EMPTY. Un modulo passivo o toggle
+     * e' abilitato (e consuma) solo se la sua {@link ModuleCondition} e' soddisfatta dal contesto.
+     */
+    public FrameEffects evaluate(FrameState s, FrameContext ctx) {
+        Objects.requireNonNull(ctx, "ctx");
         EnergyState energy = energyState(s);
         EnergyPenalties penalties = EnergyPenalties.forState(energy, cfg.energy);
 
         Set<ModuleType> enabled = EnumSet.noneOf(ModuleType.class);
         if (penalties.modulesEnabled()) {
             for (ModuleType m : installed(s)) {
-                if (activeEachTick(s, m) && moduleOperational(s, m)) {
+                if (activeEachTick(s, m) && conditionMet(m, ctx) && moduleOperational(s, m)) {
                     enabled.add(m);
                 }
             }
@@ -51,7 +61,7 @@ public final class FrameRules {
 
         int moduleMilli = 0;
         for (ModuleType m : enabled) {
-            moduleMilli += cfg.modules.costPerSecond.getOrDefault(m, 0) * MILLI_PER_RE / EnergyRates.TICKS_PER_SECOND;
+            moduleMilli += milliRePerTick(m);
         }
 
         double speed = 1.0 - cfg.frame.baseSpeedPenalty;
@@ -73,7 +83,7 @@ public final class FrameRules {
         }
         protection *= penalties.protectionMultiplier();
 
-        double consumption = mountedAndBroken(s, PieceSlot.TORSO) ? cfg.damage.brokenTorsoConsumptionMultiplier : 1.0;
+        double consumption = consumptionMultiplier(s);
 
         return new FrameEffects(
                 speed,
@@ -106,21 +116,93 @@ public final class FrameRules {
     }
 
     /**
-     * Consuma un tick: attivita' piu' moduli abilitati, per il moltiplicatore del torso rotto.
-     * Restituisce gli RE tolti dalla cella (0 senza cella).
+     * True se il modulo puo' essere attivato ora: e' operativo, lo stato energetico e' NORMAL e, per i moduli a
+     * singolo uso, la cella contiene almeno {@code modules.costPerUse}.
      */
+    public boolean canActivate(FrameState s, ModuleType m) {
+        Objects.requireNonNull(m, "module");
+        if (!moduleOperational(s, m) || energyState(s) != EnergyState.NORMAL) {
+            return false;
+        }
+        int perUse = cfg.modules.costPerUse.getOrDefault(m, 0);
+        return perUse <= 0 || s.cell().stored() >= perUse;
+    }
+
+    /** Scorciatoia per {@link #tick(FrameState, Activity, EnergyMeter, FrameContext, Set)} senza contesto ne' moduli tenuti. */
     public int tick(FrameState s, Activity a, EnergyMeter meter) {
+        return tick(s, a, meter, FrameContext.NONE, Set.of());
+    }
+
+    /**
+     * Consuma un tick: attivita' piu' moduli abilitati nel contesto, piu' i moduli {@code HOLD} tenuti premuti
+     * ({@code held}) che {@link #canActivate} consente, il tutto per il moltiplicatore del torso rotto. I moduli di
+     * {@code held} che non sono {@code HOLD} vengono ignorati. Restituisce gli RE tolti dalla cella (0 senza cella).
+     */
+    public int tick(FrameState s, Activity a, EnergyMeter meter, FrameContext ctx, Set<ModuleType> held) {
+        Objects.requireNonNull(held, "held");
         EnergyCell cell = s.cell();
         if (cell == null) {
             return 0;
         }
-        FrameEffects fx = evaluate(s);
-        return meter.tick(cell, a, fx.moduleMilliRePerTick(), fx.consumptionMultiplier());
+        FrameEffects fx = evaluate(s, ctx);
+        int moduleMilli = fx.moduleMilliRePerTick();
+        for (ModuleType m : held) {
+            if (m.activation() == Activation.HOLD && canActivate(s, m)) {
+                moduleMilli += milliRePerTick(m);
+            }
+        }
+        return meter.tick(cell, a, moduleMilli, fx.consumptionMultiplier());
+    }
+
+    /**
+     * Usa un modulo a evento ({@code ON_LANDING} o {@code ON_ATTACK}): se {@link #canActivate} lo consente toglie
+     * {@code modules.costPerUse} dalla cella e restituisce true, altrimenti restituisce false senza toccare la cella.
+     *
+     * @throws IllegalArgumentException se il modulo non e' a singolo uso
+     */
+    public boolean use(FrameState s, ModuleType m) {
+        Objects.requireNonNull(m, "module");
+        if (m.activation() != Activation.ON_LANDING && m.activation() != Activation.ON_ATTACK) {
+            throw new IllegalArgumentException("not a per-use module: " + m);
+        }
+        if (!canActivate(s, m)) {
+            return false;
+        }
+        s.cell().drain(cfg.modules.costPerUse.getOrDefault(m, 0));
+        return true;
+    }
+
+    /**
+     * Toglie il costo del salto, {@code Math.round(jumpCost x moltiplicatore di consumo)} con il costo letto dalle
+     * tariffe del contatore; restituisce gli RE effettivamente tolti (0 senza cella).
+     */
+    public int jump(FrameState s, EnergyMeter meter) {
+        EnergyCell cell = s.cell();
+        if (cell == null) {
+            return 0;
+        }
+        return cell.drain((int) Math.round(meter.rates().jumpCost() * consumptionMultiplier(s)));
     }
 
     /** Punti armatura di un set completo del livello: round(IRON_ARMOR_POINTS x moltiplicatore del livello). */
     public int protectionPointsFor(Tier t) {
         return (int) Math.round(IRON_ARMOR_POINTS * multiplier(t));
+    }
+
+    private int milliRePerTick(ModuleType m) {
+        return cfg.modules.costPerSecond.getOrDefault(m, 0) * MILLI_PER_RE / EnergyRates.TICKS_PER_SECOND;
+    }
+
+    /** Moltiplicatore dei consumi: quello del torso rotto se il torso e' montato e rotto, altrimenti 1. */
+    private double consumptionMultiplier(FrameState s) {
+        return mountedAndBroken(s, PieceSlot.TORSO) ? cfg.damage.brokenTorsoConsumptionMultiplier : 1.0;
+    }
+
+    private static boolean conditionMet(ModuleType m, FrameContext ctx) {
+        return switch (m.condition()) {
+            case ALWAYS -> true;
+            case SUBMERGED -> ctx.submerged();
+        };
     }
 
     private double multiplier(Tier t) {

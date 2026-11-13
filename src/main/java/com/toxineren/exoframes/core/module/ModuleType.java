@@ -49,6 +49,11 @@ public enum ModuleType {
         return minTier;
     }
 
+    /** Condizione ambientale per abilitare il modulo: SUBMERGED solo per REBREATHER, ALWAYS per gli altri. */
+    public ModuleCondition condition() {
+        return this == REBREATHER ? ModuleCondition.SUBMERGED : ModuleCondition.ALWAYS;
+    }
+
     /** True solo per i moduli che richiedono entrambe le gambe (SHOCKWAVE). */
     public boolean requiresBothLegs() {
         return this == SHOCKWAVE;

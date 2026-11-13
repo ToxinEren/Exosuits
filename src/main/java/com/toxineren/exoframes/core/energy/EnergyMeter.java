@@ -28,6 +28,11 @@ public final class EnergyMeter {
         return cell.drain(rates.jumpCost());
     }
 
+    /** Tariffe usate da questo contatore. */
+    public EnergyRates rates() {
+        return rates;
+    }
+
     public int carryMilliRe() {
         return carry;
     }

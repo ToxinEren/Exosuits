@@ -119,6 +119,73 @@ class DamageRouterTest {
         assertEquals(0, split.unabsorbed());
     }
 
+    /** 100 colpi GENERIC da 1 con riporto: ogni colpo usura esattamente 1 e il totale segue le quote. */
+    @Test
+    void manySmallHitsFollowShares() {
+        Map<PieceSlot, Piece> mounted = fullSet();
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        Map<PieceSlot, Integer> total = new EnumMap<>(PieceSlot.class);
+        for (int hit = 0; hit < 100; hit++) {
+            DamageRouter.Split split = router.route(DamageKind.GENERIC, 1, mounted, carry);
+            assertEquals(1, sum(split.perPiece()), "hit " + hit);
+            assertEquals(0, split.unabsorbed(), "hit " + hit);
+            split.perPiece().forEach((slot, wear) -> total.merge(slot, wear, Integer::sum));
+        }
+        assertEquals(30, total.get(PieceSlot.TORSO));
+        assertEquals(15, total.get(PieceSlot.HELMET));
+        assertEquals(15, total.get(PieceSlot.LEFT_LEG));
+        assertEquals(15, total.get(PieceSlot.RIGHT_LEG));
+        assertEquals(25, total.get(PieceSlot.LEFT_ARM) + total.get(PieceSlot.RIGHT_ARM));
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        for (PieceSlot slot : PieceSlot.values()) {
+            double exact = 100 * cfg.pieces.shares.get(slot);
+            assertTrue(Math.abs(total.get(slot) - exact) <= 1.0, slot + " " + total.get(slot) + " vs " + exact);
+        }
+        assertEquals(100, sum(total));
+    }
+
+    @Test
+    void carryIsPerSlotAndBounded() {
+        Map<PieceSlot, Piece> mounted = fullSet();
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        for (int hit = 0; hit < 100; hit++) {
+            router.route(DamageKind.GENERIC, 1, mounted, carry);
+            assertEquals(PieceSlot.values().length, carry.size(), "hit " + hit);
+            for (Map.Entry<PieceSlot, Integer> e : carry.entrySet()) {
+                assertTrue(Math.abs(e.getValue()) <= 999, "hit " + hit + " " + e);
+            }
+        }
+    }
+
+    @Test
+    void carryLeavesUnroutedSlotsAlone() {
+        Map<PieceSlot, Piece> mounted = fullSet();
+        mounted.put(PieceSlot.HELMET, new Piece(PieceSlot.HELMET, Tier.INDUSTRIAL, 1_000, 0));
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        carry.put(PieceSlot.HELMET, 400);
+        DamageRouter.Split split = router.route(DamageKind.GENERIC, 1, mounted, carry);
+        assertEquals(1, sum(split.perPiece()));
+        assertEquals(400, carry.get(PieceSlot.HELMET));
+
+        Map<PieceSlot, Integer> untouched = new EnumMap<>(PieceSlot.class);
+        untouched.put(PieceSlot.TORSO, 700);
+        DamageRouter.Split none = router.route(DamageKind.GENERIC, 3, Map.of(), untouched);
+        assertEquals(3, none.unabsorbed());
+        assertEquals(Map.of(PieceSlot.TORSO, 700), untouched);
+    }
+
+    @Test
+    void zeroDamageWithCarryWearsNothing() {
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        carry.put(PieceSlot.TORSO, 600);
+        carry.put(PieceSlot.HELMET, -300);
+        DamageRouter.Split split = router.route(DamageKind.GENERIC, 0, fullSet(), carry);
+        assertTrue(split.perPiece().isEmpty());
+        assertEquals(0, split.unabsorbed());
+        assertEquals(600, carry.get(PieceSlot.TORSO));
+        assertEquals(-300, carry.get(PieceSlot.HELMET));
+    }
+
     @Test
     void allMountedPiecesBrokenLeavesAllUnabsorbed() {
         Map<PieceSlot, Piece> mounted = new EnumMap<>(PieceSlot.class);

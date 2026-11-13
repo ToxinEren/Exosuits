@@ -23,6 +23,9 @@ import java.util.UUID;
  * <p>I moduli appartengono al pezzo montato nel loro slot: smontare o sostituire il pezzo toglie dal telaio
  * i moduli di quello slot (e i loro toggle accesi). Per riportarli sull'oggetto del pezzo, il livello di
  * piattaforma chiama {@link #takeModules(PieceSlot)} prima di {@link #unmount(PieceSlot)}.
+ *
+ * <p>Il riporto frazionario del danno ({@link #damageCarryMilli()}) e' per slot e appartiene al pezzo montato:
+ * smontarlo o sostituirlo lo azzera.
  */
 public final class FrameState {
 
@@ -31,6 +34,7 @@ public final class FrameState {
     private final Map<PieceSlot, Piece> pieces = new EnumMap<>(PieceSlot.class);
     private final Map<PieceSlot, List<ModuleType>> modules = new EnumMap<>(PieceSlot.class);
     private final Set<ModuleType> activeToggles = EnumSet.noneOf(ModuleType.class);
+    private final EnumMap<PieceSlot, Integer> damageCarryMilli = new EnumMap<>(PieceSlot.class);
     private EnergyCell cell;
     private boolean reinforced;
     private UUID owner;
@@ -69,20 +73,24 @@ public final class FrameState {
 
     /**
      * Monta il pezzo nel suo slot, sostituendo quello eventualmente presente; lo slot riparte senza moduli
-     * (quelli del pezzo sostituito vanno ripresi prima con {@link #takeModules(PieceSlot)}).
+     * (quelli del pezzo sostituito vanno ripresi prima con {@link #takeModules(PieceSlot)}) e con il riporto
+     * del danno azzerato.
      */
     public void mount(Piece p) {
         Objects.requireNonNull(p, "piece");
         takeModules(p.slot());
+        damageCarryMilli.remove(p.slot());
         pieces.put(p.slot(), p);
     }
 
     /**
      * Smonta il pezzo dallo slot e lo restituisce (null se lo slot era vuoto). Toglie anche i moduli dello
-     * slot e i loro toggle: chi deve conservarli li riprende prima con {@link #takeModules(PieceSlot)}.
+     * slot e i loro toggle (chi deve conservarli li riprende prima con {@link #takeModules(PieceSlot)}) e azzera
+     * il riporto del danno dello slot.
      */
     public Piece unmount(PieceSlot s) {
         takeModules(Objects.requireNonNull(s, "slot"));
+        damageCarryMilli.remove(s);
         return pieces.remove(s);
     }
 
@@ -124,6 +132,16 @@ public final class FrameState {
             installed.add(module);
         }
         return reason;
+    }
+
+    /**
+     * Mappa mutabile del riporto frazionario del danno per slot, in millesimi di punto (uno slot assente vale 0):
+     * da passare a {@link com.toxineren.exoframes.core.armor.DamageRouter#route(
+     * com.toxineren.exoframes.core.armor.DamageKind, int, Map, Map)}, che la aggiorna. Ogni valore sta in
+     * (-1000, 1000): negativo se il pezzo ha gia' ricevuto in anticipo un punto di usura.
+     */
+    public EnumMap<PieceSlot, Integer> damageCarryMilli() {
+        return damageCarryMilli;
     }
 
     /** Insieme mutabile dei moduli toggle accesi dal giocatore. */

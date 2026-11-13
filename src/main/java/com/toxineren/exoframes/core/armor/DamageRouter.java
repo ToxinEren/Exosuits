@@ -20,12 +20,16 @@ import java.util.Set;
  * destinatari sommano a 0 il resto si divide in parti uguali). Se nessun primario puo' assorbire, la quota primaria si somma al
  * resto; se puo' assorbire solo qualche primario, il resto va ai primari. I pezzi rotti o assenti non
  * ricevono nulla. Gli interi si ottengono con il metodo dei resti maggiori (a parita' di resto vince il
- * pezzo che viene prima in {@link PieceSlot}), cosi' la somma e' esattamente {@code amount}.
+ * pezzo che viene prima in {@link PieceSlot}), cosi' la somma e' esattamente {@code amount}. La variante con
+ * riporto ({@link #route(DamageKind, int, Map, Map)}) conserva le frazioni tra un colpo e l'altro.
  */
 public final class DamageRouter {
 
     /** Tolleranza per non perdere un'unita' quando una quota esatta esce come 29.999999999. */
     private static final double EPSILON = 1e-9;
+
+    /** Millesimi di punto per punto di danno: l'unita' del riporto. */
+    private static final int MILLI = 1000;
 
     /**
      * Esito della ripartizione. {@code perPiece} contiene solo i pezzi che ricevono un danno &gt; 0;
@@ -65,7 +69,33 @@ public final class DamageRouter {
         this.shares = copy;
     }
 
+    /**
+     * Ripartizione senza memoria: equivale a {@link #route(DamageKind, int, Map, Map)} con un riporto vuoto
+     * usato una volta sola, cioe' il metodo dei resti maggiori sulle quote esatte.
+     */
     public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted) {
+        return route(kind, amount, mounted, new EnumMap<>(PieceSlot.class));
+    }
+
+    /**
+     * Ripartisce il danno tenendo conto del riporto frazionario per slot, in millesimi di punto, e lo aggiorna.
+     * La somma dell'usura assegnata in un colpo e' esattamente {@code amount} (se qualche pezzo puo' assorbire),
+     * e su molti colpi piccoli l'usura di ogni pezzo converge alla sua quota.
+     *
+     * <ol>
+     *   <li>Le quote esatte dei pezzi destinatari, in millesimi, sommano a {@code amount x 1000}
+     *       (resti maggiori a precisione di millesimo).</li>
+     *   <li>Per ogni destinatario {@code v = riporto + quota}: con {@code v >= 0} l'usura e' {@code v / 1000} e il
+     *       resto {@code v % 1000}; con {@code v < 0} l'usura e' 0 e il resto {@code v}.</li>
+     *   <li>Se la somma dei resti raggiunge {@code k} migliaia, i {@code k} destinatari con il resto maggiore (a
+     *       parita' il primo in {@link PieceSlot}) ricevono un punto in piu' e il loro resto cala di 1000.</li>
+     *   <li>I resti tornano nel riporto; gli slot che non ricevono danno (assenti o rotti) restano invariati.</li>
+     * </ol>
+     *
+     * Ogni valore del riporto resta in (-1000, 1000); uno slot assente dalla mappa vale 0.
+     */
+    public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted, Map<PieceSlot, Integer> carry) {
+        Objects.requireNonNull(carry, "carry");
         if (amount < 0) {
             throw new IllegalArgumentException("amount must be >= 0: " + amount);
         }
@@ -91,48 +121,79 @@ public final class DamageRouter {
             otherShares += shares.get(slot);
         }
 
-        // Quote esatte, nell'ordine di dichiarazione di PieceSlot.
+        // Quote esatte in millesimi, nell'ordine di dichiarazione di PieceSlot.
         List<PieceSlot> slots = new ArrayList<>();
         List<Double> quotas = new ArrayList<>();
         for (PieceSlot slot : PieceSlot.values()) {
             if (primary.contains(slot)) {
                 slots.add(slot);
-                quotas.add(primaryPart / primary.size());
+                quotas.add(primaryPart / primary.size() * MILLI);
             } else if (others.contains(slot)) {
                 slots.add(slot);
-                quotas.add(otherShares > 0.0
+                quotas.add((otherShares > 0.0
                         ? otherPart * shares.get(slot) / otherShares
-                        : otherPart / others.size());
+                        : otherPart / others.size()) * MILLI);
             }
         }
+        long[] milli = largestRemainder(quotas, (long) amount * MILLI);
 
-        int[] shares = new int[slots.size()];
-        double[] remainders = new double[slots.size()];
-        int assigned = 0;
-        for (int i = 0; i < slots.size(); i++) {
-            double quota = quotas.get(i);
-            shares[i] = (int) Math.floor(quota + EPSILON);
-            remainders[i] = quota - shares[i];
-            assigned += shares[i];
+        int n = slots.size();
+        long[] wear = new long[n];
+        long[] rest = new long[n];
+        long pending = 0;
+        for (int i = 0; i < n; i++) {
+            long v = carry.getOrDefault(slots.get(i), 0) + milli[i];
+            wear[i] = v >= 0 ? v / MILLI : 0;
+            rest[i] = v >= 0 ? v % MILLI : v;
+            pending += rest[i];
         }
-        // Resti maggiori: le unita' mancanti vanno ai resti piu' grandi; a parita' vince l'indice minore.
-        for (int left = amount - assigned; left > 0; left--) {
+        // Le migliaia accumulate nei resti diventano punti di usura per i resti maggiori (a parita' l'indice minore).
+        for (long k = pending / MILLI; k > 0; k--) {
             int best = 0;
-            for (int i = 1; i < remainders.length; i++) {
+            for (int i = 1; i < n; i++) {
+                if (rest[i] > rest[best]) {
+                    best = i;
+                }
+            }
+            wear[best]++;
+            rest[best] -= MILLI;
+        }
+
+        for (int i = 0; i < n; i++) {
+            carry.put(slots.get(i), (int) rest[i]);
+            if (wear[i] > 0) {
+                perPiece.put(slots.get(i), Math.toIntExact(wear[i]));
+            }
+        }
+        return new Split(perPiece, 0);
+    }
+
+    /**
+     * Interi che sommano a {@code total}: la parte intera di ogni quota, poi le unita' mancanti ai resti piu'
+     * grandi (a parita' vince l'indice minore).
+     */
+    private static long[] largestRemainder(List<Double> quotas, long total) {
+        int n = quotas.size();
+        long[] result = new long[n];
+        double[] remainders = new double[n];
+        long assigned = 0;
+        for (int i = 0; i < n; i++) {
+            double quota = quotas.get(i);
+            result[i] = (long) Math.floor(quota + EPSILON);
+            remainders[i] = quota - result[i];
+            assigned += result[i];
+        }
+        for (long left = total - assigned; left > 0; left--) {
+            int best = 0;
+            for (int i = 1; i < n; i++) {
                 if (remainders[i] > remainders[best] + EPSILON) {
                     best = i;
                 }
             }
-            shares[best]++;
+            result[best]++;
             remainders[best] = Double.NEGATIVE_INFINITY;
         }
-
-        for (int i = 0; i < slots.size(); i++) {
-            if (shares[i] > 0) {
-                perPiece.put(slots.get(i), shares[i]);
-            }
-        }
-        return new Split(perPiece, 0);
+        return result;
     }
 
     private static Set<PieceSlot> primariesOf(DamageKind kind) {
