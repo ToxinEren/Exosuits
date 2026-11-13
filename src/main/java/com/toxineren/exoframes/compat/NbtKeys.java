@@ -73,6 +73,19 @@ public final class NbtKeys {
     public static final String CARRY_MILLI = "carry_milli";
 
     /**
+     * Riassunto visivo del telaio indossato (compound con {@link #PIECES}: una voce per id di PieceSlot in minuscolo
+     * con {@link #TIER}, {@link #CONDITION} e le chiavi dell'aspetto), nel tag radice del segnaposto del torso; vedi
+     * SuitSummary. Assente = nessun riassunto.
+     */
+    public static final String VISUAL = "visual";
+    /**
+     * Stato visivo di un pezzo (string: il nome di PieceCondition in minuscolo, {@code intact}, {@code damaged},
+     * {@code critical} o {@code broken}), dentro una voce del riassunto {@link #VISUAL}; assente o sconosciuto =
+     * {@code intact}.
+     */
+    public static final String CONDITION = "condition";
+
+    /**
      * Versione dello schema delle voci (int), accanto a {@code frames} nel dato salvato degli stati del telaio;
      * assente vale 1. Non c'e' marcatore sugli item.
      */

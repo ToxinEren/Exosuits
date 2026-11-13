@@ -2,11 +2,22 @@ package com.toxineren.exoframes.gametest;
 
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
+import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
+import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.armor.Appearance;
+import com.toxineren.exoframes.core.armor.Decal;
+import com.toxineren.exoframes.core.armor.PieceCondition;
+import com.toxineren.exoframes.core.armor.PieceSlot;
+import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.frame.FrameState;
+import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 import net.minecraft.core.BlockPos;
@@ -14,6 +25,7 @@ import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 
 /**
@@ -44,6 +56,7 @@ public final class ExoframeGameTests {
         List<TestFunction> tests = new ArrayList<>();
         add(tests, "wiringPlacesABlock", ExoframeGameTests::wiringPlacesABlock);
         add(tests, "frameStateOnMockPlayer", ExoframeGameTests::frameStateOnMockPlayer);
+        add(tests, "itemDataRoundTripsOnARealStack", ExoframeGameTests::itemDataRoundTripsOnARealStack);
         return tests;
     }
 
@@ -62,6 +75,29 @@ public final class ExoframeGameTests {
         Optional<FrameState> state = Compat.frameState().get(player);
         helper.assertTrue(state.isPresent(), "frame state missing after update");
         helper.assertTrue(state.get().reinforced(), "frame state not reinforced after update");
+        helper.succeed();
+    }
+
+    /**
+     * Andata e ritorno dei dati degli item su uno stack vero (il percorso di scrittura che i test unitari non
+     * raggiungono): un pezzo con aspetto non predefinito, poi il riassunto visivo, che non deve cancellare il pezzo.
+     */
+    private static void itemDataRoundTripsOnARealStack(GameTestHelper helper) {
+        ItemStack stack = new ItemStack(ModItems.REDSTONE_CELL.get());
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of(new Decal("minecraft:creeper", "red")));
+        PieceData piece = new PieceData(Tier.ARMORED, 120, 400, List.of(ModuleType.NIGHT_VISION), painted);
+        Compat.itemData().setPiece(stack, piece);
+        helper.assertTrue(Optional.of(piece).equals(Compat.itemData().piece(stack)),
+                "piece data changed on round trip: " + Compat.itemData().piece(stack));
+
+        SuitSummary summary = new SuitSummary(Map.of(
+                PieceSlot.TORSO, new PieceLook(Tier.ARMORED, PieceCondition.DAMAGED, painted),
+                PieceSlot.HELMET, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT)));
+        Compat.itemData().setSuitSummary(stack, summary);
+        helper.assertTrue(Optional.of(summary).equals(Compat.itemData().suitSummary(stack)),
+                "suit summary changed on round trip: " + Compat.itemData().suitSummary(stack));
+        helper.assertTrue(Optional.of(piece).equals(Compat.itemData().piece(stack)),
+                "writing the suit summary changed the piece data: " + Compat.itemData().piece(stack));
         helper.succeed();
     }
 

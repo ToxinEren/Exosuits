@@ -2,6 +2,7 @@ package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.compat.ItemDataAccess;
 import com.toxineren.exoframes.compat.NbtKeys;
+import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.EnumMap;
@@ -101,6 +102,19 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
             piecesTag.put(SchemaIds.slotId(entry.getKey()), pieceTag);
         }
         root.put(NbtKeys.PIECES, piecesTag);
+        ItemPayload.write(stack, root);
+    }
+
+    @Override
+    public Optional<SuitSummary> suitSummary(ItemStack stack) {
+        CompoundTag root = ItemPayload.read(stack);
+        return root == null ? Optional.empty() : SuitSummaryTags.read(root);
+    }
+
+    @Override
+    public void setSuitSummary(ItemStack stack, SuitSummary summary) {
+        CompoundTag root = rootOrEmpty(stack);
+        SuitSummaryTags.write(root, summary);
         ItemPayload.write(stack, root);
     }
 

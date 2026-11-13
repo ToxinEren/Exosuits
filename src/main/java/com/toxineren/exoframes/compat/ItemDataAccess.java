@@ -54,6 +54,17 @@ public interface ItemDataAccess {
     /** Scrive tutti i campi del telaio, conservando le altre chiavi del tag radice. */
     void setFrame(ItemStack stack, FrameItemData data);
 
+    /**
+     * Il riassunto visivo del telaio ({@link NbtKeys#VISUAL} nel tag radice); vuoto se manca il tag radice o se
+     * {@link NbtKeys#VISUAL} manca o non e' un compound. Lettura tollerante: una voce con slot o livello sconosciuti
+     * (o non compound) si salta, una condizione assente o sconosciuta vale {@code INTACT}, l'aspetto si legge con le
+     * garanzie dei pezzi descritte sopra.
+     */
+    Optional<SuitSummary> suitSummary(ItemStack stack);
+
+    /** Scrive il riassunto visivo, sostituendo quello presente e conservando le altre chiavi del tag radice. */
+    void setSuitSummary(ItemStack stack, SuitSummary summary);
+
     /** Vero se lo stack ha il tag radice {@link NbtKeys#ROOT}. */
     boolean hasData(ItemStack stack);
 

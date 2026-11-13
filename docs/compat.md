@@ -10,7 +10,7 @@ Regole di struttura (Milestone 2b):
 
 Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (vedi in fondo).
 
-## Le sette interfacce
+## Le otto interfacce
 
 ### `Platform` — ambiente di esecuzione
 
@@ -23,9 +23,10 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 ### `ItemDataAccess` — dati tipizzati sugli item
 
 - **File:** [`ItemDataAccess.java`](../src/main/java/com/toxineren/exoframes/compat/ItemDataAccess.java), implementazione [`ItemDataAccessImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/ItemDataAccessImpl.java) con l'accesso grezzo in [`ItemPayload.java`](../src/main/java/com/toxineren/exoframes/compat/impl/ItemPayload.java).
-- **A cosa serve:** energia delle celle (`cellEnergy`/`setCellEnergy`), dati dei pezzi (`piece`/`setPiece` con il record `PieceData`: tier, durabilità, durabilità massima, moduli, aspetto `Appearance` con due colori e le decalcomanie), dati del telaio come item (`frame`/`setFrame` con il record `FrameItemData`: proprietario `Optional<UUID>`, sbloccato, rinforzato, energia della cella `Optional<Integer>`, pezzi per slot), presenza dei dati (`hasData`). I record rifiutano componenti null. In lettura (dati non fidati: `/give`, inventario creativo, altre mod) gli intervalli sono garantiti: un pezzo ha `maxDurability > 0` (altrimenti nessun pezzo) e `durability` in [0, `maxDurability`]; i moduli sono noti, senza duplicati, nell'ordine salvato e al massimo uno per tipo; i colori valgono `Appearance.UNPAINTED` (−1, colore predefinito del livello) se la chiave manca e altrimenti sono ridotti a 24 bit; le decalcomanie valide sono al massimo `Appearance.MAX_DECALS` (4) e quelle malformate si saltano; l'energia della cella è sempre `>= 0` (il limite superiore, la capacità, resta al chiamante).
+- **A cosa serve:** energia delle celle (`cellEnergy`/`setCellEnergy`), dati dei pezzi (`piece`/`setPiece` con il record `PieceData`: tier, durabilità, durabilità massima, moduli, aspetto `Appearance` con due colori e le decalcomanie), dati del telaio come item (`frame`/`setFrame` con il record `FrameItemData`: proprietario `Optional<UUID>`, sbloccato, rinforzato, energia della cella `Optional<Integer>`, pezzi per slot), riassunto visivo del telaio indossato (`suitSummary`/`setSuitSummary` con il record `SuitSummary`, vedi sotto), presenza dei dati (`hasData`). I record rifiutano componenti null. In lettura (dati non fidati: `/give`, inventario creativo, altre mod) gli intervalli sono garantiti: un pezzo ha `maxDurability > 0` (altrimenti nessun pezzo) e `durability` in [0, `maxDurability`]; i moduli sono noti, senza duplicati, nell'ordine salvato e al massimo uno per tipo; i colori valgono `Appearance.UNPAINTED` (−1, colore predefinito del livello) se la chiave manca e altrimenti sono ridotti a 24 bit; le decalcomanie valide sono al massimo `Appearance.MAX_DECALS` (4) e quelle malformate si saltano; l'energia della cella è sempre `>= 0` (il limite superiore, la capacità, resta al chiamante).
+- **Riassunto visivo:** [`SuitSummary`](../src/main/java/com/toxineren/exoframes/compat/SuitSummary.java) è la descrizione solo visiva del telaio indossato: per ogni slot con un pezzo montato un `PieceLook` (livello, `PieceCondition`, `Appearance`); la mappa è una copia non modificabile, `SuitSummary.BARE` è il telaio nudo e `SuitSummary.of(FrameState)` lo ricava dallo stato (livello e condizione del pezzo, aspetto dello slot). Sta nei dati del segnaposto del torso sotto la chiave `visual`, così la sincronizzazione vanilla degli slot armatura lo porta a ogni client che vede il giocatore, su ogni loader e versione; il layer di rendering lo legge. `suitSummary` è vuoto se manca il tag radice o se `visual` manca o non è un compound; un `visual` senza `pieces` compound vale il telaio nudo. Lettura tollerante e mai con eccezioni ([`SuitSummaryTags`](../src/main/java/com/toxineren/exoframes/compat/impl/SuitSummaryTags.java)): si guardano solo le voci dei sei slot noti (le chiavi sconosciute o in eccesso si ignorano), una voce non compound o con livello assente, non string o sconosciuto si salta, una condizione assente, non string o sconosciuta vale `INTACT`, l'aspetto si legge con `PieceTags` con le garanzie dei pezzi. `setSuitSummary` sostituisce tutto `visual` e conserva le altre chiavi del tag radice.
 - **Differenze chiuse:** su 1.20.1 i dati stanno nel tag NBT dello stack (`getTagElement`/`getOrCreateTag`); su 1.21.1 nel componente vanilla `minecraft:custom_data` (nessun componente registrato dalla mod). Il contenuto del tag radice `exoframes` è identico, così il DFU di vanilla, che lo copia così com'è in `custom_data`, conserva i dati primitivi di un mondo 1.20.1 aggiornato a 1.21.1; gli stack annidati (gli item riposti di `stowed`) non vengono convertiti e avranno bisogno di una migrazione esplicita. Le scritture conservano le chiavi non toccate e non fanno nulla su uno stack vuoto.
-- **Condizione:** solo `ItemPayload` (lettura e scrittura del tag radice); `ItemDataAccessImpl` non ha condizioni.
+- **Condizione:** solo `ItemPayload` (lettura e scrittura del tag radice); `ItemDataAccessImpl` e `SuitSummaryTags` non hanno condizioni.
 - **Uso:** `Compat.itemData().cellEnergy(stack)`.
 
 ### `ArmorMaterials` — materiale d'armatura segnaposto
@@ -67,6 +68,14 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 - **Differenze chiuse:** persistenza con un unico `SavedData` nell'overworld (`data/redstone_exoframes_frames.dat`, mappa UUID → stato) uguale sui quattro target, al posto di capability Forge, attachment NeoForge o data-attachment Fabric; tra versioni cambiano la firma di `SavedData.save` (con `HolderLookup.Provider` su 1.21.1), `DimensionDataStorage.computeIfAbsent` (`Function, Supplier, String` su 1.20.1, `SavedData.Factory, String` su 1.21.1) e la lambda di `PlayerEvent.PLAYER_RESPAWN` di Architectury (un parametro in più su 1.21.1). Codec e pacchetto (UUID, flag di presenza, tag) sono identici.
 - **Condizione:** `FrameStateSavedData` (save, computeIfAbsent) e `FrameStateAccessImpl` (evento di respawn).
 - **Uso:** `Compat.frameState().update(serverPlayer, state -> state.setUnlocked(true))`.
+
+### `GameTests` — test in gioco
+
+- **File:** [`GameTests.java`](../src/main/java/com/toxineren/exoframes/compat/GameTests.java), implementazione [`GameTestsImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/GameTestsImpl.java); i test comuni stanno in [`gametest/ExoframeGameTests.java`](../src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java).
+- **A cosa serve:** `register(testClass)` aggancia la classe dei test in gioco (GameTest vanilla) al framework del loader, solo se è attivo il server di test (mai in produzione; altrimenti non fa nulla), dall'init comune; `mockServerPlayer(helper)` crea un giocatore finto connesso nel livello del test. I test si lanciano con `./gradlew :<variante>:runGameTestServer` o, sulle quattro varianti, con `bash tools/run_gametests.sh`.
+- **Differenze chiuse:** registrazione: su Forge e NeoForge un ascoltatore di `RegisterGameTestsEvent` sul bus del mod (bus di Architectury su Forge, del `ModContainer` su NeoForge), aggiunto solo se `isGametestServer()`; su Fabric `register` non fa nulla, perché la classe è l'entrypoint `fabric-gametest` di `fabric.mod.json`. Giocatore finto: su 1.21.1 `GameTestHelper.makeMockServerPlayerInLevel()`; su 1.20.1 un `ServerPlayer` creativo con una `Connection` agganciata a un `EmbeddedChannel` (senza canale Forge lancia un NPE all'ingresso e Fabric lascia i pacchetti in coda).
+- **Condizione:** `GameTestsImpl` (loader in `register`, versione in `mockServerPlayer`).
+- **Uso:** `Compat.gameTests().mockServerPlayer(helper)`.
 
 ### Fuori dalle interfacce: `Ids`
 
@@ -117,15 +126,17 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 |---|---|---|
 | `exoframes` | compound | radice dei dati sugli item |
 | `energy` | int | cella (item); dentro `cell` |
-| `tier` | string (`Tier#id`) | pezzo; voce di `pieces` |
+| `tier` | string (`Tier#id`) | pezzo; voce di `pieces` (anche dentro `visual`) |
 | `durability`, `max_durability` | int | pezzo; voce di `pieces` |
 | `modules` | lista di string (`ModuleType#id`) | pezzo; voce di `pieces` |
-| `color_primary`, `color_secondary` | int RGB (ridotto a 24 bit in lettura; assente = `UNPAINTED`) | pezzo; voce di `pieces` |
-| `decals` | lista di compound con `pattern` e `color` (string non vuote, al massimo 64 caratteri), al massimo 4 voci; le voci malformate si saltano, le eccedenti si tagliano; assente = nessuna | pezzo; voce di `pieces` |
+| `color_primary`, `color_secondary` | int RGB (ridotto a 24 bit in lettura; assente = `UNPAINTED`) | pezzo; voce di `pieces` (anche dentro `visual`) |
+| `decals` | lista di compound con `pattern` e `color` (string non vuote, al massimo 64 caratteri), al massimo 4 voci; le voci malformate si saltano, le eccedenti si tagliano; assente = nessuna | pezzo; voce di `pieces` (anche dentro `visual`) |
 | `owner` | UUID come int array | telaio (assente = nessun proprietario) |
 | `unlocked`, `reinforced` | boolean | telaio |
 | `cell` | compound con `energy` (e `capacity` nello stato) | telaio (assente = nessuna cella) |
-| `pieces` | compound, una voce per `PieceSlot` in minuscolo | telaio |
+| `pieces` | compound, una voce per `PieceSlot` in minuscolo | telaio; dentro `visual` |
+| `visual` | compound con `pieces`: una voce per `PieceSlot` in minuscolo con `tier`, `condition`, `color_primary`, `color_secondary`, `decals` (stesse regole dei pezzi); assente o non compound = nessun riassunto | segnaposto del torso: riassunto visivo (`SuitSummary`) |
+| `condition` | string, `PieceCondition` in minuscolo (`intact`, `damaged`, `critical`, `broken`); assente o sconosciuta = `intact` | voce di `pieces` dentro `visual` |
 | `stowed` | lista di tag item | definita, non ancora usata (rinviata alla Milestone 3, vedi "Limiti noti e rinvii") |
 | `capacity` | int | solo stato del telaio, dentro `cell` (Task 8) |
 | `active` | lista di string (`ModuleType#id`) | solo stato del telaio: toggle accesi (Task 8) |
