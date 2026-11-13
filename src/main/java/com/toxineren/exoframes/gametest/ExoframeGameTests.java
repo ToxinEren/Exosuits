@@ -1,0 +1,76 @@
+package com.toxineren.exoframes.gametest;
+
+import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.core.frame.FrameState;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.function.Consumer;
+import net.minecraft.core.BlockPos;
+import net.minecraft.gametest.framework.GameTestGenerator;
+import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.block.Blocks;
+
+/**
+ * Test in gioco (GameTest vanilla) comuni alle quattro varianti, senza differenze di versione o loader: quelle stanno
+ * dietro {@link Compat#gameTests()}. Si lanciano con {@code ./gradlew :<variante>:runGameTestServer} o con
+ * {@code bash tools/run_gametests.sh}.
+ *
+ * <p>Per aggiungere un test: un metodo {@code private static void temaCaso(GameTestHelper helper)} che chiude con
+ * {@code helper.succeed()}, e una riga {@code add(tests, "temaCaso", ExoframeGameTests::temaCaso);} in
+ * {@link #generate()}.
+ *
+ * <p>I test nascono da un {@link GameTestGenerator} e non dall'annotazione {@code @GameTest}, perche' i loader
+ * risolvono in modo diverso il nome della struttura dell'annotazione; il costruttore a 7 argomenti di
+ * {@link TestFunction} e' identico su 1.20.1 e 1.21.1. Nome del test e struttura portano entrambi il namespace della
+ * mod: Forge 1.20.1 filtra i test generati sul namespace del nome, NeoForge su quello della struttura.
+ */
+public final class ExoframeGameTests {
+    /** Struttura vuota 8x8x8 della mod: data/redstone_exoframes/structures/empty.nbt (1.20.1) e structure/ (1.21). */
+    private static final String EMPTY_STRUCTURE = RedstoneExoframes.MOD_ID + ":empty";
+    private static final int MAX_TICKS = 100;
+
+    /** Costruttore pubblico senza argomenti: l'entrypoint {@code fabric-gametest} istanzia la classe. */
+    public ExoframeGameTests() {
+    }
+
+    @GameTestGenerator
+    public static Collection<TestFunction> generate() {
+        List<TestFunction> tests = new ArrayList<>();
+        add(tests, "wiringPlacesABlock", ExoframeGameTests::wiringPlacesABlock);
+        add(tests, "frameStateOnMockPlayer", ExoframeGameTests::frameStateOnMockPlayer);
+        return tests;
+    }
+
+    /** Piazza un blocco nella struttura vuota e verifica che ci sia: prova del cablaggio. */
+    private static void wiringPlacesABlock(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(1, 1, 1);
+        helper.setBlock(pos, Blocks.REDSTONE_BLOCK);
+        helper.assertBlockPresent(Blocks.REDSTONE_BLOCK, pos);
+        helper.succeed();
+    }
+
+    /** Stato del telaio per giocatore su un giocatore finto: update, poi get. */
+    private static void frameStateOnMockPlayer(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        Compat.frameState().update(player, state -> state.setReinforced(true));
+        Optional<FrameState> state = Compat.frameState().get(player);
+        helper.assertTrue(state.isPresent(), "frame state missing after update");
+        helper.assertTrue(state.get().reinforced(), "frame state not reinforced after update");
+        helper.succeed();
+    }
+
+    /**
+     * Aggiunge un test obbligatorio nella struttura vuota. Il nome {@code temaCaso} diventa
+     * {@code redstone_exoframes:tema_caso}: Forge lo legge come ResourceLocation, che non ammette maiuscole.
+     */
+    private static void add(List<TestFunction> tests, String name, Consumer<GameTestHelper> test) {
+        String id = RedstoneExoframes.MOD_ID + ":" + name.replaceAll("([A-Z])", "_$1").toLowerCase(Locale.ROOT);
+        tests.add(new TestFunction(RedstoneExoframes.MOD_ID, id, EMPTY_STRUCTURE, MAX_TICKS, 0L, true, test));
+    }
+}

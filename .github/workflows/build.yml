@@ -19,6 +19,9 @@ jobs:
         run: ./gradlew --no-daemon --console=plain :1.20.1-forge:test :1.20.1-fabric:test :1.21.1-fabric:test :1.21.1-neoforge:test
       - name: Build dei quattro jar
         run: ./gradlew --no-daemon --console=plain :1.20.1-forge:build :1.20.1-fabric:build :1.21.1-fabric:build :1.21.1-neoforge:build :1.20.1-forge:collectJar :1.20.1-fabric:collectJar :1.21.1-fabric:collectJar :1.21.1-neoforge:collectJar
+      - name: Test in gioco (GameTest) sulle quattro varianti
+        # Passa solo con uscita 0 e "All N required tests passed" con N > 0 per ogni variante.
+        run: bash tools/run_gametests.sh
       - name: Controlli sui sorgenti
         run: bash tools/check_sources.sh
       - name: Controlli sui jar

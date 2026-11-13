@@ -69,6 +69,48 @@ repositories {
     maven("https://repo.maven.apache.org/maven2/") { name = "MavenCentralFallback" }
 }
 
+// Test in gioco senza client: :<variante>:runGameTestServer avvia il server GameTest vanilla nella cartella
+// versions/<variante>/run-gametest (separata da run/, il mondo di runServer). Il server esce con il numero di test
+// obbligatori falliti, quindi un test fallito fa fallire il task. Un'uscita 0 da sola non prova che i test siano
+// girati (Forge e NeoForge escono con 0 anche senza test): tools/run_gametests.sh controlla la riga
+// "All N required tests passed" con N > 0.
+val gameTestRunDir = "run-gametest"
+loom {
+    runs {
+        create("gameTestServer") {
+            server()
+            name("GameTest Server")
+            runDir(gameTestRunDir)
+            ideConfigGenerated(false)
+            val modId = project.property("mod.id").toString()
+            when (loader) {
+                "fabric" -> {
+                    // Basta la presenza della proprieta': il modulo fabric-gametest sostituisce il server dedicato.
+                    property("fabric-api.gametest")
+                    property("fabric-api.gametest.report-file", project.layout.buildDirectory.file("gametest/report.xml").get().asFile.absolutePath)
+                }
+                "forge", "neoforge" -> {
+                    // server() impone il launch target del server normale e il template non porta le sue proprieta':
+                    // senza gameTestServer=true parte un server dedicato qualunque (Forge senza eula esce con 0 e zero
+                    // test, NeoForge resta acceso).
+                    forgeTemplate("gameTestServer")
+                    property("$loader.enabledGameTestNamespaces", modId)
+                    property("$loader.enableGameTest", "true")
+                    property("$loader.gameTestServer", "true")
+                }
+            }
+        }
+    }
+}
+
+// Mondo nuovo a ogni esecuzione: su Forge 1.20.1 il server GameTest usa il mondo normale della cartella, che
+// altrimenti resta tra un'esecuzione e l'altra.
+val cleanGameTestWorld = tasks.register<Delete>("cleanGameTestWorld") {
+    description = "Cancella il mondo del server GameTest."
+    delete(layout.projectDirectory.dir("$gameTestRunDir/world"))
+}
+tasks.matching { it.name == "runGameTestServer" }.configureEach { dependsOn(cleanGameTestWorld) }
+
 dependencies {
     minecraft("com.mojang:minecraft:$mc")
     mappings(loom.officialMojangMappings())

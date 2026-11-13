@@ -4,6 +4,7 @@ import com.toxineren.exoframes.compat.impl.ArmorMaterialsImpl;
 import com.toxineren.exoframes.compat.impl.DamageClassifierImpl;
 import com.toxineren.exoframes.compat.impl.FrameAttributesImpl;
 import com.toxineren.exoframes.compat.impl.FrameStateAccessImpl;
+import com.toxineren.exoframes.compat.impl.GameTestsImpl;
 import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
 import com.toxineren.exoframes.compat.impl.NetImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
@@ -44,6 +45,10 @@ public final class Compat {
         return FrameStateHolder.INSTANCE;
     }
 
+    public static GameTests gameTests() {
+        return GameTestsHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
     }
@@ -70,5 +75,9 @@ public final class Compat {
 
     private static final class FrameStateHolder {
         static final FrameStateAccess INSTANCE = new FrameStateAccessImpl();
+    }
+
+    private static final class GameTestsHolder {
+        static final GameTests INSTANCE = new GameTestsImpl();
     }
 }

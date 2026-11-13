@@ -4,6 +4,7 @@ import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,6 +25,7 @@ public final class RedstoneExoframes {
         ModItems.register();
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
+        Compat.gameTests().register(ExoframeGameTests.class); // non fa nulla se il server di test non e' attivo
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */
