@@ -1,7 +1,8 @@
 """Livello Rottame: i sei pezzi, armatura pesante chiusa sul telaio (designs/frame.py). Quarta passata della prova
 d'arte, approvata da Luigi il 13 novembre 2026. Petto a botte a tre lastre con chiglia, vita a segmenti, falde basse
 sui fianchi, spallacci enormi a tre strati con feritoie a lamelle, testa piccola incassata nel collare, avambracci e
-stivali pesanti. Lamiere di recupero: toppe, bulloni, ammaccature dipinte.
+stivali pesanti. Lamiere di recupero: toppe, bulloni, ammaccature dipinte. Piedi (schinieri, piastre delle dita) e
+schiena (scapole, feritoie, piastre lombari e dei fianchi) sono della quinta passata, dal riferimento di Luigi.
 
 Ogni scatola si dichiara una volta nell'osso modello exo.piece(slot, regione) e il modello la ripete nei quattro
 stati visivi (ossa piece<Slot>_s0..s3_<regione>, stesse scatole, zone diverse dell'atlante); la pittura degli stati
@@ -79,9 +80,18 @@ def torso(m):
     m.sym(p1, 'tasset_front', (-6, 8.75, -5.5), (-1, 12.5, -4.75), 'paint')
     # parte da y 10.25, sopra il palmo e il pollice della mano della tuta a riposo
     m.sym(p1, 'tasset_side', (-7.5, 10.25, -3.25), (-6.75, 13, 3.25), 'paint')
-    # schiena: piastra, fianchi della botte
+    # schiena, attorno all'alloggiamento della cella (che resta scoperto): piastra di fondo, scapole a tre strati,
+    # piastra lombare a due gradini sotto la fascia di feritoie del telaio, piastre dei fianchi che girano dietro
     m.box(p1, 'back_plate', (-9.5, 15.5, 4.5), (9.5, 23.5, 5.25), 'paint')
-    m.sym(p2, 'back_flank', (-9.5, 16, 5.25), (-6.5, 23, 6.25), 'paint')
+    m.sym(p1, 'scapula_1', (-10.75, 17.75, 5.25), (-6.75, 25, 7), 'paint')
+    m.sym(p1, 'scapula_2', (-10.25, 18.75, 7), (-7.25, 24.25, 8.25), 'paint')
+    m.sym(p2, 'scapula_3', (-9.75, 19.75, 8.25), (-7.75, 23.25, 9), 'paint')
+    # fascia di feritoie orizzontali sotto le scapole: con quella del telaio sotto la cella fa una banda unica
+    m.sym(n, 'blade_louver', (-10.25, 15.5, 5.25), (-6.75, 17.75, 6.75), 'vent')
+    m.box(p1, 'lumbar_1', (-5.75, 10.5, 4.25), (5.75, 11.75, 5.25), 'paint')
+    m.box(p2, 'lumbar_2', (-4, 10.75, 5.25), (4, 11.5, 5.75), 'paint')
+    m.sym(p1, 'hip_back', (-7.5, 10.25, 3.25), (-5.5, 13, 4.5), 'paint')
+    m.sym(p2, 'hip_back_2', (-7, 10.75, 4.5), (-6, 12.5, 5), 'paint')
 
 
 def shoulders(m):
@@ -112,16 +122,24 @@ def arms(m):
 
 
 def legs(m):
-    p1, p2 = piece('RightLeg', 'p1'), piece('RightLeg', 'p2')
+    p1, p2, n = piece('RightLeg', 'p1'), piece('RightLeg', 'p2'), piece('RightLeg', 'n')
     m.sym(p1, 'cuisse', (-5.25, 9, -4.75), (-0.5, 11.75, -4), 'paint')
     m.sym(p1, 'knee_cop', (-5, 4.5, -4.5), (-0.5, 7.5, -3.75), 'paint')
     m.sym(p2, 'knee_ridge', (-4, 5, -5), (-1.5, 7, -4.5), 'paint')
-    # schiniere grande a due strati, fianco dello stinco, stivale corazzato
-    m.sym(p1, 'greave', (-5.75, 2.75, -3.75), (-0.25, 4.5, -3), 'paint')
-    m.sym(p2, 'greave_2', (-4.75, 3, -4.25), (-1.25, 4.25, -3.75), 'paint')
-    m.sym(p1, 'shin_side', (-6.75, 2, -2), (-6.25, 4.5, 2), 'paint')
-    m.sym(p1, 'boot_toe', (-7, 1, -7.75), (-0.25, 2.25, -7.25), 'paint')
-    m.sym(p1, 'boot_ankle', (-7.25, 0.5, -2.5), (-6.75, 3, 2.5), 'paint')
+    # schiniere a gradini che scende sul davanti della caviglia, con feritoie; piastra esterna della caviglia (il mozzo
+    # e i puntoni del telaio restano fuori); piastra del polpaccio, paratacco
+    m.sym(p1, 'greave', (-5.75, 3.25, -3.75), (-0.5, 4.75, -3), 'paint')
+    m.sym(p1, 'greave_low', (-6.25, 2, -4.25), (-0.75, 3.25, -3.25), 'paint')
+    m.sym(p2, 'greave_ridge', (-4.75, 2.25, -4.5), (-2.25, 3, -4.25), 'paint')
+    m.sym(n, 'greave_louver', (-5, 3.5, -4), (-1.25, 4.5, -3.75), 'vent')
+    m.sym(p1, 'ankle_guard', (-7.25, 0.75, -2.75), (-6.75, 3.25, 1), 'paint')
+    m.sym(p1, 'calf_plate', (-5.5, 2.75, 3.5), (-0.75, 6.5, 4.25), 'paint')
+    m.sym(p2, 'calf_plate_2', (-4.75, 3.5, 4.25), (-1.5, 5.75, 4.75), 'paint')
+    m.sym(p2, 'heel_guard', (-6.25, 1, 4.25), (-1.25, 2.5, 4.75), 'paint')
+    # stivale: piastra e naso su ciascuna delle due dita
+    for side, (x0, x1) in (('out', (-7.5, -4.25)), ('in', (-3.75, -0.5))):
+        m.sym(p1, f'toe_plate_{side}', (x0, 1.75, -7.75), (x1, 2.25, -3.5), 'paint')
+        m.sym(p2, f'toe_nose_{side}', (x0 + 0.25, 0.5, -8.5), (x1 - 0.25, 1.75, -8), 'paint')
 
 
 def decals(m):

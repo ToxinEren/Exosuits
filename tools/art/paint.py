@@ -396,7 +396,7 @@ WEAR = {
 RUST = np.array((132, 64, 30), float)
 CHAR = np.array((44, 42, 40), float)
 SOOT_SEED = 0x50D7
-METALS = ('gun', 'steel', 'brass', 'vent')
+METALS = ('gun', 'steel', 'brass')   # metallo nudo che arrugginisce (le griglie scure si sporcano e basta)
 GLOWING = ('lamp', 'glass', 'cell')
 
 
@@ -459,7 +459,8 @@ def wear(F, col, mat, glow):
         keep = vnoise(F.P, 1.6, seed + 131) > 0.66
         k = WEAR['char'][st] * (0.85 + 0.3 * white(F.P, seed + 133))
         k[keep] *= 0.3
-        col = col * (1 - k[..., None]) + CHAR * k[..., None]
+        # il carbone scurisce soltanto: su una griglia gia' piu' scura del carbone non schiarisce
+        col = np.minimum(col, col * (1 - k[..., None]) + CHAR * k[..., None])
     # graffi lunghi: un solco scuro con il labbro sopra lucido (sulla vernice un graffio solo chiaro non si vedrebbe:
     # il grigio di base e' gia' vicino al bianco); sempre gli stessi, piu' numerosi e piu' lunghi con lo stato
     rng = HashRng(F.seed + 0x5C2A)

@@ -108,7 +108,7 @@ def build(m):
   confrontano. Le quattro copie hanno le stesse scatole; le dipinge `paint.wear` (sotto).
 - **Regioni di colore:** `paint='p1'`/`'p2'` per le ossa da colorare (materiale `paint`, in toni di grigio),
   `'n'` per il metallo neutro. Il nome dell'osso porta la regione (`piece<Slot>_s<0-3>_p1`, `_p2`, `_n`, come
-  `SuitBones.piece`). `piece_bones` dichiara anche le ossa senza scatole (oggi `_n` di braccia e gambe): il renderer
+  `SuitBones.piece`). `piece_bones` dichiara anche le ossa senza scatole (oggi `_n` delle braccia): il renderer
   le cerca tutte.
 - **Decalcomanie:** un osso nella regione `decal` (`piece<Slot>_decal`, come `SuitBones.decal`) con una scatola piatta
   di materiale `decal`: i suoi texel restano trasparenti. Con `hide` si esporta solo la faccia esterna.
@@ -139,7 +139,8 @@ media cali sempre.
 Le regioni `p1` e `p2` sono in grigio chiaro e il renderer le moltiplica per il colore del pezzo: li' l'usura puo'
 essere solo piu' scura (vernice saltata, ammaccature, fuliggine, crepe, bruciato) o piu' chiara (il labbro dei
 graffi), mai di un altro colore. Il metallo nudo dei graffi e la ruggine con i loro colori compaiono solo nella
-regione neutra (materiali di metallo delle ossa `_n`).
+regione neutra (acciaio, ottone e acciaio brunito delle ossa `_n`; le griglie scure si sporcano e basta, perche' la
+ruggine le schiarirebbe). Il bruciato non schiarisce mai un texel gia' piu' scuro del carbone.
 
 ## Atlante
 
@@ -149,9 +150,9 @@ dichiarazione). Una faccia piu' larga della regione (oltre 256 px di modello) fe
 
 | Regione | Righe | Contenuto |
 |---|---|---|
-| `frame` | 0..111 | telaio nudo (oggi ne usa 59) |
+| `frame` | 0..111 | telaio nudo (oggi ne usa 60) |
 | `decal` | 112..127 | decalcomanie (texel trasparenti; oggi 7 righe) |
-| `piece_s0` | 128..223 | i sei pezzi, stato 0 (integro; oggi 38 righe, come gli altri stati) |
+| `piece_s0` | 128..223 | i sei pezzi, stato 0 (integro; oggi 41 righe, come gli altri stati) |
 | `piece_s1` | 224..319 | stato 1 (danneggiato) |
 | `piece_s2` | 320..415 | stato 2 (critico) |
 | `piece_s3` | 416..511 | stato 3 (rotto) |

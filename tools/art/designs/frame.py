@@ -3,6 +3,8 @@ senza pezzi montati. E' il telaio della quarta passata della prova d'arte, appro
 scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe, con petto a botte, testa incassata,
 spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli attuatori,
 pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette, borchie).
+Piedi (dita divise, cerniera, puntoni della caviglia, appoggio del tallone) e parte bassa e laterale della schiena
+(trave lombare con feritoie, puntoni verso il giogo) sono della quinta passata; la cella e il suo alloggiamento no.
 
 Il renderer scala la tuta di exo.SUIT_SCALE (1.65) attorno ai piedi e disegna il pilota a grandezza normale sollevato
 di exo.PILOT_LIFT_PX (24(S-1) = 15.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
@@ -120,9 +122,14 @@ def back(m):
     m.sym(BODY, 'stack_cap', (-5.5, 29.75, 6.5), (-3.5, 30.5, 8.5), 'vent')
     m.sym(BODY, 'cable_a', (-8, 24.75, 7), (-6.25, 25.75, 8), 'cable')
     m.sym(BODY, 'cable_a_fwd', (-8, 24.75, 6), (-7.25, 25.75, 7), 'cable')
-    m.sym(BODY, 'cable_b', (-5, 12.25, 5.25), (-4.25, 13.5, 7.25), 'cable')
-    m.sym(BODY, 'hose', (-2.75, 12, 6.25), (-1.75, 13.5, 7.25), 'rubber')
-    m.sym(BODY, 'hose_fwd', (-2.75, 12, 5.25), (-1.75, 13, 6.25), 'rubber')
+    # parte bassa della schiena: trave lombare sotto la vita, fascia di feritoie orizzontali sotto l'alloggiamento della
+    # cella, blocco della spina in fondo
+    m.box(BODY, 'lumbar_beam', (-5.5, 11, 3.25), (5.5, 12.5, 5), 'gun')
+    m.box(BODY, 'lumbar_vent', (-5.25, 11.75, 5), (5.25, 13.5, 5.5), 'vent')
+    m.box(BODY, 'spine_block', (-1.25, 10, 3.5), (1.25, 11, 5), 'gun')
+    # puntoni a gradini dalla trave lombare, ai lati dell'alloggiamento, fino al giogo dietro le spalle
+    for k, (x0, y0, y1) in enumerate(((-7.25, 12, 15.25), (-8.5, 15.25, 18.75), (-9.75, 18.75, 22.25), (-10.5, 22.25, 24.75))):
+        m.sym(BODY, f'back_strut_{k}', (x0, y0, 4.25), (x0 + 1.5, y1, 5.5), 'steel' if k % 2 else 'gun')
 
 
 def arms(m):
@@ -179,13 +186,25 @@ def legs(m):
     m.sym(RLEG, 'shin_ram', (-3.5, 2.25, -3), (-2, 4.75, -1.5), 'steel')
     m.sym(RLEG, 'calf_ram', (-4, 3, 2), (-1.5, 6.5, 3.5), 'steel')
     m.sym(RLEG, 'calf_rod', (-3.25, 1.75, 2.5), (-2.25, 3, 3.25), 'chrome')
-    # caviglia e piede largo
-    m.sym(RLEG, 'ankle_block', (-5.5, 1, -2.25), (-0.5, 2, 2.25), 'gun')
-    m.sym(RLEG, 'ankle_hub', (-6.75, 0.75, -1.25), (-5.5, 2.75, 1.25), 'brass', hub=True)
-    m.sym(RLEG, 'sole', (-7, 0, -7.5), (-0.25, 1, 5), 'gun')
-    m.sym(RLEG, 'toe', (-6.75, 1, -7.25), (-0.5, 2.25, -2.25), 'steel')
-    m.sym(RLEG, 'toe_cap', (-6.25, 2.25, -6.75), (-1, 2.75, -2.75), 'gun')
-    m.sym(RLEG, 'heel', (-6.5, 1, 2.25), (-0.5, 2.25, 4.75), 'steel')
-    m.sym(RLEG, 'heel_spur', (-6, 0.25, 5), (-1, 1.5, 5.75), 'gun')
+    # caviglia: blocco sopra il piede, mozzo esterno e puntoni a gradini sui due lati, dal tallone allo stinco
+    m.sym(RLEG, 'ankle_block', (-5.75, 1.75, -2), (-1, 2.75, 2), 'gun')
+    m.sym(RLEG, 'ankle_hub', (-7.75, 1, -1.25), (-7, 3, 1.25), 'brass', hub=True)
+    m.sym(RLEG, 'ankle_strut_out_0', (-8, 1, 2), (-6.75, 2.25, 3.5), 'steel')
+    m.sym(RLEG, 'ankle_strut_out_1', (-7.75, 2.25, 1.25), (-7, 3.5, 2.75), 'steel')
+    m.sym(RLEG, 'ankle_strut_out_2', (-7.5, 3.5, 0.5), (-6, 4.75, 2), 'steel')
+    m.sym(RLEG, 'ankle_strut_in_0', (-0.75, 1, 2), (-0.25, 2.25, 3.5), 'steel')
+    m.sym(RLEG, 'ankle_strut_in_1', (-0.75, 2.25, 1.25), (-0.25, 3.5, 2.75), 'steel')
+    m.sym(RLEG, 'ankle_strut_in_2', (-0.75, 3.5, 0.5), (-0.25, 4.75, 2), 'steel')
+    # piede grande: base, collo del piede, tallone; davanti due dita squadrate con un'apertura in mezzo, su una
+    # cerniera d'ottone che si vede dai due lati; dietro il tallone un appoggio a due gradini
+    m.sym(RLEG, 'foot_base', (-7, 0, -3), (-0.5, 1, 4.5), 'gun')
+    m.sym(RLEG, 'instep', (-6.75, 1, -3), (-0.75, 2, 1.25), 'steel')
+    m.sym(RLEG, 'heel', (-6.75, 1, 1.25), (-0.75, 2.25, 4.25), 'gun')
+    for side, (x0, x1) in (('out', (-7.5, -4.25)), ('in', (-3.75, -0.5))):
+        m.sym(RLEG, f'toe_{side}', (x0, 0, -8), (x1, 1.25, -3), 'gun')
+        m.sym(RLEG, f'toe_{side}_cap', (x0 + 0.25, 1.25, -7.75), (x1 - 0.25, 1.75, -3.25), 'steel')
+    m.sym(RLEG, 'toe_hinge', (-7.75, 0.25, -3.75), (-0.25, 1.5, -2.5), 'brass', hub=True)
+    m.sym(RLEG, 'heel_strut', (-5.75, 0, 4.5), (-1.75, 1.25, 6.5), 'gun')
+    m.sym(RLEG, 'heel_spur', (-5.25, 0, 6.5), (-2.25, 0.75, 7.25), 'steel')
     # borchie per i pezzi delle gambe
     m.sym(RLEG, 'shin_boss', (-6.25, 2.75, -0.5), (-6, 3.75, 0.5), 'chrome')
