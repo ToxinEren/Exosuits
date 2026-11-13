@@ -1,7 +1,9 @@
 package com.toxineren.exoframes.compat;
 
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 
 /**
  * Aggancio dei test in gioco (GameTest vanilla) al loader: l'unico punto con le differenze di registrazione tra
@@ -24,4 +26,12 @@ public interface GameTests {
      * lista aspettandosi di trovarci solo i propri.
      */
     ServerPlayer mockServerPlayer(GameTestHelper helper);
+
+    /**
+     * Scrive {@code root} cosi' com'e', senza validarlo, come tag radice {@link NbtKeys#ROOT} dello stack, nello stesso
+     * punto in cui lo legge {@link ItemDataAccess} (tag dello stack su 1.20.1, custom_data su 1.21.1); su uno stack
+     * vuoto non fa nulla. Esiste solo per i test: simula dati scritti da altre mod, da {@code /give} o da versioni
+     * vecchie, che il codice della mod non scriverebbe mai.
+     */
+    void writeRawItemData(ItemStack stack, CompoundTag root);
 }

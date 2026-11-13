@@ -2,7 +2,9 @@ package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.compat.GameTests;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
 //? if <1.21 {
 /*import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -81,5 +83,10 @@ public final class GameTestsImpl implements GameTests {
         *///?} else {
         return helper.makeMockServerPlayerInLevel();
         //?}
+    }
+
+    @Override
+    public void writeRawItemData(ItemStack stack, CompoundTag root) {
+        ItemPayload.write(stack, root.copy());
     }
 }

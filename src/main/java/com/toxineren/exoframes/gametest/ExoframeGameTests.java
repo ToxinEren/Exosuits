@@ -6,6 +6,7 @@ import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
+import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
 import com.toxineren.exoframes.content.ModItems;
@@ -32,9 +33,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -76,6 +79,9 @@ public final class ExoframeGameTests {
         add(tests, "debugWearPutsPlaceholdersAndSummary", ExoframeGameTests::debugWearPutsPlaceholdersAndSummary);
         add(tests, "debugWearRemoveClearsEverything", ExoframeGameTests::debugWearRemoveClearsEverything);
         add(tests, "debugWearWithStateAndColors", ExoframeGameTests::debugWearWithStateAndColors);
+        add(tests, "debugWearHandlesTorsoWithoutValidSummary",
+                ExoframeGameTests::debugWearHandlesTorsoWithoutValidSummary);
+        add(tests, "debugWearDropsArmorWhenInventoryIsFull", ExoframeGameTests::debugWearDropsArmorWhenInventoryIsFull);
         return tests;
     }
 
@@ -146,7 +152,8 @@ public final class ExoframeGameTests {
 
     /**
      * {@link DebugWear#wear} su un giocatore con un elmo di ferro: i quattro slot armatura hanno i segnaposto, il
-     * torso porta il riassunto (sei pezzi SCRAP INTACT non dipinti) e l'elmo di ferro e' finito nell'inventario.
+     * torso porta il riassunto (sei pezzi SCRAP INTACT non dipinti) e l'elmo di ferro e' finito nell'inventario, dove
+     * resta dopo {@link DebugWear#remove}.
      */
     private static void debugWearPutsPlaceholdersAndSummary(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -164,6 +171,12 @@ public final class ExoframeGameTests {
         helper.assertTrue(Optional.of(summary).equals(written), "wrong suit summary on the torso: " + written);
         helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 1,
                 "iron helmet not moved to the inventory");
+
+        DebugWear.remove(player);
+        helper.assertTrue(countPlaceholders(player) == 0,
+                countPlaceholders(player) + " placeholders left after remove");
+        helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 1,
+                "iron helmet not in the inventory after remove");
         helper.succeed();
     }
 
@@ -210,11 +223,7 @@ public final class ExoframeGameTests {
         helper.assertTrue(player.getItemBySlot(EquipmentSlot.CHEST).is(Items.IRON_CHESTPLATE),
                 "a failed command changed the armor slots");
 
-        try {
-            dispatcher.execute("exoframe debug wear rottame 2 Ab12Ef 00ff00", source);
-        } catch (CommandSyntaxException e) {
-            throw new IllegalStateException("command failed: " + e.getMessage(), e);
-        }
+        runCommand(dispatcher, source, "exoframe debug wear rottame 2 Ab12Ef 00ff00");
         assertPlaceholdersWorn(helper, player);
         Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
         helper.assertTrue(written.isPresent(), "no suit summary on the torso");
@@ -227,6 +236,93 @@ public final class ExoframeGameTests {
         helper.assertTrue(countInMainInventory(player, Items.IRON_CHESTPLATE) == 1,
                 "iron chestplate not moved to the inventory");
         helper.succeed();
+    }
+
+    /**
+     * Segnaposto del torso con riassunto assente o malformato, come da {@code /give}, altre mod o dati vecchi: la
+     * lettura non lancia (vuota senza riassunto o con {@code visual} non compound, telaio nudo se le voci sono tutte
+     * sconosciute), {@code via} li toglie ovunque e {@code nudo} sostituisce quello indossato.
+     */
+    private static void debugWearHandlesTorsoWithoutValidSummary(GameTestHelper helper) {
+        ItemStack bare = new ItemStack(ModItems.EXOFRAME_TORSO.get());
+        helper.assertTrue(Compat.itemData().suitSummary(bare).isEmpty(),
+                "summary read from a torso without data: " + Compat.itemData().suitSummary(bare));
+
+        ItemStack notCompound = new ItemStack(ModItems.EXOFRAME_TORSO.get());
+        CompoundTag stringVisual = new CompoundTag();
+        stringVisual.putString(NbtKeys.VISUAL, "garbage");
+        Compat.gameTests().writeRawItemData(notCompound, stringVisual);
+        helper.assertTrue(Compat.itemData().suitSummary(notCompound).isEmpty(),
+                "summary read from a non-compound visual: " + Compat.itemData().suitSummary(notCompound));
+
+        ItemStack unknownEntries = new ItemStack(ModItems.EXOFRAME_TORSO.get());
+        CompoundTag unknownSlot = new CompoundTag();
+        unknownSlot.putString(NbtKeys.TIER, Tier.SCRAP.id());
+        CompoundTag unknownTier = new CompoundTag();
+        unknownTier.putString(NbtKeys.TIER, "mythic");
+        CompoundTag pieces = new CompoundTag();
+        pieces.put("left_wing", unknownSlot);
+        pieces.put("helmet", unknownTier);
+        CompoundTag visual = new CompoundTag();
+        visual.put(NbtKeys.PIECES, pieces);
+        CompoundTag root = new CompoundTag();
+        root.put(NbtKeys.VISUAL, visual);
+        Compat.gameTests().writeRawItemData(unknownEntries, root);
+        helper.assertTrue(Optional.of(SuitSummary.BARE).equals(Compat.itemData().suitSummary(unknownEntries)),
+                "unknown entries not skipped: " + Compat.itemData().suitSummary(unknownEntries));
+
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setItemSlot(EquipmentSlot.CHEST, bare);
+        player.getInventory().items.set(3, notCompound);
+        player.getInventory().offhand.set(0, unknownEntries);
+        CommandSourceStack source = player.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+
+        runCommand(dispatcher, source, "exoframe debug wear via");
+        helper.assertTrue(countPlaceholders(player) == 0,
+                countPlaceholders(player) + " placeholders left after via");
+
+        player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        runCommand(dispatcher, source, "exoframe debug wear nudo");
+        assertPlaceholdersWorn(helper, player);
+        helper.assertTrue(countPlaceholders(player) == 4,
+                countPlaceholders(player) + " placeholders after nudo, expected the 4 worn ones");
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(Optional.of(SuitSummary.BARE).equals(written), "wrong summary after nudo: " + written);
+        helper.succeed();
+    }
+
+    /**
+     * Con l'inventario principale pieno l'armatura spostata da {@link DebugWear#wear} finisce a terra accanto al
+     * giocatore, intera, e nulla dell'inventario va perso.
+     */
+    private static void debugWearDropsArmorWhenInventoryIsFull(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        int slots = player.getInventory().items.size();
+        for (int i = 0; i < slots; i++) {
+            player.getInventory().items.set(i, new ItemStack(Items.DIRT, 64));
+        }
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+
+        DebugWear.wear(player, SuitSummary.BARE);
+
+        assertPlaceholdersWorn(helper, player);
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == slots * 64, "inventory contents changed");
+        List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                player.getBoundingBox().inflate(4), entity -> entity.getItem().is(Items.IRON_HELMET));
+        helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
+                "expected one dropped iron helmet next to the player, found " + dropped.size());
+        helper.succeed();
+    }
+
+    /** Esegue un comando che deve riuscire; un errore di sintassi o di esecuzione fa fallire il test. */
+    private static void runCommand(CommandDispatcher<CommandSourceStack> dispatcher, CommandSourceStack source,
+            String command) {
+        try {
+            dispatcher.execute(command, source);
+        } catch (CommandSyntaxException e) {
+            throw new IllegalStateException("command failed: " + command + ": " + e.getMessage(), e);
+        }
     }
 
     /** Verifica che i quattro slot armatura abbiano ciascuno il proprio segnaposto. */
