@@ -6,7 +6,10 @@ import com.toxineren.exoframes.core.armor.PieceSlot;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Set;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.PlayerModel;
+import net.minecraft.client.model.geom.ModelPart;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
@@ -16,26 +19,39 @@ import net.minecraft.world.entity.LivingEntity;
  * {@link SuitScale#PILOT_RAISE_PX} pixel del modello, perde le gambe (sempre) e le parti coperte da un pezzo montato,
  * e l'oggetto impugnato passa nella mano della tuta, ingrandito di {@link SuitScale#S}.
  * <p>
+ * Il sollevamento e' nello spazio del modello, dopo le rotazioni della posa (sdraiato, nuoto, caduta della morte) e
+ * dopo l'attributo {@code scale} di 1.21.1: pilota e tuta (che lo annulla in {@link SuitLayer}, nello stesso spazio)
+ * restano allineati tra loro e con il corpo a terra in ogni posa. L'etichetta del nome si disegna fuori da quello
+ * spazio e non sale con il pilota.
+ * <p>
  * Tutta la logica sta qui. I due mixin client ({@code mixin/client/PlayerRendererMixin} e
  * {@code mixin/client/ItemInHandLayerMixin}) non hanno stato e fanno una sola chiamata per aggancio ai metodi
  * {@code on...} di questa classe; nessuno di questi lancia. La prima persona non cambia.
  */
 public final class PilotPose {
     /**
-     * Spostamento orizzontale, in pixel del modello, dal perno del braccio del pilota a quello del braccio della tuta:
-     * il perno a 5 px dal centro, scalato di S, finisce a 5 * S (verso l'esterno, quindi -x per il braccio destro).
+     * Spostamento orizzontale, in pixel del modello, dal perno del braccio classico a riposo del pilota (x = 5 dal
+     * centro) a quello della tuta: 5 * (S - 1), verso l'esterno. Vale {@link #handShiftPx} per quel perno.
      */
     static final float ARM_SHIFT_X_PX = 2f;
 
     /**
-     * Spostamento verticale, in pixel del modello con y verso il basso, dal perno del braccio del pilota a quello della
-     * tuta: il perno a 22 px dai piedi, scalato di S, sale di 22 * (S - 1) = 8,8 px, meno dei 9,6 del pilota.
+     * Spostamento verticale, in pixel del modello con y verso il basso, dal perno del braccio classico a riposo del
+     * pilota (22 px dai piedi) a quello della tuta: sale di 22 * (S - 1) = 8,8 px, meno dei 9,6 del pilota. Vale
+     * {@link #handShiftPx} per quel perno.
      */
     static final float ARM_SHIFT_Y_PX = 0.8f;
+
+    /** Altezza dei piedi nello spazio del modello del giocatore, in pixel (y verso il basso). */
+    private static final float FEET_Y_PX = 24f;
 
     /** Parti del modello del giocatore che si possono nascondere, ognuna con il suo secondo strato della skin. */
     public enum BodyPart {
         HEAD, BODY, LEFT_ARM, RIGHT_ARM, LEGS
+    }
+
+    /** Uno spostamento in pixel del modello del giocatore (y verso il basso). */
+    record Shift(float x, float y, float z) {
     }
 
     private PilotPose() {
@@ -64,6 +80,18 @@ public final class PilotPose {
     }
 
     /**
+     * Spostamento dal perno di un braccio del pilota, in (x, y, z) pixel del modello, al perno del braccio della tuta.
+     * La tuta e' il modello scalato di S attorno ai piedi (y = 24) e abbassato del sollevamento, e il suo osso del
+     * braccio segue la posizione del braccio del modello di base: ((S - 1) x, (S - 1)(y - 24) + sollevamento,
+     * (S - 1) z). A riposo (perno (+-5, 2, 0)) da' (+-2, 0,8, 0); cambia accovacciati (y = 5,2) e con la skin sottile
+     * (y = 2,5). Java puro.
+     */
+    static Shift handShiftPx(float x, float y, float z) {
+        float k = SuitScale.S - 1f;
+        return new Shift(k * x, k * (y - FEET_Y_PX) + SuitScale.PILOT_RAISE_PX, k * z);
+    }
+
+    /**
      * True se il disegno del giocatore va adattato alla tuta: la indossa ({@link SuitLayer#wearsSuit}) e non e'
      * spettatore (per lo spettatore il gioco non disegna i layer, quindi nemmeno la tuta). Non lancia mai.
      */
@@ -71,14 +99,12 @@ public final class PilotPose {
         return SuitLayer.wearsSuit(player) && !player.isSpectator();
     }
 
-    /** Solleva il disegno del pilota, nello spazio del mondo (y verso l'alto). */
+    /**
+     * Solleva il disegno del pilota di {@link SuitScale#PILOT_RAISE_PX} pixel, nello spazio del modello (y verso il
+     * basso, unita' di 16 pixel): va applicato dopo la scala del modello del giocatore.
+     */
     public static void raise(PoseStack pose) {
-        pose.translate(0f, SuitScale.pilotRaiseBlocks(), 0f);
-    }
-
-    /** Annulla {@link #raise}. */
-    public static void lower(PoseStack pose) {
-        pose.translate(0f, -SuitScale.pilotRaiseBlocks(), 0f);
+        pose.translate(0f, -SuitScale.PILOT_RAISE_PX / 16f, 0f);
     }
 
     /** Spegne le parti date e il loro secondo strato della skin. */
@@ -112,12 +138,12 @@ public final class PilotPose {
     }
 
     /**
-     * Prima di {@code translateToHand}, nello spazio del modello del giocatore: dal perno del braccio del pilota a
-     * quello del braccio della tuta (verso l'esterno e {@link #ARM_SHIFT_Y_PX} piu' in basso).
+     * Prima di {@code translateToHand}, nello spazio del modello del giocatore: dal perno attuale del braccio del
+     * pilota a quello del braccio della tuta ({@link #handShiftPx}).
      */
-    public static void beforeHandTransform(PoseStack pose, HumanoidArm arm) {
-        float x = arm == HumanoidArm.LEFT ? ARM_SHIFT_X_PX : -ARM_SHIFT_X_PX;
-        pose.translate(x / 16f, ARM_SHIFT_Y_PX / 16f, 0f);
+    public static void beforeHandTransform(PoseStack pose, ModelPart arm) {
+        Shift shift = handShiftPx(arm.x, arm.y, arm.z);
+        pose.translate(shift.x() / 16f, shift.y() / 16f, shift.z() / 16f);
     }
 
     /** Dopo {@code translateToHand}: l'oggetto e la sua distanza dal perno crescono come la tuta. */
@@ -127,8 +153,12 @@ public final class PilotPose {
 
     // --- Punti d'ingresso dei mixin: una chiamata per aggancio. ---
 
-    /** In testa a {@code PlayerRenderer.render}. */
-    public static void onRenderStart(AbstractClientPlayer player, PoseStack pose) {
+    /**
+     * In coda a {@code PlayerRenderer.scale(AbstractClientPlayer, PoseStack, float)}, che
+     * {@code LivingEntityRenderer.render} chiama dentro il proprio push/pop dopo rotazioni e ribaltamento: il
+     * sollevamento sparisce con quel pop.
+     */
+    public static void onScale(AbstractClientPlayer player, PoseStack pose) {
         if (applies(player)) {
             raise(pose);
         }
@@ -147,23 +177,20 @@ public final class PilotPose {
         }
     }
 
-    /** A ogni uscita di {@code PlayerRenderer.render}, anche quella di un disegno annullato da un evento. */
-    public static void onRenderEnd(AbstractClientPlayer player, PoseStack pose) {
-        if (applies(player)) {
-            lower(pose);
+    /**
+     * Prima di {@code translateToHand} in {@code ItemInHandLayer.renderArmWithItem}; {@code model} e' il modello del
+     * layer, di cui si legge il braccio che impugna.
+     */
+    public static void onBeforeHand(LivingEntity entity, EntityModel<?> model, PoseStack pose, HumanoidArm arm) {
+        if (model instanceof HumanoidModel<?> humanoid && entity instanceof AbstractClientPlayer player
+                && applies(player)) {
+            beforeHandTransform(pose, arm == HumanoidArm.LEFT ? humanoid.leftArm : humanoid.rightArm);
         }
     }
 
-    /** Prima di {@code translateToHand} in {@code ItemInHandLayer.renderArmWithItem}. */
-    public static void onBeforeHand(LivingEntity entity, PoseStack pose, HumanoidArm arm) {
-        if (entity instanceof AbstractClientPlayer player && applies(player)) {
-            beforeHandTransform(pose, arm);
-        }
-    }
-
-    /** Subito dopo {@code translateToHand} in {@code ItemInHandLayer.renderArmWithItem}. */
-    public static void onAfterHand(LivingEntity entity, PoseStack pose) {
-        if (entity instanceof AbstractClientPlayer player && applies(player)) {
+    /** Subito dopo {@code translateToHand} in {@code ItemInHandLayer.renderArmWithItem}; stesse condizioni di prima. */
+    public static void onAfterHand(LivingEntity entity, EntityModel<?> model, PoseStack pose) {
+        if (model instanceof HumanoidModel<?> && entity instanceof AbstractClientPlayer player && applies(player)) {
             afterHandTransform(pose);
         }
     }

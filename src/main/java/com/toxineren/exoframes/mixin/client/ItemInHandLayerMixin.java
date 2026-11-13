@@ -14,9 +14,10 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Oggetto impugnato nella mano della tuta (design, par. 4.7): dal perno del braccio del pilota a quello della tuta
- * prima di {@code translateToHand}, ingrandito di S subito dopo. Senza stato e senza logica: ogni aggancio e' una
- * chiamata a {@link PilotPose}, che decide se l'entita' e' un giocatore con la tuta. Il pop della posa resta quello
+ * Oggetto impugnato nella mano della tuta (design, par. 4.7): dal perno attuale del braccio del pilota (letto dal
+ * modello del layer) a quello della tuta prima di {@code translateToHand}, ingrandito di S subito dopo. Senza stato e
+ * senza logica: ogni aggancio e' una chiamata a {@link PilotPose}, che decide se l'entita' e' un giocatore con la
+ * tuta. Il pop della posa resta quello
  * del metodo vanilla, tra i due agganci e la fine non ci sono uscite.
  * <p>
  * Bersaglio verificato con javap sui jar di 1.20.1 e 1.21.1, vanilla e con le patch di Forge e NeoForge: una sola
@@ -32,7 +33,7 @@ abstract class ItemInHandLayerMixin {
                     + "Lnet/minecraft/world/entity/HumanoidArm;Lcom/mojang/blaze3d/vertex/PoseStack;)V"))
     private void exoframes$toSuitArmPivot(LivingEntity entity, ItemStack stack, ItemDisplayContext context,
             HumanoidArm arm, PoseStack pose, MultiBufferSource buffers, int packedLight, CallbackInfo ci) {
-        PilotPose.onBeforeHand(entity, pose, arm);
+        PilotPose.onBeforeHand(entity, ((ItemInHandLayer<?, ?>) (Object) this).getParentModel(), pose, arm);
     }
 
     @Inject(method = "renderArmWithItem(Lnet/minecraft/world/entity/LivingEntity;"
@@ -44,6 +45,6 @@ abstract class ItemInHandLayerMixin {
                     shift = At.Shift.AFTER))
     private void exoframes$scaleToSuitHand(LivingEntity entity, ItemStack stack, ItemDisplayContext context,
             HumanoidArm arm, PoseStack pose, MultiBufferSource buffers, int packedLight, CallbackInfo ci) {
-        PilotPose.onAfterHand(entity, pose);
+        PilotPose.onAfterHand(entity, ((ItemInHandLayer<?, ?>) (Object) this).getParentModel(), pose);
     }
 }

@@ -61,8 +61,9 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
             PoseStack local = new PoseStack();
             local.last().pose().set(pose.last().pose());
             local.last().normal().set(pose.last().normal());
-            // Il disegno del giocatore e' sollevato dal mixin del renderer (PilotPose): si annulla il sollevamento
-            // (nello spazio del modello y cresce verso il basso), cosi' i piedi della tuta restano a terra.
+            // Il disegno del giocatore e' sollevato nello spazio del modello dal mixin del renderer (PilotPose, in coda a
+            // PlayerRenderer.scale): si annulla nello stesso spazio (y cresce verso il basso), cosi' i piedi della tuta
+            // restano sul corpo a terra in ogni posa.
             local.translate(0f, SuitScale.PILOT_RAISE_PX / 16f, 0f);
             // Tuta S volte piu' grande attorno ai piedi.
             local.translate(0f, FEET_Y, 0f);
