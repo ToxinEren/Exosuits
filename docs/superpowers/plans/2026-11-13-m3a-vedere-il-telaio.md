@@ -325,3 +325,24 @@ Viste le anteprime del primo telaio, Luigi ha chiesto una tuta più grande del g
 - [ ] **Step 4: verificare** — build delle quattro varianti; test PASS; test in mondo sulle quattro varianti (il server dedicato parte con i mixin client dichiarati); `OK sources`, `OK jars` con una prova negativa (configurazione tolta da un jar: deve fallire); se esiste lo script del client senza schermo (`docs/` o rapporto della prova), avviare il client di ogni variante e allegare gli screenshot di fronte, retro e lato con `/exoframe debug wear nudo` e con `rottame`.
 - [ ] **Step 5:** `docs/compat.md` (i due mixin, perché esistono, dove sta la logica); commit `client: pilota sollevato dentro la tuta, parti coperte nascoste, oggetto nella mano della tuta`.
 
+### Task 13: Piedi e schiena della tuta dal riferimento di Luigi
+
+> **Aggiunto (Revisione 5, 13 novembre 2026).** Visti gli screenshot dal gioco, Luigi: «usa l'immagine di riferimento che ti ho mandato per migliorare i piedi e la schiena della exosuit (ovviamente lascia il modello del redstone core)».
+
+**Files:**
+- Modify: `tools/art/designs/frame.py`, `tools/art/designs/scrap.py`, `tools/art/paint.py` (solo se serve un materiale nuovo), i file di risorse generati, `tools/art/README.md` e `docs/arte/README.md` (misure, descrizione di piedi e schiena)
+- Create: `docs/arte/anteprime/rottame-v5/`
+
+**Interfaces:**
+- Consumes: generatore e disegno del Task 6 (scala 1,65; pezzi con quattro stati; controlli di distanze e facce complanari); l'immagine di riferimento mandata da Luigi (fuori dal repo), usata come nel design §4.7: proporzioni e carattere, non gli elementi che identificano quell'armatura.
+- Produces:
+  - **piedi** (scheletro e parte bassa dei pezzi delle gambe): più grandi e articolati; suola larga e pesante; punta divisa in due dita squadrate con un'apertura in mezzo; caviglia con puntoni o pistoni visibili ai due lati; un appoggio dietro il tallone; lo schiniere che scende a coprire la caviglia con piastre a gradini e feritoie. Il bordo interno di ogni piede resta ad almeno 0,25 px dal piano di mezzo, perché le gambe ruotano una accanto all'altra.
+  - **schiena** (busto dello scheletro e retro del pezzo Torso): la cella di redstone con il suo alloggiamento, le barre di guardia e la luce resta com'è, al centro. Attorno: piastre a strati sulle scapole, un blocco della spina dorsale, puntoni a gradini dalla schiena agli attuatori delle spalle, una griglia di feritoie orizzontali, una piastra lombare e piastre dei fianchi. Le ciminiere si tengono solo se stanno bene con il resto; se no, diventano sfiati bassi.
+  - stessi nomi e perni delle ossa, nessuna scatola ruotata, limiti invariati (telaio x ±12,75, y 0..31,25, z −8..10; pezzi x ±13,5, y 0..32, z −8,75..10,5); gambe sinistra e destra speculari; i quattro stati dei pezzi continuano a distinguersi.
+  - anteprime prima e dopo (schiena, piedi, figura intera davanti e dietro) in `docs/arte/anteprime/rottame-v5/`.
+
+- [ ] **Step 1:** rendere di schiena e ai piedi lo stato di oggi (anteprime "prima").
+- [ ] **Step 2: disegnare** piedi e schiena; `python3 tools/art/build.py` senza segnalazioni; guardare le anteprime e correggere finché piedi e schiena si leggono a colpo d'occhio alla grandezza di uno screenshot di gioco.
+- [ ] **Step 3: verificare** — due build identiche; `OK art`; `ExoframeGeometryTest` su `1.21.1-neoforge` e `1.20.1-forge`; build delle quattro varianti; `OK jars`, `OK sources`; nel client vero, su una variante per versione del gioco: tuta armata e telaio nudo, davanti e dietro, con gli scatti allegati.
+- [ ] **Step 4:** documenti; commit `art: piedi e schiena della tuta ridisegnati dal riferimento`.
+
