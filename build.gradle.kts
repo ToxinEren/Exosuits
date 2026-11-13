@@ -129,6 +129,10 @@ tasks.processResources {
         "loader_range" to project.property("mod.loader_range").toString(),
         "neoforge_range" to (project.findProperty("mod.neoforge_range") ?: "").toString(),
         "pack_format" to project.property("mod.pack_format").toString(),
+        // Versioni minime dichiarate nei metadati: quelle con cui il mod e' compilato e provato.
+        "architectury_version" to project.property("deps.architectury").toString(),
+        "geckolib_version" to project.property("deps.geckolib").toString(),
+        "fabric_api_version" to (project.findProperty("deps.fabric_api") ?: "").toString().substringBefore('+'),
     )
     inputs.properties(props)
     filesMatching(listOf("fabric.mod.json", "META-INF/mods.toml", "META-INF/neoforge.mods.toml", "pack.mcmeta")) {

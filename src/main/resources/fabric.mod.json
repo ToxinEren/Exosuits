@@ -14,9 +14,10 @@
   },
   "depends": {
     "fabricloader": "${loader_range}",
-    "fabric-api": "*",
+    "fabric-api": ">=${fabric_api_version}",
     "minecraft": "${mc_range}",
-    "architectury": "*",
+    "architectury": ">=${architectury_version}",
+    "geckolib": ">=${geckolib_version}",
     "java": ">=17"
   }
 }

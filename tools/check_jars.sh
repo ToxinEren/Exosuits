@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 fail=0
 err() { echo "FAIL: $1: $2" >&2; fail=1; }
 
+command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 non trovato: serve per leggere i metadati e per il controllo di privacy" >&2; exit 1; }
+
 shopt -s nullglob
 dir=${1:-build/libs/all}
 jars=("$dir"/*.jar)
@@ -80,6 +82,23 @@ for jar in "${jars[@]}"; do
     echo "$listing" | grep -qx 'com/toxineren/exoframes/RedstoneExoframes.class' \
         || err "$name" "manca com/toxineren/exoframes/RedstoneExoframes.class"
 
+    # (d2) le classi d'ingresso dichiarate nei metadati sono nel jar (anche l'entrypoint client di Fabric,
+    #      che un avvio del server dedicato non carica mai).
+    case "$loader" in
+        fabric)
+            entries=$(unzip -p "$jar" fabric.mod.json | python3 -c 'import json, sys
+for value in json.load(sys.stdin).get("entrypoints", {}).values():
+    for item in (value if isinstance(value, list) else [value]):
+        print(item if isinstance(item, str) else item.get("value", ""))') ;;
+        forge) entries=com.toxineren.exoframes.platform.RedstoneExoframesForge ;;
+        neoforge) entries=com.toxineren.exoframes.platform.RedstoneExoframesNeoForge ;;
+    esac
+    [ -n "$entries" ] || err "$name" "nessuna classe d'ingresso dichiarata"
+    for cls in $entries; do
+        echo "$listing" | grep -qx "$(echo "$cls" | tr . /).class" \
+            || err "$name" "classe d'ingresso $cls dichiarata nei metadati ma assente dal jar"
+    done
+
     # (e) nessun refmap.
     refmaps=$(echo "$listing" | grep -E '\.refmap\.json$' || true)
     [ -z "$refmaps" ] || err "$name" "refmap presente: $refmaps"
@@ -89,12 +108,7 @@ for jar in "${jars[@]}"; do
 done
 
 # (g) nessun dato personale nei jar da pubblicare: percorsi locali, e-mail, metadati di immagini e suoni.
-if command -v python3 >/dev/null 2>&1; then
-    python3 tools/check_jar_privacy.py "${jars[@]}" || fail=1
-else
-    echo "FAIL: python3 non trovato: serve per il controllo di privacy (tools/check_jar_privacy.py)" >&2
-    fail=1
-fi
+python3 tools/check_jar_privacy.py "${jars[@]}" || fail=1
 
 [ "$fail" -eq 0 ] || exit 1
 echo "OK jars"

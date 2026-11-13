@@ -27,13 +27,13 @@ side="BOTH"
 [[dependencies.redstone_exoframes]]
 modId="architectury"
 mandatory=true
-versionRange="[9.2,)"
+versionRange="[${architectury_version},)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.redstone_exoframes]]
 modId="geckolib"
 mandatory=true
-versionRange="[4.4,)"
+versionRange="[${geckolib_version},)"
 ordering="AFTER"
 side="BOTH"
