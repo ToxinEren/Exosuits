@@ -21,7 +21,7 @@
 - Chiavi NBT nuove, tutte sotto la radice `exoframes`: `decals` (lista di `{pattern, color}`), `visual` (riassunto visivo: `{pieces:{<slot>:{tier, condition, color_primary?, color_secondary?, decals?}}}`), `condition` (`intact`, `damaged`, `critical`, `broken`).
 - Colori: interi RGB 0..0xFFFFFF; `Appearance.UNPAINTED = -1` significa "colore predefinito del livello".
 - Mixin: solo i due del Task 12, lato client (design §4.7). Nessuna forma, nome o texture riconoscibile di Fallout, Iron Man o Halo; nessun asset di Mjolnir.
-- Scala della tuta S = 1,4; sollevamento del pilota 24·(S−1) = 9,6 pixel del modello (design §4.7). I due numeri vivono in `client/SuitScale` (codice) e nel generatore (`tools/art`); un test li tiene uguali.
+- Scala della tuta S = 1,65 (dal 13 novembre: Luigi vuole la tuta alta almeno 3 blocchi; prima era 1,4); sollevamento del pilota 24·(S−1) = 15,6 pixel del modello (design §4.7). I due numeri vivono in `client/SuitScale` (codice) e nel generatore (`tools/art`); un test li tiene uguali. Dove i task qui sotto scrivono 1,4, 9,6 px o misure che ne derivano, vale il valore nuovo.
 - I PNG generati non hanno metadati; `tools/check_jars.sh` (privacy compresa) deve stampare `OK jars`.
 - Identificatori e messaggi d'eccezione in inglese; Javadoc e commenti in italiano con apostrofi ASCII; testi di gioco in `en_us` e `it_it`.
 - Ogni task termina con: build delle quattro varianti (`./gradlew --console=plain :1.20.1-forge:build :1.20.1-fabric:build :1.21.1-fabric:build :1.21.1-neoforge:build`), `bash tools/check_sources.sh`, commit sul branch del piano e push.
