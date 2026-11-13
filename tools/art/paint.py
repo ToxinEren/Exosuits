@@ -454,7 +454,8 @@ def wear(F, col, mat, glow):
         col[dent & ~up] *= 0.7
         col[dent & ~down & up] *= 1.6
     # bruciato (stato 3): la superficie diventa carbone, la vernice resta a isole; le luci no (spie, vetri e celle
-    # accese restano rosse, le altre sono gia' spente da dead_light): un pezzo rotto non sembra piu' acceso di uno critico
+    # accese restano rosse, le altre sono gia' spente da dead_light): un pezzo rotto non sembra piu' acceso di uno
+    # critico
     if WEAR['char'][st] and mat not in GLOWING:
         keep = vnoise(F.P, 1.6, seed + 131) > 0.66
         k = WEAR['char'][st] * (0.85 + 0.3 * white(F.P, seed + 133))

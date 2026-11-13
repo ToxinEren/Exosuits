@@ -80,18 +80,18 @@ def torso(m):
     m.sym(p1, 'tasset_front', (-6, 8.75, -5.5), (-1, 12.5, -4.75), 'paint')
     # parte da y 10.25, sopra il palmo e il pollice della mano della tuta a riposo
     m.sym(p1, 'tasset_side', (-7.5, 10.25, -3.25), (-6.75, 13, 3.25), 'paint')
-    # schiena, attorno all'alloggiamento della cella (che resta scoperto): piastra di fondo, scapole a tre strati,
-    # piastra lombare a due gradini sotto la fascia di feritoie del telaio, piastre dei fianchi che girano dietro
+    # schiena, attorno all'alloggiamento della cella (che resta scoperto): piastra di fondo, scapole a tre strati sotto
+    # i puntoni del telaio, fasce di feritoie sotto le scapole, piastra lombare a due gradini sotto quella del telaio,
+    # piastre dei fianchi che girano dietro (fuori dalla larghezza delle cosce, quindi mai toccate camminando)
     m.box(p1, 'back_plate', (-9.5, 15.5, 4.5), (9.5, 23.5, 5.25), 'paint')
-    m.sym(p1, 'scapula_1', (-10.75, 17.75, 5.25), (-6.75, 25, 7), 'paint')
-    m.sym(p1, 'scapula_2', (-10.25, 18.75, 7), (-7.25, 24.25, 8.25), 'paint')
-    m.sym(p2, 'scapula_3', (-9.75, 19.75, 8.25), (-7.75, 23.25, 9), 'paint')
-    # fascia di feritoie orizzontali sotto le scapole: con quella del telaio sotto la cella fa una banda unica
-    m.sym(n, 'blade_louver', (-10.25, 15.5, 5.25), (-6.75, 17.75, 6.75), 'vent')
-    m.box(p1, 'lumbar_1', (-5.75, 10.5, 4.25), (5.75, 11.75, 5.25), 'paint')
-    m.box(p2, 'lumbar_2', (-4, 10.75, 5.25), (4, 11.5, 5.75), 'paint')
-    m.sym(p1, 'hip_back', (-7.5, 10.25, 3.25), (-5.5, 13, 4.5), 'paint')
-    m.sym(p2, 'hip_back_2', (-7, 10.75, 4.5), (-6, 12.5, 5), 'paint')
+    m.sym(p1, 'scapula_1', (-10.75, 17.75, 5.25), (-6.75, 25, 6.5), 'paint')
+    m.sym(p1, 'scapula_2', (-10.25, 18.75, 6.5), (-7.25, 24.25, 7.25), 'paint')
+    m.sym(p2, 'scapula_3', (-9.75, 19.75, 7.25), (-7.75, 23.25, 7.75), 'paint')
+    m.sym(n, 'blade_louver', (-10.25, 14.5, 5.25), (-6.75, 17.75, 7.25), 'vent')
+    m.box(p1, 'lumbar_1', (-5.75, 10.25, 7.75), (5.75, 11.25, 9), 'paint')
+    m.box(p2, 'lumbar_2', (-4, 10.5, 9), (4, 11, 9.5), 'paint')
+    m.sym(p1, 'hip_back', (-7.5, 10.25, 3.25), (-6.5, 13, 5.25), 'paint')
+    m.sym(p2, 'hip_back_2', (-7.25, 10.75, 5.25), (-6.75, 12.5, 5.75), 'paint')
 
 
 def shoulders(m):

@@ -15,6 +15,9 @@ Dalla radice del repository (serve Python 3 con numpy, versione in `tools/art/re
     python3 tools/art/build.py --out <dir> --designs frame
                                                solo i design indicati (per esempio il telaio nudo, per le anteprime)
     bash tools/check_art.sh                    rigenera in una cartella temporanea e confronta: "OK art"
+    python3 tools/art/swing.py [--all]         gambe in movimento: per ogni gamba e direzione il primo angolo (1..60
+                                               gradi) a cui una scatola della gamba entra nel busto; da rifare quando
+                                               si cambiano gambe, bacino o schiena (non e' un controllo della build)
 
 File generati (uguali sulle quattro varianti):
 

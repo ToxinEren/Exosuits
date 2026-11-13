@@ -24,6 +24,8 @@ borchie), cable (rame), rubber (tubi), vent (griglie calde), cell (cella di reds
 ORDER = 0
 
 HEAD, BODY, RARM, RLEG = 'frameHead', 'frameBody', 'frameRightArm', 'frameRightLeg'
+# gradini dei puntoni della schiena, lato destro: (x minimo, y minimo, y massimo), larghi 1.5 px
+BACK_STRUT_STEPS = ((-7.5, 12, 15.5), (-8.5, 15.5, 18.5), (-9.5, 18.5, 21.5), (-10.5, 21.5, 24.5))
 
 
 def build(m):
@@ -122,14 +124,17 @@ def back(m):
     m.sym(BODY, 'stack_cap', (-5.5, 29.75, 6.5), (-3.5, 30.5, 8.5), 'vent')
     m.sym(BODY, 'cable_a', (-8, 24.75, 7), (-6.25, 25.75, 8), 'cable')
     m.sym(BODY, 'cable_a_fwd', (-8, 24.75, 6), (-7.25, 25.75, 7), 'cable')
-    # parte bassa della schiena: trave lombare sotto la vita, fascia di feritoie orizzontali sotto l'alloggiamento della
-    # cella, blocco della spina in fondo
-    m.box(BODY, 'lumbar_beam', (-5.5, 11, 3.25), (5.5, 12.5, 5), 'gun')
-    m.box(BODY, 'lumbar_vent', (-5.25, 11.75, 5), (5.25, 13.5, 5.5), 'vent')
-    m.box(BODY, 'spine_block', (-1.25, 10, 3.5), (1.25, 11, 5), 'gun')
-    # puntoni a gradini dalla trave lombare, ai lati dell'alloggiamento, fino al giogo dietro le spalle
-    for k, (x0, y0, y1) in enumerate(((-7.25, 12, 15.25), (-8.5, 15.25, 18.75), (-9.75, 18.75, 22.25), (-10.5, 22.25, 24.75))):
-        m.sym(BODY, f'back_strut_{k}', (x0, y0, 4.25), (x0 + 1.5, y1, 5.5), 'steel' if k % 2 else 'gun')
+    # parte bassa della schiena. Tutto cio' che sta sotto il perno delle gambe (y 12) sta dietro z 6.25, fuori dall'arco
+    # che coscia e ginocchio spazzano camminando (vedi tools/art/swing.py): trave lombare appesa al fondo
+    # dell'alloggiamento della cella, fascia di feritoie orizzontali sul suo dorso, blocco della spina sotto
+    m.box(BODY, 'lumbar_beam', (-5.5, 10.75, 7.25), (5.5, 13.5, 8.5), 'gun')
+    m.box(BODY, 'lumbar_vent', (-5.25, 11.25, 8.5), (5.25, 13.25, 9), 'vent')
+    m.box(BODY, 'spine_block', (-1, 10, 7.5), (1, 10.75, 8.25), 'gun')
+    # puntoni a gradini verso le spalle, in rilievo sopra le scapole del pezzo Torso: dal fondo dell'alloggiamento
+    # salgono di lato fino a un attacco sul giogo dietro le spalle
+    for k, (x0, y0, y1) in enumerate(BACK_STRUT_STEPS):
+        m.sym(BODY, f'back_strut_{k}', (x0, y0, 7.75), (x0 + 1.5, y1, 9), 'chrome')
+    m.sym(BODY, 'back_strut_mount', (-11, 23.75, 5.5), (-8.75, 25.5, 8.25), 'gun')
 
 
 def arms(m):
