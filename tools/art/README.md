@@ -35,7 +35,8 @@ compressi cambiano con la build di zlib (per esempio zlib-ng) anche a pixel iden
 `build.py` si ferma (uscita 1) se il modello non passa i controlli di `exo.Model.check()`:
 
 - facce complanari con la stessa normale che si sovrappongono, in tutte e sei le direzioni (anche verso il basso),
-  salvo la parte coperta da altre scatole;
+  salvo la parte coperta da altre scatole (controllata cella per cella sulla griglia dei quarti di pixel, quindi
+  anche una striscia scoperta di 0.25 px viene segnalata);
 - scatole troppo vicine al pilota, misurate come nel gioco: la tuta scalata di `exo.SUIT_SCALE` (1.4) attorno ai
   piedi, il pilota a grandezza normale sollevato di `exo.PILOT_LIFT_PX` (24(S-1) = 9.6 px, collo e spalle
   allineati a quelli della tuta) e senza gambe (non si disegnano: stanno nelle cosce chiuse della tuta). Margini:

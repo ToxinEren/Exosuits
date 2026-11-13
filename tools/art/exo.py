@@ -81,6 +81,8 @@ ATLAS_REGIONS = (
 )
 
 EPS = 1e-6
+# Passo della griglia delle coordinate (Box le vuole in quarti di pixel).
+GRID = 0.25
 
 
 def face_frame(face, lo, hi):
@@ -144,7 +146,7 @@ class Box:
             if b - a <= EPS:
                 raise ValueError(f'scatola {name}: dimensioni non positive {lo} -> {hi}')
             for v in (a, b):
-                if abs(v * 4 - round(v * 4)) > EPS:
+                if abs(v / GRID - round(v / GRID)) > EPS:
                     raise ValueError(f'scatola {name}: le coordinate vanno in quarti di pixel ({v})')
         self.mat = mat if isinstance(mat, dict) else {'default': mat}
         self.opts = dict(opts)
@@ -307,20 +309,27 @@ class Model:
                     o = [k for k in range(3) if k != ax]
                     if any(min(a.hi[k], b.hi[k]) - max(a.lo[k], b.lo[k]) <= EPS for k in o):
                         continue
-                    # parte comune visibile? campioni appena fuori dal piano, coperti da un'altra scatola?
+                    # parte comune visibile? Un campione al centro di ogni cella di GRID px, appena fuori dal piano:
+                    # tutti gli spigoli stanno sulla griglia dei quarti di pixel, quindi ogni cella e' o tutta coperta
+                    # da un'altra scatola o tutta scoperta, e il controllo e' esatto (anche per strisce di 0.25 px)
                     lo = [max(a.lo[k], b.lo[k]) for k in range(3)]
                     hi = [min(a.hi[k], b.hi[k]) for k in range(3)]
+                    p = [0.0, 0.0, 0.0]
+                    p[ax] = side[ax] + 0.01 * n[ax]
                     occ = [c for c in self.boxes if c is not a and c is not b and self._together(c, a)
-                           and self._together(c, b)]
+                           and self._together(c, b) and c.lo[ax] + EPS < p[ax] < c.hi[ax] - EPS
+                           and all(c.lo[k] < hi[k] - EPS and c.hi[k] > lo[k] + EPS for k in o)]
+                    steps = [int(round((hi[k] - lo[k]) / GRID)) for k in o]
                     visible = False
-                    for s in (0.1, 0.5, 0.9):
-                        for t in (0.1, 0.5, 0.9):
-                            p = [0.0, 0.0, 0.0]
-                            p[ax] = side[ax] + 0.01 * n[ax]
-                            p[o[0]] = lo[o[0]] + s * (hi[o[0]] - lo[o[0]])
-                            p[o[1]] = lo[o[1]] + t * (hi[o[1]] - lo[o[1]])
+                    for i0 in range(steps[0]):
+                        p[o[0]] = lo[o[0]] + (i0 + 0.5) * GRID
+                        for i1 in range(steps[1]):
+                            p[o[1]] = lo[o[1]] + (i1 + 0.5) * GRID
                             if not any(self._inside(p, c.lo, c.hi) for c in occ):
                                 visible = True
+                                break
+                        if visible:
+                            break
                     if visible:
                         problems.append(f'facce complanari {a.name} / {b.name} ({f}, piano {side[ax]})')
         return problems

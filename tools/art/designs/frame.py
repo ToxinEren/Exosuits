@@ -144,7 +144,7 @@ def legs(m):
     m.sym(RLEG, 'thigh_sleeve', (-3.25, 8.75, -3.25), (-1, 11.25, -2.5), 'steel')
     m.sym(RLEG, 'thigh_rod', (-2.75, 7.5, -3), (-1.5, 8.75, -2.5), 'chrome')
     # ginocchio: blocco, mozzo esterno, snodo davanti
-    m.sym(RLEG, 'knee_block', (-4, 5.25, -1.75), (-0.5, 7.25, 1.75), 'gun')
+    m.sym(RLEG, 'knee_block', (-4, 5.25, -1.75), (-0.5, 6.75, 1.75), 'gun')
     m.sym(RLEG, 'knee_hub', (-5, 5, -1.5), (-4, 7.5, 1.5), 'brass', hub=True)
     m.sym(RLEG, 'knee_cap', (-3.25, 5.5, -2.75), (-1.25, 7.5, -1.75), 'brass', hub=True)
     # stinco: due montanti, pistone davanti, pistone del polpaccio dietro
