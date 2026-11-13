@@ -1,10 +1,12 @@
 package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
@@ -23,6 +25,8 @@ import net.minecraft.core.HolderLookup;
  * toccano). Le condizioni di versione sono solo sulla firma di {@code save} e su {@code computeIfAbsent}. Su 1.21.1
  * il {@code DataFixTypes} della factory e' null (nessun datafixer per i dati della mod): Fabric API e NeoForge
  * saltano il datafix in quel caso.
+ * <p>
+ * In lettura ogni voce e' isolata: una voce corrotta viene scartata con un avviso, le altre restano.
  * <p>
  * Solo sul thread del server; chi modifica una voce deve chiamare {@link #setDirty()}.
  */
@@ -53,6 +57,16 @@ final class FrameStateSavedData extends SavedData {
     }
 
     private static FrameStateSavedData load(CompoundTag tag) {
+        return load(tag, FrameStateCodec::read);
+    }
+
+    /**
+     * Legge il dato con il lettore di voce dato (nel codice e' sempre {@link FrameStateCodec#read}; il parametro
+     * esiste per i test). Ogni voce e' isolata: se la sua lettura lancia, si scarta solo quella voce con un avviso.
+     * Un'eccezione che uscisse da qui farebbe ricreare il dato vuoto e il salvataggio successivo cancellerebbe gli
+     * stati di tutti i giocatori.
+     */
+    static FrameStateSavedData load(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader) {
         FrameStateSavedData data = new FrameStateSavedData();
         CompoundTag framesTag = tag.getCompound(FRAMES);
         for (String key : framesTag.getAllKeys()) {
@@ -66,7 +80,11 @@ final class FrameStateSavedData extends SavedData {
                 RedstoneExoframes.LOGGER.warn("Ignoring frame state with invalid player id: {}", key);
                 continue;
             }
-            data.frames.put(player, FrameStateCodec.read(framesTag.getCompound(key), RedstoneExoframes.config()));
+            try {
+                data.frames.put(player, reader.apply(framesTag.getCompound(key), RedstoneExoframes.config()));
+            } catch (RuntimeException e) {
+                RedstoneExoframes.LOGGER.warn("Skipping corrupt frame state of player {}: {}", key, e.toString());
+            }
         }
         return data;
     }

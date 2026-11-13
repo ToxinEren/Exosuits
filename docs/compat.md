@@ -62,8 +62,8 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 
 ### `FrameStateAccess` — stato del telaio per giocatore
 
-- **File:** [`FrameStateAccess.java`](../src/main/java/com/toxineren/exoframes/compat/FrameStateAccess.java), implementazione [`FrameStateAccessImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateAccessImpl.java) con [`FrameStateCodec.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateCodec.java), [`FrameStateSavedData.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateSavedData.java), [`FrameStateSyncPacket.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateSyncPacket.java), [`FrameStateClientCache.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateClientCache.java).
-- **A cosa serve:** `get(player)` (dato salvato sul server, copia sincronizzata sul client), `update(serverPlayer, change)` (crea se assente, applica, `setDirty()`, sincronizza: l'unico punto di scrittura), `clear`, `clientView`, `syncTo`; `registerCommon()` (pacchetto S2C ed eventi di ingresso e respawn, dall'init comune) e `registerClient()` (pulizia della copia all'uscita dal mondo, solo dagli entrypoint client).
+- **File:** [`FrameStateAccess.java`](../src/main/java/com/toxineren/exoframes/compat/FrameStateAccess.java), implementazione [`FrameStateAccessImpl.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateAccessImpl.java) con [`FrameStateCodec.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateCodec.java) (helper di schema condiviso con gli item in [`SchemaIds.java`](../src/main/java/com/toxineren/exoframes/compat/impl/SchemaIds.java)), [`FrameStateSavedData.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateSavedData.java), [`FrameStateSyncPacket.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateSyncPacket.java), [`FrameStateClientCache.java`](../src/main/java/com/toxineren/exoframes/compat/impl/FrameStateClientCache.java).
+- **A cosa serve:** `get(player)` (dato salvato sul server, copia sincronizzata sul client), `update(serverPlayer, change)` (crea se assente, applica, `setDirty()`, sincronizza: l'unico punto di scrittura; `setDirty()` e la sincronizzazione avvengono anche se `change` lancia), `clear`, `clientView`, `syncTo`; `registerCommon()` (pacchetto S2C ed eventi di ingresso e respawn, dall'init comune) e `registerClient()` (pulizia della copia all'uscita dal mondo, solo dagli entrypoint client).
 - **Differenze chiuse:** persistenza con un unico `SavedData` nell'overworld (`data/redstone_exoframes_frames.dat`, mappa UUID → stato) uguale sui quattro target, al posto di capability Forge, attachment NeoForge o data-attachment Fabric; tra versioni cambiano la firma di `SavedData.save` (con `HolderLookup.Provider` su 1.21.1), `DimensionDataStorage.computeIfAbsent` (`Function, Supplier, String` su 1.20.1, `SavedData.Factory, String` su 1.21.1) e la lambda di `PlayerEvent.PLAYER_RESPAWN` di Architectury (un parametro in più su 1.21.1). Codec e pacchetto (UUID, flag di presenza, tag) sono identici.
 - **Condizione:** `FrameStateSavedData` (save, computeIfAbsent) e `FrameStateAccessImpl` (evento di respawn).
 - **Uso:** `Compat.frameState().update(serverPlayer, state -> state.setUnlocked(true))`.
@@ -111,7 +111,7 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 
 ## Schema NBT ([`NbtKeys`](../src/main/java/com/toxineren/exoframes/compat/NbtKeys.java))
 
-`NbtKeys` è l'unica fonte delle chiavi. Gli item usano il tag radice `exoframes` (nel tag dello stack su 1.20.1, in `custom_data` su 1.21.1); lo stato del telaio per giocatore (`FrameStateCodec`) riusa le stesse chiavi e gli stessi tipi.
+`NbtKeys` è l'unica fonte delle chiavi. Gli item usano il tag radice `exoframes` (nel tag dello stack su 1.20.1, in `custom_data` su 1.21.1); lo stato del telaio per giocatore (`FrameStateCodec`) riusa le stesse chiavi e gli stessi tipi. Le conversioni comuni ai due codec (id di slot, livelli e moduli, avviso una volta per id sconosciuto, lettura dell'UUID valida solo per un int array di 4 elementi, altrimenti assente) stanno in un solo helper, [`SchemaIds`](../src/main/java/com/toxineren/exoframes/compat/impl/SchemaIds.java), così i due codec non possono divergere.
 
 | Chiave | Tipo | Dove |
 |---|---|---|
@@ -130,7 +130,7 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 | `active` | lista di string (`ModuleType#id`) | solo stato del telaio: toggle accesi (Task 8) |
 | `carry_milli` | int in [0, 999] | solo stato del telaio, voce di `pieces`: riporto del danno in millesimi (Task 8) |
 
-Il `SavedData` salva gli stati sotto la chiave `frames`, una voce per UUID del giocatore in forma testuale.
+Il `SavedData` salva gli stati sotto la chiave `frames`, una voce per UUID del giocatore in forma testuale. In lettura ogni voce è isolata: una voce corrotta (o con chiave non UUID) viene scartata con un avviso nel log e le altre restano, invece di far ricreare vuoto l'intero dato.
 
 ## Regole di [`tools/check_sources.sh`](../tools/check_sources.sh)
 

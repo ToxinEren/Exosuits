@@ -12,10 +12,7 @@ import com.toxineren.exoframes.core.module.ModuleInstaller;
 import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -33,13 +30,11 @@ import net.minecraft.nbt.Tag;
  * = nessuna cella); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED}; {@link NbtKeys#OWNER} (assente = nessun
  * proprietario); {@link NbtKeys#UNLOCKED}. {@link NbtKeys#STOWED} non e' ancora scritto ne' letto.
  * <p>
- * La lettura e' tollerante: id sconosciuti di slot, livello o modulo vengono ignorati con un solo avviso per id;
+ * La lettura e' tollerante: id sconosciuti di slot, livello o modulo vengono ignorati con un solo avviso per id
+ * (conversioni condivise con gli item in {@link SchemaIds}); un proprietario malformato vale assente;
  * valori fuori intervallo vengono riportati nell'intervallo valido o, se non recuperabili, scartati con un avviso.
  */
 final class FrameStateCodec {
-    /** Id sconosciuti gia' segnalati nel log, per avvisare una volta sola per id. */
-    private static final Set<String> WARNED_IDS = ConcurrentHashMap.newKeySet();
-
     private FrameStateCodec() {
     }
 
@@ -56,7 +51,7 @@ final class FrameStateCodec {
             pieceTag.putInt(NbtKeys.MAX_DURABILITY, piece.maxDurability());
             pieceTag.put(NbtKeys.MODULES, idList(modules.getOrDefault(slot, List.of())));
             pieceTag.putInt(NbtKeys.CARRY_MILLI, state.damageCarryMilli().getOrDefault(slot, 0));
-            piecesTag.put(slotId(slot), pieceTag);
+            piecesTag.put(SchemaIds.slotId(slot), pieceTag);
         }
         root.put(NbtKeys.PIECES, piecesTag);
         EnergyCell cell = state.cell();
@@ -84,9 +79,9 @@ final class FrameStateCodec {
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
         Map<PieceSlot, CompoundTag> mounted = new EnumMap<>(PieceSlot.class);
         for (String key : piecesTag.getAllKeys()) {
-            PieceSlot slot = slotById(key);
+            PieceSlot slot = SchemaIds.slotById(key);
             if (slot == null) {
-                warnUnknown("piece slot", key);
+                SchemaIds.warnUnknown("piece slot", key);
             } else if (piecesTag.contains(key, Tag.TAG_COMPOUND)) {
                 CompoundTag pieceTag = piecesTag.getCompound(key);
                 Piece piece = readPiece(slot, pieceTag);
@@ -100,12 +95,12 @@ final class FrameStateCodec {
             PieceSlot slot = entry.getKey();
             ListTag list = entry.getValue().getList(NbtKeys.MODULES, Tag.TAG_STRING);
             for (int i = 0; i < list.size(); i++) {
-                ModuleType module = moduleById(list.getString(i));
+                ModuleType module = SchemaIds.moduleById(list.getString(i));
                 if (module != null) {
                     ModuleInstaller.Reason reason = state.installModule(slot, module);
                     if (reason != ModuleInstaller.Reason.OK) {
                         RedstoneExoframes.LOGGER.warn("Dropping module {} from frame slot {}: {}", module.id(),
-                                slotId(slot), reason);
+                                SchemaIds.slotId(slot), reason);
                     }
                 }
             }
@@ -127,16 +122,14 @@ final class FrameStateCodec {
         }
         ListTag active = root.getList(NbtKeys.ACTIVE, Tag.TAG_STRING);
         for (int i = 0; i < active.size(); i++) {
-            ModuleType module = moduleById(active.getString(i));
+            ModuleType module = SchemaIds.moduleById(active.getString(i));
             if (module != null) {
                 // activeToggles() e' l'insieme vivo dello stato: si scrive direttamente
                 state.activeToggles().add(module);
             }
         }
         state.setReinforced(root.getBoolean(NbtKeys.REINFORCED));
-        if (root.contains(NbtKeys.OWNER, Tag.TAG_INT_ARRAY)) {
-            state.setOwner(NbtUtils.loadUUID(root.get(NbtKeys.OWNER)));
-        }
+        state.setOwner(SchemaIds.readUuid(root, NbtKeys.OWNER).orElse(null));
         state.setUnlocked(root.getBoolean(NbtKeys.UNLOCKED));
         return state;
     }
@@ -151,14 +144,14 @@ final class FrameStateCodec {
         if (!tag.contains(NbtKeys.TIER, Tag.TAG_STRING)) {
             return null;
         }
-        Tier tier = tierById(tag.getString(NbtKeys.TIER));
+        Tier tier = SchemaIds.tierById(tag.getString(NbtKeys.TIER));
         if (tier == null) {
             return null;
         }
         int max = tag.getInt(NbtKeys.MAX_DURABILITY);
         if (max <= 0) {
             RedstoneExoframes.LOGGER.warn("Dropping frame piece in slot {} with invalid max durability {}",
-                    slotId(slot), max);
+                    SchemaIds.slotId(slot), max);
             return null;
         }
         int durability = Math.max(0, Math.min(max, tag.getInt(NbtKeys.DURABILITY)));
@@ -171,42 +164,5 @@ final class FrameStateCodec {
             list.add(StringTag.valueOf(module.id()));
         }
         return list;
-    }
-
-    private static Tier tierById(String id) {
-        try {
-            return Tier.byId(id);
-        } catch (IllegalArgumentException e) {
-            warnUnknown("tier", id);
-            return null;
-        }
-    }
-
-    private static ModuleType moduleById(String id) {
-        try {
-            return ModuleType.byId(id);
-        } catch (IllegalArgumentException e) {
-            warnUnknown("module", id);
-            return null;
-        }
-    }
-
-    private static String slotId(PieceSlot slot) {
-        return slot.name().toLowerCase(Locale.ROOT);
-    }
-
-    private static PieceSlot slotById(String id) {
-        for (PieceSlot slot : PieceSlot.values()) {
-            if (slotId(slot).equals(id)) {
-                return slot;
-            }
-        }
-        return null;
-    }
-
-    private static void warnUnknown(String kind, String id) {
-        if (WARNED_IDS.add(kind + ":" + id)) {
-            RedstoneExoframes.LOGGER.warn("Ignoring unknown {} id in frame state: {}", kind, id);
-        }
     }
 }

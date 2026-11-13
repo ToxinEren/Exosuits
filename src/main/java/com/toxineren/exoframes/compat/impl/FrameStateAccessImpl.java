@@ -34,9 +34,13 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
         FrameState state = data.frames().computeIfAbsent(p.getUUID(),
                 uuid -> new FrameState(RedstoneExoframes.config()));
-        change.accept(state);
-        data.setDirty();
-        syncTo(p);
+        try {
+            change.accept(state);
+        } finally {
+            // anche se la modifica lancia a meta': disco e client restano allineati alla memoria
+            data.setDirty();
+            syncTo(p);
+        }
     }
 
     @Override

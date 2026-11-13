@@ -1,6 +1,5 @@
 package com.toxineren.exoframes.compat.impl;
 
-import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.ItemDataAccess;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.armor.PieceSlot;
@@ -9,12 +8,9 @@ import com.toxineren.exoframes.core.module.ModuleType;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
@@ -31,9 +27,6 @@ import net.minecraft.world.item.ItemStack;
  * (per esempio {@link NbtKeys#STOWED}) restano intatte.
  */
 public final class ItemDataAccessImpl implements ItemDataAccess {
-    /** Id sconosciuti gia' segnalati nel log, per avvisare una volta sola per id. */
-    private static final Set<String> WARNED_IDS = ConcurrentHashMap.newKeySet();
-
     @Override
     public int cellEnergy(ItemStack stack) {
         CompoundTag root = ItemPayload.read(stack);
@@ -66,16 +59,16 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         if (root == null) {
             return Optional.empty();
         }
-        Optional<UUID> owner = readOwner(root);
+        Optional<UUID> owner = SchemaIds.readUuid(root, NbtKeys.OWNER);
         Optional<Integer> cellEnergy = root.contains(NbtKeys.CELL, Tag.TAG_COMPOUND)
                 ? Optional.of(root.getCompound(NbtKeys.CELL).getInt(NbtKeys.ENERGY))
                 : Optional.empty();
         Map<PieceSlot, PieceData> pieces = new EnumMap<>(PieceSlot.class);
         CompoundTag piecesTag = root.getCompound(NbtKeys.PIECES);
         for (String key : piecesTag.getAllKeys()) {
-            PieceSlot slot = slotById(key);
+            PieceSlot slot = SchemaIds.slotById(key);
             if (slot == null) {
-                warnUnknown("piece slot", key);
+                SchemaIds.warnUnknown("piece slot", key);
             } else if (piecesTag.contains(key, Tag.TAG_COMPOUND)) {
                 readPiece(piecesTag.getCompound(key)).ifPresent(piece -> pieces.put(slot, piece));
             }
@@ -105,7 +98,7 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         for (Map.Entry<PieceSlot, PieceData> entry : data.pieces().entrySet()) {
             CompoundTag pieceTag = new CompoundTag();
             writePiece(pieceTag, entry.getValue());
-            piecesTag.put(slotId(entry.getKey()), pieceTag);
+            piecesTag.put(SchemaIds.slotId(entry.getKey()), pieceTag);
         }
         root.put(NbtKeys.PIECES, piecesTag);
         ItemPayload.write(stack, root);
@@ -122,31 +115,19 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         return root == null ? new CompoundTag() : root;
     }
 
-    /** Il proprietario del telaio; vuoto se la chiave manca o non e' un UUID valido (int array di 4 elementi). */
-    private static Optional<UUID> readOwner(CompoundTag root) {
-        if (!root.contains(NbtKeys.OWNER, Tag.TAG_INT_ARRAY)) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(NbtUtils.loadUUID(root.get(NbtKeys.OWNER)));
-        } catch (IllegalArgumentException e) {
-            return Optional.empty();
-        }
-    }
-
     /** Legge un pezzo da un tag (il tag radice di un pezzo o una voce di {@link NbtKeys#PIECES}). */
     private static Optional<PieceData> readPiece(CompoundTag tag) {
         if (!tag.contains(NbtKeys.TIER, Tag.TAG_STRING)) {
             return Optional.empty();
         }
-        Tier tier = tierById(tag.getString(NbtKeys.TIER));
+        Tier tier = SchemaIds.tierById(tag.getString(NbtKeys.TIER));
         if (tier == null) {
             return Optional.empty();
         }
         List<ModuleType> modules = new ArrayList<>();
         ListTag list = tag.getList(NbtKeys.MODULES, Tag.TAG_STRING);
         for (int i = 0; i < list.size(); i++) {
-            ModuleType module = moduleById(list.getString(i));
+            ModuleType module = SchemaIds.moduleById(list.getString(i));
             if (module != null) {
                 modules.add(module);
             }
@@ -167,42 +148,5 @@ public final class ItemDataAccessImpl implements ItemDataAccess {
         tag.put(NbtKeys.MODULES, modules);
         tag.putInt(NbtKeys.COLOR_PRIMARY, data.colorPrimary());
         tag.putInt(NbtKeys.COLOR_SECONDARY, data.colorSecondary());
-    }
-
-    private static Tier tierById(String id) {
-        try {
-            return Tier.byId(id);
-        } catch (IllegalArgumentException e) {
-            warnUnknown("tier", id);
-            return null;
-        }
-    }
-
-    private static ModuleType moduleById(String id) {
-        try {
-            return ModuleType.byId(id);
-        } catch (IllegalArgumentException e) {
-            warnUnknown("module", id);
-            return null;
-        }
-    }
-
-    private static String slotId(PieceSlot slot) {
-        return slot.name().toLowerCase(Locale.ROOT);
-    }
-
-    private static PieceSlot slotById(String id) {
-        for (PieceSlot slot : PieceSlot.values()) {
-            if (slotId(slot).equals(id)) {
-                return slot;
-            }
-        }
-        return null;
-    }
-
-    private static void warnUnknown(String kind, String id) {
-        if (WARNED_IDS.add(kind + ":" + id)) {
-            RedstoneExoframes.LOGGER.warn("Ignoring unknown {} id in item data: {}", kind, id);
-        }
     }
 }
