@@ -64,9 +64,16 @@ Scelto B: meno codice e meno punti in cui sbagliare. Costo: il riassunto visivo 
 - **A. Modelli fatti a mano in Blockbench.** Non disponibile: la grafica la fa la sessione cloud.
 - **B. Generatore in Python nel repo (scelto).** Un piccolo linguaggio di descrizione (ossa, scatole, regioni di colore) produce geometria GeckoLib, atlante delle texture e anteprime renderizzate. I file generati sono committati. Luigi sceglie la direzione tra tre anteprime prima che il generatore definitivo entri nel repo.
 
-### 4.5 Divisione del lavoro
+### 4.5 Dove vive il contenuto di un telaio piazzato
 
-Una milestone unica sarebbe di oltre trenta task. Divisa in tre parti, ognuna con piano, revisione e unione a `main` proprie (scelta del costruttore):
+- **A. Nell'NBT dell'entità.** Semplice, ma entità (dati dei chunk) e stato del giocatore (dato salvato del livello) si salvano in momenti diversi: un crash tra i due salvataggi può duplicare un telaio (entità ancora su disco e stato già sul giocatore) o perderlo (stato già tolto e entità non ancora scritta). Un'entità può anche sparire nel vuoto o per un comando.
+- **B. In un registro unico nel dato salvato; l'entità è solo una vista (scelto).** Ogni telaio ha un'identità (`frameId`). Il dato salvato tiene tutti i telai: quelli indossati (per giocatore) e quelli piazzati (per `frameId`, con dimensione, posizione e orientamento). Entrare e uscire spostano un record tra le due mappe dentro lo stesso file, quindi non esiste uno stato a metà. L'entità ha come UUID il `frameId`, non possiede il contenuto e si riallinea al registro: se il registro non ha un telaio piazzato con quell'identità l'entità si elimina (niente doppioni); se il registro ha un telaio piazzato in un chunk caricato e l'entità manca da qualche secondo, viene ricreata (niente perdite per crash, vuoto o `/kill`).
+
+Scelto B: è l'unico che rispetta l'anti-obiettivo "nessuna perdita" senza finestre di rischio. Costo: la logica di riallineamento, coperta da test in mondo.
+
+### 4.6 Divisione del lavoro
+
+Una milestone unica sarebbe di oltre trenta task. Divisa in tre parti, ognuna con piano, revisione e unione a `main` proprie (scelta del costruttore). Una parte si unisce a `main` quando build, test, test in mondo e server dedicato sono verdi nel cloud; le prove sul PC procedono in parallelo quando il PC è disponibile, e ciò che trovano diventa il primo task della parte successiva. Nessuna parte aspetta il PC per cominciare.
 
 | Parte | Contenuto | Fatta quando |
 |---|---|---|
@@ -104,28 +111,30 @@ Dalla ricognizione, opzione (a): un `RenderLayer` vanilla sul renderer del gioca
 
 - **Aspetto:** in `core`, `Appearance(int primary, int secondary, List<Decal> decals)` con `Appearance.DEFAULT`, e `Decal(String pattern, String color)` (id del registro e nome della tinta come stringhe: forma che sopravvive al passaggio 1.20.1 → 1.21.1). `ItemDataAccess.PieceData` sostituisce i due interi dei colori con `Appearance`; `FrameState` tiene un `Appearance` per slot. Nuove chiavi NBT: `decals` (lista di `{pattern, color}`); i colori restano `color_primary` e `color_secondary`.
 - **Ripristino fidato:** `FrameStateCodec` ottiene una lettura che non rivalida i moduli contro la config di chi legge, usata dal client e dai dati sincronizzati dell'entità; il caricamento sul server continua a validare. Chiude il limite (a) di `docs/compat.md`.
-- **Codec esposto e passaggi di mano:** `FrameStateAccess` espone `writeTag(FrameState)`, `readTag(CompoundTag)`, `put(ServerPlayer, FrameState)` (sostituisce e sincronizza una volta) e `take(ServerPlayer)` (toglie e sincronizza una volta), così entità e dato salvato condividono uno schema e ingresso e uscita sono un passo solo.
-- **Armatura stivata:** accanto al `FrameState`, nella voce del dato salvato e nell'entità, una lista di stack salvati con il provider su 1.21.1 (`stowed`), esposta con due metodi su `FrameStateAccess` e mai inviata ai client.
+- **Registro dei telai (vedi §4.5):** il dato salvato esistente si estende. Ogni record ha `frameId`, `FrameState` e armatura stivata. I record indossati restano indicizzati per giocatore (come oggi); i record piazzati sono indicizzati per `frameId` e portano dimensione, posizione e orientamento. `FrameStateAccess` ottiene le operazioni di registro: `place(record, posizione)`, `enter(ServerPlayer, frameId)` (sposta il record da piazzato a indossato e sincronizza una volta), `exit(ServerPlayer, posizione)` (l'inverso), `placed(frameId)`, `remove(frameId)`, più `writeTag`/`readTag` per il riassunto che l'entità manda ai client. Lo schema del dato salvato passa a 2; lo schema 1 non è mai uscito dal repo, quindi non serve migrazione.
+- **Armatura stivata:** lista di stack dentro il record, mai inviata ai client. Gli stack si salvano con il provider su 1.21.1 e portano accanto la versione dei dati di Minecraft (`data_version`): al caricamento su 1.21.1 di stack salvati su 1.20.1 si passa dal correttore di dati vanilla prima di leggerli, così l'armatura sopravvive all'aggiornamento del mondo.
 - **Riassunto visivo:** `SuitSummary` (pezzi presenti, livello, stato visivo, aspetto per slot), scritto nei dati del segnaposto del torso sotto una nuova chiave `visual` e letto dal layer. Si riscrive solo quando cambia.
 - **Pacchetto al proprietario:** oltre allo stato porta tre indicatori calcolati dal server (`canSprint`, `canSwim`, stato dell'energia), così il client non valuta le regole con la propria config.
 
 ### 5.4 Entità telaio (3b)
 
 - `entity/ExoframeEntity extends CompatEntity` (`compat/CompatEntity`: dati sincronizzati con o senza `Builder`, altezza degli occhi, pacchetto di spawn vanilla). Immobile, senza gravità dopo l'appoggio, persistente, con riquadro da giocatore (0,6 × 1,95).
-- Contenuto: `FrameState` (pezzi, cella, proprietario, sblocco, rinforzo), armatura stivata, orientamento. Salvato nell'NBT dell'entità con il codec; sincronizzato ai client come `CompoundTag` in lettura fidata.
-- Item `exoframe`: piazza l'entità sul blocco cliccato, rivolta verso il giocatore, con il giocatore come proprietario.
+- L'entità è una vista del record piazzato con il suo stesso UUID (`frameId`): nel suo NBT salva solo l'identità; il contenuto sta nel registro. Ai client manda il riassunto visivo come `CompoundTag` sincronizzato, aggiornato quando il record cambia.
+- Riallineamento: al primo tick dopo il caricamento, se il registro non ha un record piazzato con quell'identità l'entità si elimina; il server controlla ogni pochi secondi i record piazzati nei chunk caricati e ricrea l'entità mancante. Per togliere davvero un telaio si passa dal registro (raccolta come item, `/exoframe remove`).
+- Item `exoframe`: crea un record nuovo (identità nuova, il giocatore come proprietario) e l'entità sul blocco cliccato, rivolta verso il giocatore.
+- Permessi: ogni interazione con un telaio piazzato (entrare, montare, smontare, togliere la cella, ritirare l'armatura stivata, raccoglierlo) richiede di essere il proprietario, oppure che il telaio sia sbloccato o senza proprietario, oppure che la config `frame.ownerOnly` sia falsa; un operatore in creativa può sempre.
 - Interazioni (senza GUI, scelta del costruttore):
   - con un pezzo in mano: monta il pezzo nel suo slot se libero; braccia e gambe usano un solo item per lato e vanno sul lato cliccato, o sul primo libero;
   - con una cella in mano: inserisce la cella se manca;
   - mano vuota: entra, se il giocatore è il proprietario o il telaio è sbloccato (o la config lo consente) e c'è una cella con carica;
-  - accovacciato a mano vuota: smonta ciò che si trova all'altezza cliccata (testa, busto e braccia, gambe); se lì non c'è nulla toglie la cella; se il telaio è vuoto lo raccoglie come item.
-- Danni: l'entità non si distrugge a colpi; esplosioni e vuoto non la eliminano con il contenuto (se cade nel vuoto si perde, come ogni entità; nota nei limiti).
+  - accovacciato a mano vuota: se il telaio contiene armatura stivata la restituisce tutta (inventario, o a terra se pieno); altrimenti smonta ciò che si trova all'altezza cliccata (testa, busto e braccia, gambe); se lì non c'è nulla toglie la cella; se il telaio è del tutto vuoto lo raccoglie come item e cancella il record.
+- Danni: l'entità non si distrugge a colpi né con le esplosioni. Se sparisce (vuoto, comando), il registro la ricrea all'ultima posizione registrata.
 
 ### 5.5 Ingresso, uscita, morte (3b)
 
-- **Ingresso:** il server prende lo stato dall'entità, stiva l'armatura indossata, mette i quattro segnaposto, fa `put` dello stato, rimuove l'entità, scrive il riassunto visivo. Un solo tick, nessuno stato intermedio salvato.
-- **Uscita:** tasto `V` (`KeyMappingRegistry`) tenuto 1 s sul client, poi pacchetto C2S `frame_exit`; il server verifica che il giocatore sia nel telaio, fa `take`, toglie i segnaposto, ricrea l'entità nella posizione del giocatore con stato e nessuna armatura stivata, e restituisce l'armatura civile agli slot (se uno slot è occupato l'oggetto va nell'inventario o cade).
-- **Morte:** in `LIVING_DEATH` il server crea l'entità nel punto di morte con stato e armatura stivata, toglie stato e segnaposto. Vale anche con `keepInventory`.
+- **Ingresso:** se il record contiene già armatura stivata (telaio lasciato da una morte), quella va prima a chi entra se è il proprietario, altrimenti cade a terra accanto al telaio. Poi il server stiva l'armatura indossata nel record, fa `enter` (il record passa da piazzato a indossato), mette i quattro segnaposto, elimina l'entità e scrive il riassunto visivo. Un solo tick.
+- **Uscita:** tasto `V` (`KeyMappingRegistry`) tenuto 1 s sul client, poi pacchetto C2S `frame_exit`; il server verifica che il giocatore sia nel telaio, toglie i segnaposto, restituisce l'armatura civile agli slot (se uno slot è occupato l'oggetto va nell'inventario o cade), fa `exit` con la posizione del giocatore e crea l'entità.
+- **Morte:** in `LIVING_DEATH` il server toglie i segnaposto e fa `exit` lasciando l'armatura stivata nel record; l'entità nasce nel punto di morte. Se il punto di morte è sotto il limite inferiore del mondo o nel vuoto, si usa l'ultima posizione sicura (l'ultima in cui il giocatore nel telaio era a terra, registrata ogni secondo). Vale anche con `keepInventory`.
 - **Uscita dal gioco e riavvio:** lo stato resta nel dato salvato e i segnaposto nell'inventario; al rientro l'autoriparazione riallinea slot e stato (stato presente senza segnaposto: li rimette; segnaposto senza stato: li toglie).
 - **Proprietario:** `owner` e `unlocked` come da `FrameState`; opzione di config `frame.ownerOnly` (default vero). L'interruttore di sblocco dal gioco arriva con la stazione; in 3b c'è `/exoframe unlock`.
 
@@ -154,7 +163,7 @@ Dalla ricognizione, opzione (a): un `RenderLayer` vanilla sul renderer del gioca
 ### 5.9 Test
 
 - **JUnit:** aspetto e codec, riassunto visivo, firma in millesimi del `DamageRouter`, idempotenza degli attributi dove testabile, controllo della geometria generata.
-- **GameTest (se la prova in corso lo conferma):** registrazione per loader in `platform/`, classe di test comune, un passo nella CI per variante. Casi: ingresso e uscita con armatura civile restituita; morte che lascia l'entità con tutto dentro; autoriparazione dei segnaposto; consumo di energia su N tick; usura dei pezzi da un danno noto; caduta senza danno; caricatore che carica.
+- **GameTest (se la prova in corso lo conferma):** registrazione per loader in `platform/`, classe di test comune, un passo nella CI per variante. Casi: ingresso e uscita con armatura civile restituita; morte che lascia l'entità con tutto dentro e rientro che restituisce l'armatura; entità doppia che si elimina; entità eliminata che viene ricreata; morte nel vuoto che lascia il telaio all'ultima posizione sicura; permessi del non proprietario; stack stivato in formato 1.20.1 letto su 1.21.1; autoriparazione dei segnaposto; consumo di energia su N tick; usura dei pezzi da un danno noto; caduta senza danno; caricatore che carica.
 - **Server dedicato:** avvio e arresto sulle quattro varianti a ogni parte.
 - **PC:** una checklist per parte in `docs/test-in-gioco/` (resa grafica, ingresso e uscita, multiplayer con due client se possibile).
 
@@ -171,6 +180,11 @@ Forme esatte delle ricette; valori di ritmo del caricatore e soglie di movimento
 5. Ingresso immediato e uscita con `V` tenuto, senza animazioni di apertura: arrivano in M4.
 6. In prima persona il braccio resta quello vanilla fino a M4.
 7. Un solo item per braccio e uno per gamba, validi per entrambi i lati.
+8. Il contenuto di ogni telaio vive in un registro unico sul server e l'entità nel mondo ne è solo la vista: un telaio non si duplica e non si perde per crash, vuoto o comandi; per eliminarlo si raccoglie da vuoto o si usa un comando.
+9. Un telaio bloccato non può essere toccato da altri giocatori in nessun modo (non solo l'ingresso); uno sbloccato è accessibile a tutti; un operatore in creativa può sempre.
+10. L'armatura civile rimasta in un telaio dopo una morte torna al proprietario quando rientra o quando la ritira accovacciandosi a mano vuota; se entra un altro giocatore, cade a terra accanto al telaio.
+11. Chi muore nel vuoto ritrova il telaio nell'ultimo punto sicuro in cui era a terra.
+12. Le parti 3b e 3c non aspettano le prove sul PC: si procede nel cloud e ciò che il PC trova si corregge all'inizio della parte successiva.
 
 ## 8. Domanda aperta per Luigi
 
@@ -180,5 +194,6 @@ La direzione artistica: tre anteprime in arrivo, sceglie lui. Se non risponde, s
 
 - **Resa in gioco non verificabile nel cloud:** perni del modello, compenetrazioni con la skin, costo del rendering. Mitigazione: 3a esiste apposta per portare presto qualcosa di visibile sul PC.
 - **GameTest su quattro varianti:** se una variante non regge, lì restano test JUnit, server dedicato e checklist.
+- **Riallineamento tra registro ed entità:** è la parte più delicata di 3b; un errore lì può creare proprio i doppioni o le perdite che vuole evitare. Mitigazione: test in mondo dedicati prima di costruirci sopra ingresso e uscita.
 - **Movimento deciso dal client** (scatto, nuoto): serve codice sui due lati e prova sul PC.
 - **Qualità della grafica generata:** è sufficiente per un'alpha in stile Minecraft; resta sostituibile da un artista senza toccare il codice, perché i nomi delle ossa e la disposizione sono fissati qui.
