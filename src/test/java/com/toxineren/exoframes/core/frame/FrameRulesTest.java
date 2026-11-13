@@ -37,9 +37,13 @@ class FrameRulesTest {
     }
 
     private FrameState fullScrapSet() {
+        return fullSet(Tier.SCRAP);
+    }
+
+    private FrameState fullSet(Tier tier) {
         FrameState s = poweredFrame();
         for (PieceSlot slot : PieceSlot.values()) {
-            s.mount(scrap(slot));
+            s.mount(Piece.fresh(slot, tier, cfg.tiers));
         }
         return s;
     }
@@ -93,6 +97,7 @@ class FrameRulesTest {
     @Test
     void fullScrapSetProtectsLikeIron() {
         assertEquals(15.0, rules.evaluate(fullScrapSet()).protectionPoints(), EPS);
+        assertEquals(15, rules.evaluate(fullScrapSet()).armorPoints());
         assertEquals(15, rules.protectionPointsFor(Tier.SCRAP));
         assertEquals(30, rules.protectionPointsFor(Tier.PROTOTYPE));
     }
@@ -136,9 +141,10 @@ class FrameRulesTest {
     void shockwaveNeedsBothLegs() {
         FrameState s = poweredFrame();
         s.mount(scrap(PieceSlot.LEFT_LEG));
-        s.installModule(PieceSlot.LEFT_LEG, ModuleType.SHOCKWAVE);
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.LEFT_LEG, ModuleType.SHOCKWAVE));
         assertFalse(rules.moduleOperational(s, ModuleType.SHOCKWAVE));
         s.mount(scrap(PieceSlot.RIGHT_LEG));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.RIGHT_LEG, ModuleType.SHOCKWAVE));
         assertTrue(rules.moduleOperational(s, ModuleType.SHOCKWAVE));
         breakPiece(s, PieceSlot.RIGHT_LEG);
         assertFalse(rules.moduleOperational(s, ModuleType.SHOCKWAVE));
@@ -193,5 +199,76 @@ class FrameRulesTest {
         assertEquals(1.25, rules.evaluate(s).consumptionMultiplier(), EPS);
         EnergyMeter meter = new EnergyMeter(EnergyRates.from(cfg.energy));
         assertEquals(10, run(rules, s, Activity.WALK, meter, 20));
+    }
+
+    @Test
+    void shockwaveOnLeftLegOnlyIsNotOperational() {
+        FrameState s = poweredFrame();
+        s.mount(scrap(PieceSlot.LEFT_LEG));
+        s.mount(scrap(PieceSlot.RIGHT_LEG));
+        assertEquals(ModuleInstaller.Reason.OK, s.installModule(PieceSlot.LEFT_LEG, ModuleType.SHOCKWAVE));
+        assertFalse(rules.moduleOperational(s, ModuleType.SHOCKWAVE));
+    }
+
+    @Test
+    void fullIndustrialSetProtectsLikeDiamond() {
+        FrameEffects fx = rules.evaluate(fullSet(Tier.INDUSTRIAL));
+        assertEquals(15 * 1.333, fx.protectionPoints(), EPS); // 19,995: l'attributo vanilla (floor) darebbe 19
+        assertEquals(20, fx.armorPoints());
+    }
+
+    @Test
+    void fullArmoredSetIsDiamondPlusThirtyPercent() {
+        FrameEffects fx = rules.evaluate(fullSet(Tier.ARMORED));
+        assertEquals(15 * 1.733, fx.protectionPoints(), EPS); // 25,995
+        assertEquals(26, fx.armorPoints());
+    }
+
+    @Test
+    void fullNetheriteSetHas24ArmorPoints() {
+        assertEquals(24, rules.evaluate(fullSet(Tier.NETHERITE)).armorPoints());
+    }
+
+    @Test
+    void fullPrototypeSetHas30ArmorPoints() {
+        assertEquals(30, rules.evaluate(fullSet(Tier.PROTOTYPE)).armorPoints());
+    }
+
+    /**
+     * Set misto, calcolato a mano con le quote e i moltiplicatori di default:
+     * elmo PROTOTYPE 0,15 x 15 x 2,000 = 4,5; torso ARMORED 0,30 x 15 x 1,733 = 7,7985;
+     * braccia INDUSTRIAL 2 x 0,125 x 15 x 1,333 = 4,99875; gambe NETHERITE 2 x 0,15 x 15 x 1,600 = 7,2;
+     * totale 24,49725 → 24 punti armatura.
+     */
+    @Test
+    void mixedTierSetHas24ArmorPoints() {
+        FrameState s = poweredFrame();
+        s.mount(Piece.fresh(PieceSlot.HELMET, Tier.PROTOTYPE, cfg.tiers));
+        s.mount(Piece.fresh(PieceSlot.TORSO, Tier.ARMORED, cfg.tiers));
+        s.mount(Piece.fresh(PieceSlot.LEFT_ARM, Tier.INDUSTRIAL, cfg.tiers));
+        s.mount(Piece.fresh(PieceSlot.RIGHT_ARM, Tier.INDUSTRIAL, cfg.tiers));
+        s.mount(Piece.fresh(PieceSlot.LEFT_LEG, Tier.NETHERITE, cfg.tiers));
+        s.mount(Piece.fresh(PieceSlot.RIGHT_LEG, Tier.NETHERITE, cfg.tiers));
+        FrameEffects fx = rules.evaluate(s);
+        assertEquals(24.49725, fx.protectionPoints(), EPS);
+        assertEquals(24, fx.armorPoints());
+        assertEquals(EnergyState.NORMAL, fx.energyState());
+    }
+
+    @Test
+    void frameWithoutCellIsEmptyAndTickDrainsNothing() {
+        FrameState s = new FrameState(cfg);
+        for (PieceSlot slot : PieceSlot.values()) {
+            s.mount(scrap(slot));
+        }
+        s.installModule(PieceSlot.LEFT_LEG, ModuleType.SERVOS);
+        FrameEffects fx = rules.evaluate(s);
+        assertEquals(EnergyState.EMPTY, fx.energyState());
+        assertTrue(fx.enabledModules().isEmpty());
+        assertEquals(7.5, fx.protectionPoints(), EPS);
+        assertEquals(0.85 * 0.30, fx.speedMultiplier(), EPS);
+        EnergyMeter meter = new EnergyMeter(EnergyRates.from(cfg.energy));
+        assertEquals(0, rules.tick(s, Activity.SPRINT, meter));
+        assertEquals(0, run(rules, s, Activity.WALK, meter, 20));
     }
 }

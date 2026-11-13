@@ -15,11 +15,18 @@ import java.util.Map;
  * <ul>
  *   <li>sezioni o mappe nulle, voci mancanti o nulle: ripristinate al default;</li>
  *   <li>soglie, frazioni e moltiplicatori in [0, 1]: fuori intervallo vengono clampati (NaN → default);</li>
- *   <li>capacita', consumi, costi, durabilita', moltiplicatori di protezione: se &lt;= 0 tornano al default;</li>
+ *   <li>consumi (energy.*PerSecond, energy.jumpCost) e costi dei moduli: se negativi tornano al default; 0 e'
+ *       ammesso (un modpack puo' azzerare un consumo, es. quello da fermo);</li>
+ *   <li>capacita' della cella, durabilita' massima dei livelli, RE per redstone del caricatore: devono essere
+ *       &gt; 0 (con 0 la cella, il pezzo o il caricatore non avrebbero senso), altrimenti tornano al default;
+ *       lo stesso vale per i moltiplicatori di protezione e la durata massima del jetpack;</li>
  *   <li>tempi, slot e conteggi: se negativi tornano al default (0 e' ammesso dove ha senso);</li>
- *   <li>quote dei pezzi: ogni quota non finita o negativa torna al default; se la somma e' in (0, +inf) ma
- *       diversa da 1 vengono normalizzate a somma 1, se la somma e' 0 tornano tutte al default.</li>
+ *   <li>quote dei pezzi: ogni quota non finita o negativa torna al default; se la somma e' finita e &gt; 0 ma
+ *       diversa da 1 vengono normalizzate a somma 1; se la somma e' 0 o non finita (overflow a +inf con quote
+ *       enormi) tornano tutte al default.</li>
  * </ul>
+ *
+ * <p>I messaggi sono in inglese (finiscono nei log dei server) e iniziano con il percorso del campo.
  */
 public final class ConfigValidation {
 
@@ -39,7 +46,7 @@ public final class ConfigValidation {
         ExoframesConfig defaults = ExoframesConfig.defaults();
         ExoframesConfig out = new ExoframesConfig();
         if (input == null) {
-            problems.add("config: assente, usati i default");
+            problems.add("config: missing, using defaults");
             return new ValidationResult(problems, out);
         }
         Ctx c = new Ctx(problems);
@@ -49,10 +56,11 @@ public final class ConfigValidation {
             ExoframesConfig.Energy d = defaults.energy;
             ExoframesConfig.Energy o = out.energy;
             o.cellCapacity = c.positive("energy.cellCapacity", in.cellCapacity, d.cellCapacity);
-            o.idlePerSecond = c.positive("energy.idlePerSecond", in.idlePerSecond, d.idlePerSecond);
-            o.walkPerSecond = c.positive("energy.walkPerSecond", in.walkPerSecond, d.walkPerSecond);
-            o.sprintPerSecond = c.positive("energy.sprintPerSecond", in.sprintPerSecond, d.sprintPerSecond);
-            o.jumpCost = c.positive("energy.jumpCost", in.jumpCost, d.jumpCost);
+            // Consumi: 0 ammesso. cellCapacity e chargerRePerRedstone restano > 0 (0 non ha senso).
+            o.idlePerSecond = c.nonNegative("energy.idlePerSecond", in.idlePerSecond, d.idlePerSecond);
+            o.walkPerSecond = c.nonNegative("energy.walkPerSecond", in.walkPerSecond, d.walkPerSecond);
+            o.sprintPerSecond = c.nonNegative("energy.sprintPerSecond", in.sprintPerSecond, d.sprintPerSecond);
+            o.jumpCost = c.nonNegative("energy.jumpCost", in.jumpCost, d.jumpCost);
             o.lowThreshold = c.unit("energy.lowThreshold", in.lowThreshold, d.lowThreshold);
             o.emptySpeedMultiplier = c.unit("energy.emptySpeedMultiplier", in.emptySpeedMultiplier, d.emptySpeedMultiplier);
             o.emptyProtectionMultiplier =
@@ -88,6 +96,7 @@ public final class ConfigValidation {
             if (presentMap(input.tiers.maxDurability, "tiers.maxDurability", c)) {
                 for (Tier tier : Tier.values()) {
                     int def = defaults.tiers.maxDurability.get(tier);
+                    // > 0: un pezzo con durabilita' massima 0 nascerebbe rotto.
                     out.tiers.maxDurability.put(tier,
                             c.positive("tiers.maxDurability." + tier, input.tiers.maxDurability.get(tier), def));
                 }
@@ -149,10 +158,11 @@ public final class ConfigValidation {
             double def = slot.protectionShare();
             double share;
             if (v == null) {
-                c.problems.add("pieces.shares." + slot + ": mancante, usato il default " + def);
+                c.problems.add("pieces.shares." + slot + ": missing, using default " + def);
                 share = def;
             } else if (!Double.isFinite(v) || v < 0.0) {
-                c.problems.add("pieces.shares." + slot + ": " + v + " non valido (deve essere >= 0), usato il default " + def);
+                c.problems.add("pieces.shares." + slot + ": " + v
+                        + " is invalid (must be finite and >= 0), using default " + def);
                 share = def;
             } else {
                 share = v;
@@ -160,12 +170,13 @@ public final class ConfigValidation {
             shares.put(slot, share);
             sum += share;
         }
-        if (sum <= 0.0) {
-            c.problems.add("pieces.shares: somma 0, ripristinate le quote di default");
+        if (!Double.isFinite(sum) || sum <= 0.0) {
+            // Somma 0 (tutte nulle) o +inf (quote enormi in overflow): normalizzare darebbe quote nulle.
+            c.problems.add("pieces.shares: sum is " + sum + " (must be finite and > 0), restoring default shares");
             return; // out contiene gia' i default
         }
         if (Math.abs(sum - 1.0) > SHARE_TOLERANCE) {
-            c.problems.add("pieces.shares: somma " + sum + " diversa da 1, quote normalizzate a somma 1");
+            c.problems.add("pieces.shares: sum is " + sum + " instead of 1, shares normalized to sum 1");
             for (PieceSlot slot : PieceSlot.values()) {
                 shares.put(slot, shares.get(slot) / sum);
             }
@@ -174,8 +185,8 @@ public final class ConfigValidation {
     }
 
     /**
-     * I moduli presenti nei default devono avere un costo &gt; 0; le voci in piu' (moduli senza quel tipo di
-     * costo) vengono scartate con un messaggio. {@code out} parte gia' dai default.
+     * I moduli presenti nei default devono avere un costo &gt;= 0 (0 ammesso: modulo gratuito); le voci in piu'
+     * (moduli senza quel tipo di costo) vengono scartate con un messaggio. {@code out} parte gia' dai default.
      */
     private static void validateCosts(String name, Map<ModuleType, Integer> in, Map<ModuleType, Integer> defaults,
             EnumMap<ModuleType, Integer> out, Ctx c) {
@@ -186,16 +197,16 @@ public final class ConfigValidation {
             Integer def = defaults.get(type);
             Integer v = in.get(type);
             if (def != null) {
-                out.put(type, c.positive(name + "." + type, v, def));
+                out.put(type, c.nonNegative(name + "." + type, v, def));
             } else if (v != null && v != 0) {
-                c.problems.add(name + "." + type + ": il modulo non ha questo tipo di costo, valore " + v + " ignorato");
+                c.problems.add(name + "." + type + ": this module has no such cost, value " + v + " ignored");
             }
         }
     }
 
     private static boolean present(Object section, String name, Ctx c) {
         if (section == null) {
-            c.problems.add(name + ": sezione assente, usati i default");
+            c.problems.add(name + ": section missing, using defaults");
             return false;
         }
         return true;
@@ -203,7 +214,7 @@ public final class ConfigValidation {
 
     private static boolean presentMap(Map<?, ?> map, String name, Ctx c) {
         if (map == null) {
-            c.problems.add(name + ": assente, usati i default");
+            c.problems.add(name + ": missing, using defaults");
             return false;
         }
         return true;
@@ -214,11 +225,11 @@ public final class ConfigValidation {
 
         int positive(String name, Integer v, int def) {
             if (v == null) {
-                problems.add(name + ": mancante, usato il default " + def);
+                problems.add(name + ": missing, using default " + def);
                 return def;
             }
             if (v <= 0) {
-                problems.add(name + ": " + v + " non valido (deve essere > 0), usato il default " + def);
+                problems.add(name + ": " + v + " is invalid (must be > 0), using default " + def);
                 return def;
             }
             return v;
@@ -226,11 +237,11 @@ public final class ConfigValidation {
 
         int nonNegative(String name, Integer v, int def) {
             if (v == null) {
-                problems.add(name + ": mancante, usato il default " + def);
+                problems.add(name + ": missing, using default " + def);
                 return def;
             }
             if (v < 0) {
-                problems.add(name + ": " + v + " non valido (deve essere >= 0), usato il default " + def);
+                problems.add(name + ": " + v + " is invalid (must be >= 0), using default " + def);
                 return def;
             }
             return v;
@@ -238,11 +249,11 @@ public final class ConfigValidation {
 
         double positive(String name, Double v, double def) {
             if (v == null) {
-                problems.add(name + ": mancante, usato il default " + def);
+                problems.add(name + ": missing, using default " + def);
                 return def;
             }
             if (!Double.isFinite(v) || v <= 0.0) {
-                problems.add(name + ": " + v + " non valido (deve essere > 0), usato il default " + def);
+                problems.add(name + ": " + v + " is invalid (must be > 0), using default " + def);
                 return def;
             }
             return v;
@@ -251,12 +262,12 @@ public final class ConfigValidation {
         /** Valore in [0, 1]: fuori intervallo viene clampato, NaN torna al default. */
         double unit(String name, double v, double def) {
             if (Double.isNaN(v)) {
-                problems.add(name + ": NaN non valido, usato il default " + def);
+                problems.add(name + ": NaN is invalid, using default " + def);
                 return def;
             }
             if (v < 0.0 || v > 1.0) {
                 double clamped = Math.max(0.0, Math.min(1.0, v));
-                problems.add(name + ": " + v + " fuori da [0, 1], limitato a " + clamped);
+                problems.add(name + ": " + v + " is outside [0, 1], clamped to " + clamped);
                 return clamped;
             }
             return v;
@@ -265,11 +276,11 @@ public final class ConfigValidation {
         /** Moltiplicatore che non puo' ridurre: sotto 1 viene portato a 1, NaN/infinito torna al default. */
         double atLeastOne(String name, double v, double def) {
             if (!Double.isFinite(v)) {
-                problems.add(name + ": " + v + " non valido, usato il default " + def);
+                problems.add(name + ": " + v + " is invalid, using default " + def);
                 return def;
             }
             if (v < 1.0) {
-                problems.add(name + ": " + v + " sotto 1, limitato a 1.0");
+                problems.add(name + ": " + v + " is below 1, clamped to 1.0");
                 return 1.0;
             }
             return v;

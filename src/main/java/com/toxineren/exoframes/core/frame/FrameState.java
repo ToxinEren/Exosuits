@@ -26,8 +26,8 @@ import java.util.UUID;
  */
 public final class FrameState {
 
-    private static final ModuleInstaller INSTALLER = new ModuleInstaller();
-
+    private final ExoframesConfig cfg;
+    private final ModuleInstaller installer;
     private final Map<PieceSlot, Piece> pieces = new EnumMap<>(PieceSlot.class);
     private final Map<PieceSlot, List<ModuleType>> modules = new EnumMap<>(PieceSlot.class);
     private final Set<ModuleType> activeToggles = EnumSet.noneOf(ModuleType.class);
@@ -36,9 +36,13 @@ public final class FrameState {
     private UUID owner;
     private boolean unlocked;
 
-    /** La config non viene conservata: le regole che la leggono stanno in {@link FrameRules}. */
+    /**
+     * La config viene conservata per riferimento: l'installazione dei moduli legge {@code pieces.baseModuleSlots};
+     * gli effetti si calcolano con {@link FrameRules}.
+     */
     public FrameState(ExoframesConfig cfg) {
-        Objects.requireNonNull(cfg, "cfg");
+        this.cfg = Objects.requireNonNull(cfg, "cfg");
+        this.installer = new ModuleInstaller(cfg.pieces);
     }
 
     /** Cella inserita, oppure null. */
@@ -115,7 +119,7 @@ public final class FrameState {
             throw new IllegalStateException("no piece mounted in " + slot);
         }
         List<ModuleType> installed = modules.computeIfAbsent(slot, k -> new ArrayList<>());
-        ModuleInstaller.Reason reason = INSTALLER.canInstall(piece, installed, module);
+        ModuleInstaller.Reason reason = installer.canInstall(piece, installed, module);
         if (reason == ModuleInstaller.Reason.OK) {
             installed.add(module);
         }

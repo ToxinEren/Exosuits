@@ -25,4 +25,14 @@ public record FrameEffects(
     public FrameEffects {
         enabledModules = Set.copyOf(enabledModules);
     }
+
+    /**
+     * Punti armatura interi: {@code Math.round(protectionPoints)}. E' il valore da scrivere nell'attributo
+     * armatura vanilla, che {@code LivingEntity.getArmorValue()} tronca per difetto (floor): scrivere il double
+     * non arrotondato farebbe valere 19 un set Industriale completo (19,995) invece di 20.
+     * {@code protectionPoints} resta il valore esatto, non arrotondato.
+     */
+    public int armorPoints() {
+        return (int) Math.round(protectionPoints);
+    }
 }

@@ -30,9 +30,10 @@ public final class Piece {
      * @throws IllegalArgumentException se la config non ha una durabilita' &gt; 0 per il livello
      */
     public static Piece fresh(PieceSlot slot, Tier tier, ExoframesConfig.Tiers tiers) {
+        Objects.requireNonNull(tiers, "tiers");
         Integer max = tiers.maxDurability.get(Objects.requireNonNull(tier, "tier"));
         if (max == null) {
-            throw new IllegalArgumentException("maxDurability mancante per " + tier);
+            throw new IllegalArgumentException("no tiers.maxDurability entry for " + tier);
         }
         return new Piece(slot, tier, max, max);
     }

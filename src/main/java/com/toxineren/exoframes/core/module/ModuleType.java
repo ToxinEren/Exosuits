@@ -65,6 +65,6 @@ public enum ModuleType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("Modulo sconosciuto: " + id);
+        throw new IllegalArgumentException("unknown module id: " + id);
     }
 }

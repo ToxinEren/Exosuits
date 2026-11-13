@@ -1,7 +1,9 @@
 package com.toxineren.exoframes.core.module;
 
 import com.toxineren.exoframes.core.armor.Piece;
+import com.toxineren.exoframes.core.config.ExoframesConfig;
 import java.util.List;
+import java.util.Objects;
 
 /** Verifica se un modulo si puo' installare su un pezzo. */
 public final class ModuleInstaller {
@@ -12,6 +14,13 @@ public final class ModuleInstaller {
         NO_FREE_SLOT,
         TIER_TOO_LOW,
         DUPLICATE
+    }
+
+    private final ExoframesConfig.Pieces pieces;
+
+    /** La capacita' degli slot si legge da {@code pieces.baseModuleSlots} (per riferimento, come {@code FrameRules}). */
+    public ModuleInstaller(ExoframesConfig.Pieces pieces) {
+        this.pieces = Objects.requireNonNull(pieces, "pieces");
     }
 
     /**
@@ -29,7 +38,7 @@ public final class ModuleInstaller {
         if (installedOnPiece.contains(module)) {
             return Reason.DUPLICATE;
         }
-        if (installedOnPiece.size() >= ModuleSlots.capacity(piece.slot(), piece.tier())) {
+        if (installedOnPiece.size() >= ModuleSlots.capacity(piece.slot(), piece.tier(), pieces)) {
             return Reason.NO_FREE_SLOT;
         }
         return Reason.OK;

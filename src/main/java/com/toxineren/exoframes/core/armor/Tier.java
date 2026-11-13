@@ -53,7 +53,7 @@ public enum Tier {
                 return tier;
             }
         }
-        throw new IllegalArgumentException("Tier sconosciuto: " + id);
+        throw new IllegalArgumentException("unknown tier id: " + id);
     }
 
     /** True se questo livello e' uguale o superiore a {@code other} (confronto inclusivo). */

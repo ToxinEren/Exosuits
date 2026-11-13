@@ -127,4 +127,69 @@ class ExoframesConfigTest {
         assertEquals(1.0, sharesSum(result.normalized()), 1e-9);
         assertFalse(result.normalized().pieces.shares.isEmpty());
     }
+
+    @Test
+    void validateAcceptsZeroRatesAndCosts() {
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        cfg.energy.idlePerSecond = 0;
+        cfg.energy.walkPerSecond = 0;
+        cfg.energy.sprintPerSecond = 0;
+        cfg.energy.jumpCost = 0;
+        cfg.modules.costPerSecond.put(ModuleType.REBREATHER, 0);
+        cfg.modules.costPerUse.put(ModuleType.SHOCKWAVE, 0);
+        ConfigValidation.ValidationResult result = ConfigValidation.validate(cfg);
+        assertTrue(result.problems().isEmpty(), result.problems().toString());
+        assertEquals(0, result.normalized().energy.idlePerSecond);
+        assertEquals(0, result.normalized().energy.walkPerSecond);
+        assertEquals(0, result.normalized().energy.sprintPerSecond);
+        assertEquals(0, result.normalized().energy.jumpCost);
+        assertEquals(0, result.normalized().modules.costPerSecond.get(ModuleType.REBREATHER));
+        assertEquals(0, result.normalized().modules.costPerUse.get(ModuleType.SHOCKWAVE));
+    }
+
+    @Test
+    void validateKeepsCapacityDurabilityAndChargerStrictlyPositive() {
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        cfg.energy.cellCapacity = 0;
+        cfg.energy.chargerRePerRedstone = 0;
+        cfg.tiers.maxDurability.put(Tier.SCRAP, 0);
+        cfg.energy.idlePerSecond = -1;
+        ConfigValidation.ValidationResult result = ConfigValidation.validate(cfg);
+        assertEquals(10_000, result.normalized().energy.cellCapacity);
+        assertEquals(500, result.normalized().energy.chargerRePerRedstone);
+        assertEquals(180, result.normalized().tiers.maxDurability.get(Tier.SCRAP));
+        assertEquals(2, result.normalized().energy.idlePerSecond);
+        assertEquals(4, result.problems().size(), result.problems().toString());
+        assertTrue(result.problems().stream().anyMatch(p -> p.contains("energy.cellCapacity")));
+        assertTrue(result.problems().stream().anyMatch(p -> p.contains("energy.chargerRePerRedstone")));
+        assertTrue(result.problems().stream().anyMatch(p -> p.contains("tiers.maxDurability.SCRAP")));
+        assertTrue(result.problems().stream().anyMatch(p -> p.contains("energy.idlePerSecond")));
+    }
+
+    @Test
+    void overflowingSharesRestoreDefaults() {
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        for (PieceSlot slot : PieceSlot.values()) {
+            cfg.pieces.shares.put(slot, Double.MAX_VALUE); // finite ciascuna, somma +inf
+        }
+        assertDefaultSharesRestored(ConfigValidation.validate(cfg));
+    }
+
+    @Test
+    void allZeroSharesRestoreDefaults() {
+        ExoframesConfig cfg = ExoframesConfig.defaults();
+        for (PieceSlot slot : PieceSlot.values()) {
+            cfg.pieces.shares.put(slot, 0.0);
+        }
+        assertDefaultSharesRestored(ConfigValidation.validate(cfg));
+    }
+
+    private static void assertDefaultSharesRestored(ConfigValidation.ValidationResult result) {
+        for (PieceSlot slot : PieceSlot.values()) {
+            assertEquals(slot.protectionShare(), result.normalized().pieces.shares.get(slot), 1e-12, slot.name());
+        }
+        assertEquals(1.0, sharesSum(result.normalized()), 1e-9);
+        assertEquals(1, result.problems().size(), result.problems().toString());
+        assertTrue(result.problems().get(0).startsWith("pieces.shares"), result.problems().toString());
+    }
 }

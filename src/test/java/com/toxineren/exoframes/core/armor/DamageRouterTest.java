@@ -118,4 +118,17 @@ class DamageRouterTest {
         assertEquals(15, p.get(PieceSlot.RIGHT_LEG));
         assertEquals(0, split.unabsorbed());
     }
+
+    @Test
+    void allMountedPiecesBrokenLeavesAllUnabsorbed() {
+        Map<PieceSlot, Piece> mounted = new EnumMap<>(PieceSlot.class);
+        for (PieceSlot slot : PieceSlot.values()) {
+            mounted.put(slot, new Piece(slot, Tier.INDUSTRIAL, 1_000, 0));
+        }
+        for (DamageKind kind : DamageKind.values()) {
+            DamageRouter.Split split = router.route(kind, 37, mounted);
+            assertTrue(split.perPiece().isEmpty(), kind.name());
+            assertEquals(37, split.unabsorbed(), kind.name());
+        }
+    }
 }

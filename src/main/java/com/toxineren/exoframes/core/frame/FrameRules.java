@@ -90,13 +90,12 @@ public final class FrameRules {
     }
 
     /**
-     * True se il modulo e' installato in uno slot con un pezzo montato e integro; SHOCKWAVE richiede inoltre
-     * entrambe le gambe montate e integre.
+     * True se il modulo e' installato in uno slot con un pezzo montato e integro. I moduli che richiedono
+     * entrambe le gambe (SHOCKWAVE) devono essere installati su ENTRAMBE le gambe, montate e integre.
      */
     public boolean moduleOperational(FrameState s, ModuleType m) {
-        if (m.requiresBothLegs()
-                && !(mountedAndIntact(s, PieceSlot.LEFT_LEG) && mountedAndIntact(s, PieceSlot.RIGHT_LEG))) {
-            return false;
+        if (m.requiresBothLegs()) {
+            return installedAndIntact(s, PieceSlot.LEFT_LEG, m) && installedAndIntact(s, PieceSlot.RIGHT_LEG, m);
         }
         for (Map.Entry<PieceSlot, List<ModuleType>> e : s.modules().entrySet()) {
             if (e.getValue().contains(m) && mountedAndIntact(s, e.getKey())) {
@@ -143,6 +142,10 @@ public final class FrameRules {
     private static boolean activeEachTick(FrameState s, ModuleType m) {
         Activation a = m.activation();
         return a == Activation.PASSIVE || (a == Activation.TOGGLE && s.activeToggles().contains(m));
+    }
+
+    private static boolean installedAndIntact(FrameState s, PieceSlot slot, ModuleType m) {
+        return mountedAndIntact(s, slot) && s.modules().getOrDefault(slot, List.of()).contains(m);
     }
 
     private static boolean mountedAndIntact(FrameState s, PieceSlot slot) {
