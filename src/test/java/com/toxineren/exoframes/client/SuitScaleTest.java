@@ -1,10 +1,17 @@
 package com.toxineren.exoframes.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +21,9 @@ import org.junit.jupiter.api.Test;
 
 /** Scala della tuta e sollevamento del pilota (design, par. 4.7). */
 class SuitScaleTest {
+
+    /** La geometria generata della tuta. */
+    private static final String GEO = "/assets/redstone_exoframes/geo/exoframe.geo.json";
 
     /** Il generatore della grafica, che ha la sua copia della scala. */
     private static final String ART_GENERATOR = "tools/art/exo.py";
@@ -27,8 +37,8 @@ class SuitScaleTest {
 
     @Test
     void raiseInBlocksUsesThePlayerModelScale() {
-        assertEquals(9.6f, SuitScale.PILOT_RAISE_PX, 1e-4);
-        assertEquals(0.5625f, SuitScale.pilotRaiseBlocks(), 1e-4);
+        assertEquals(15.6f, SuitScale.PILOT_RAISE_PX, 1e-4);
+        assertEquals(0.9140625f, SuitScale.pilotRaiseBlocks(), 1e-4);
     }
 
     @Test
@@ -43,11 +53,40 @@ class SuitScaleTest {
         // Differenza in pixel del modello, con y verso il basso come nello spazio del modello del giocatore.
         float dx = suitX - pivotX;
         float dyDown = -(suitY - pivotY);
-        assertEquals(-2f, dx, 1e-4);
-        assertEquals(0.8f, dyDown, 1e-4);
+        assertEquals(-3.25f, dx, 1e-4);
+        assertEquals(1.3f, dyDown, 1e-4);
         // Gli stessi numeri che PilotPose usa per portare l'oggetto impugnato nella mano della tuta.
-        assertEquals(2f, PilotPose.ARM_SHIFT_X_PX, 1e-4);
+        assertEquals(-dx, PilotPose.ARM_SHIFT_X_PX, 1e-4);
         assertEquals(dyDown, PilotPose.ARM_SHIFT_Y_PX, 1e-4);
+    }
+
+    /**
+     * Richiesta di Luigi: la tuta e' alta almeno 3 blocchi, gia' il telaio nudo (ossa frame* della geometria
+     * generata). Nel gioco si disegna scalata di S attorno ai piedi, e un blocco vale 16 / 0,9375 pixel del modello.
+     */
+    @Test
+    void bareFrameIsAtLeastThreeBlocksTall() throws IOException {
+        double top = 0;
+        try (InputStream in = SuitScaleTest.class.getResourceAsStream(GEO)) {
+            assertNotNull(in, "risorsa assente: " + GEO);
+            try (Reader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
+                JsonObject geometry = JsonParser.parseReader(reader).getAsJsonObject()
+                        .getAsJsonArray("minecraft:geometry").get(0).getAsJsonObject();
+                for (JsonElement element : geometry.getAsJsonArray("bones")) {
+                    JsonObject bone = element.getAsJsonObject();
+                    if (!bone.get("name").getAsString().startsWith("frame") || !bone.has("cubes")) {
+                        continue;
+                    }
+                    for (JsonElement cube : bone.getAsJsonArray("cubes")) {
+                        JsonObject c = cube.getAsJsonObject();
+                        top = Math.max(top, c.getAsJsonArray("origin").get(1).getAsDouble()
+                                + c.getAsJsonArray("size").get(1).getAsDouble());
+                    }
+                }
+            }
+        }
+        double blocks = top * SuitScale.S * 0.9375 / 16;
+        assertTrue(blocks >= 3, "telaio nudo alto " + blocks + " blocchi (" + top + " px non scalati)");
     }
 
     /**

@@ -43,9 +43,9 @@ class ExoframeGeometryTest {
 
     /** Ingombri in pixel non scalati, come exo.FRAME_MIN/MAX (telaio nudo) e exo.SUIT_MIN/MAX (pezzi). */
     private static final double[] FRAME_MIN = {-12.75, 0, -8};
-    private static final double[] FRAME_MAX = {12.75, 30.7, 10};
+    private static final double[] FRAME_MAX = {12.75, 31.25, 10};
     private static final double[] SUIT_MIN = {-13.5, 0, -8.75};
-    private static final double[] SUIT_MAX = {13.5, 31.5, 10.5};
+    private static final double[] SUIT_MAX = {13.5, 32, 10.5};
 
     /** Osso di uno stato di un pezzo: piece<Slot>_s<stato>_<regione>. */
     private static final Pattern STATE_BONE = Pattern.compile("piece[A-Za-z]+_s([0-3])_(p1|p2|n)");

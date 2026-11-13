@@ -12,7 +12,7 @@ Stile Minecraft: scatole allineate agli assi, texture a pixel senza sfumature mo
 
 ## Telaio e pezzi Rottame approvati (quarta passata, 13 novembre 2026)
 
-Anteprime in `anteprime/rottame-v4/`, fatte con `node shot.js` in `tools/art/preview/` (il pilota è disegnato come nel gioco e non fa parte del modello):
+Anteprime in `anteprime/rottame-v4/`, in scala 1,65, fatte con `node shot.js` in `tools/art/preview/` (il pilota è disegnato come nel gioco e non fa parte del modello):
 - `telaio-fronte.png`, `telaio-retro.png` (3/4), `telaio-lato.png` (lato destro), `telaio-porta.png` (davanti, griglia a blocchi, porta 1×2 in bianco, box di collisione in piedi in giallo): il telaio nudo, con il pilota visibile dalla vita in su;
 - `armata-fronte.png`, `armata-retro.png`, `armata-lato.png`, `armata-porta.png`: i sei pezzi Rottame montati, stato 0, colori predefiniti;
 - `armata-fronte-stato1.png`, `-stato2.png`, `-stato3.png`: gli stessi pezzi negli stati danneggiato, critico e rotto;
@@ -33,16 +33,18 @@ Sulle regioni colorate l'usura può essere solo più scura o più chiara del gri
 
 **Decalcomanie (riservate).** Due ossa con una scatola piatta 3,5×3,5 px (7×7 texel), 0,25 px sopra la piastra, texel trasparenti, nascoste dal gioco fino a M5: `pieceTorso_decal` sulla lastra centrale del petto, accanto alla chiglia sul lato destro di chi indossa (a sinistra per chi guarda); `pieceLeftArm_decal` sulla piastra esterna del braccio sinistro, sotto lo spallaccio (sullo spallaccio non ci starebbe dentro l'ingombro, e l'osso del braccio la porta con sé quando il braccio si muove).
 
-**Misure.** Un blocco vale 17,07 pixel del modello non scalati; misure in blocchi = pixel × 1,4 × 0,9375 / 16.
+**Scala 1,65 (richiesta di Luigi del 13 novembre, dopo le tavole approvate).** Luigi ha visto che l'armatura sarebbe stata alta due blocchi e mezzo e la vuole alta almeno 3 blocchi: la tuta si disegna in scala 1,65 invece di 1,4 (fino a 1,66 il box in piedi del giocatore, 1,8 S blocchi, passa ancora sotto un soffitto a 3 blocchi) e il pilota è sollevato di 24 × 0,65 = 15,6 pixel del modello (0,91 blocchi). Il pilota resta a grandezza normale, quindi dentro la tuta è relativamente più piccolo: nelle coordinate del modello è un giocatore scalato di 1/1,65 attorno a (0, 24, 0), con la testa tra y 24 e 28,85, il busto e le braccia tra 16,73 e 24, le gambe (non disegnate) tra 9,45 e 16,73. Le forme approvate restano; cambiano solo le parti che devono seguire il pilota: la testa del telaio sale fino a y 31,25 (fronte più alta, con la spia; calotta, tempie e nuca più alte; montanti della visiera fino alla fronte), l'elmo fino a 32 (lati, viso e retro più alti, i due tetti sopra), le impugnature salgono di 1,5 px sotto le mani del pilota (a y 16..16,5) e il sedile sale fino a y 16,5 e si stringe di 0,25 px per lato, così chiude da ogni lato il posto delle gambe del pilota sotto il busto.
+
+**Misure.** Un blocco vale 17,07 pixel del modello non scalati; misure in blocchi = pixel × 1,65 × 0,9375 / 16.
 
 | | pixel del modello (larg. × alt. × prof.) | blocchi (alt. × larg. × prof.) |
 |---|---|---|
-| telaio nudo | 25,5 × 30,5 × 17,5 (x ±12,75, y 0..30,5, z −7,5..10) | 2,50 × 2,09 × 1,44 |
-| con i pezzi Rottame | 27 × 31,5 × 18,5 (x ±13,5, y 0..31,5, z −8,5..10) | 2,58 × 2,21 × 1,52 |
-| limite del telaio nudo (`exo.FRAME_MIN/MAX`, `ExoframeGeometryTest`) | x ±12,75, y 0..30,7, z −8..10 | |
-| limite con i pezzi (`exo.SUIT_MIN/MAX`, `ExoframeGeometryTest`) | x ±13,5, y 0..31,5, z −8,75..10,5 | |
+| telaio nudo | 25,5 × 31,25 × 17,5 (x ±12,75, y 0..31,25, z −7,5..10) | 3,02 × 2,47 × 1,69 |
+| con i pezzi Rottame | 27 × 32 × 18,5 (x ±13,5, y 0..32, z −8,5..10) | 3,09 × 2,61 × 1,79 |
+| limite del telaio nudo (`exo.FRAME_MIN/MAX`, `ExoframeGeometryTest`) | x ±12,75, y 0..31,25, z −8..10 | |
+| limite con i pezzi (`exo.SUIT_MIN/MAX`, `ExoframeGeometryTest`) | x ±13,5, y 0..32, z −8,75..10,5 | |
 
-Rispetto al box di collisione in piedi in scala (0,84 × 2,52 blocchi) la tuta armata sporge di circa 0,69 blocchi per parte e la cima (il tetto dell'elmo) di 0,06; il telaio nudo resta 0,02 sotto. Non passa da una porta 1×2.
+Rispetto al box di collisione in piedi in scala (0,6S × 1,8S = 0,99 × 2,97 blocchi) la tuta armata sporge di circa 0,81 blocchi per parte e la cima (il tetto dell'elmo) di 0,12; il telaio nudo sporge di 0,74 per parte e di 0,05 in alto. Non passa da una porta 1×2.
 
 **Somiglianze.** Il riferimento di Luigi per le proporzioni era un'armatura pesante di un film: se ne sono prese la sagoma pesante in alto, il petto a botte, la testa incassata, le spalle grandi, gli avambracci grossi e il colore di metallo scuro caldo, non gli elementi che la identificano. Niente disco luminoso sul petto (al centro c'è una chiglia; le luci sono tre fessure basse a lato), niente volto di quell'elmo (qui una piastra piatta con una banda di visione dietro sbarre), spallacci a lastre piatte con feritoie e non a cupola con file di fori, niente barra sopra spalle e testa, la cella resta sulla schiena in un alloggiamento a barre; niente loghi né scritte.
 

@@ -4,15 +4,16 @@ scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe,
 spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli attuatori,
 pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette, borchie).
 
-Il renderer scala la tuta di exo.SUIT_SCALE (1.4) attorno ai piedi e disegna il pilota a grandezza normale sollevato
-di exo.PILOT_LIFT_PX (24(S-1) = 9.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
-di 1/S attorno a (0,24,0). A S = 1.4: testa y 24..29.71 (x, z +-2.86); busto y 15.43..24 (x +-2.86, z +-1.43);
-braccia x +-2.86..5.71, y 15.43..24. Le braccia del pilota entrano nelle gabbie del braccio, le mani sulle
-impugnature; fuori, sul lato esterno, il braccio meccanico con la mano della tuta (fondo a y 6.75). Le gambe del
-pilota (x +-2.86, y 6.86..15.43) sono nascoste nelle prese delle cosce e nel sedile. Testa e sedile sono dimensionati
-per S = 1.4: con un'altra scala vanno ricontrollati.
+Il renderer scala la tuta di exo.SUIT_SCALE (1.65) attorno ai piedi e disegna il pilota a grandezza normale sollevato
+di exo.PILOT_LIFT_PX (24(S-1) = 15.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
+di 1/S attorno a (0,24,0). A S = 1.65: testa y 24..28.85 (x, z +-2.42); busto y 16.73..24 (x +-2.42, z +-1.21);
+braccia x +-2.42..4.85, y 16.73..24, mani in fondo a y 16.73, sulle impugnature dentro le gabbie del braccio;
+fuori, sul lato esterno, il braccio meccanico con la mano della tuta (fondo a y 6.75). Le gambe del pilota (x +-2.42,
+y 9.45..16.73) sono nascoste nelle prese delle cosce e nel sedile, che sale fino a y 16.5. Testa, sedile e
+impugnature sono dimensionati per S = 1.65 (con S = 1.4 la tuta era alta 2.5 blocchi; Luigi ne vuole almeno 3): con
+un'altra scala vanno ricontrollati. La testa arriva a y 31.25: il telaio nudo e' alto 3.02 blocchi.
 Gli attuatori delle spalle stanno nel busto (frameBody), non nelle braccia: per questo gli spallacci sono nel pezzo
-Torso. Ingombro del telaio nudo: x +-12.75, y 0..30.7, z -8..10 (exo.FRAME_MIN/MAX). Fronte verso -z, lato destro a
+Torso. Ingombro del telaio nudo: x +-12.75, y 0..31.25, z -8..10 (exo.FRAME_MIN/MAX). Fronte verso -z, lato destro a
 x negativa; sym() scrive il lato destro e aggiunge il sinistro. Nessuna scatola ruotata.
 
 Materiali: gun (acciaio brunito), steel (parti lavorate chiare), brass (mozzi), chrome (steli, impugnature,
@@ -40,21 +41,21 @@ def build(m):
 
 def head(m):
     # testa scheletrica stretta (pareti di 1 px attorno alla testa del pilota, x e z +-3.21)
-    m.box(HEAD, 'crown', (-4, 30.25, -3.75), (4, 30.5, 4), 'gun')
-    m.sym(HEAD, 'temple', (-4.25, 27.25, -3.75), (-3.25, 30.25, 3.75), 'gun')
+    m.box(HEAD, 'crown', (-4, 31, -3.75), (4, 31.25, 4), 'gun')
+    m.sym(HEAD, 'temple', (-4.25, 27.25, -3.75), (-3.25, 31, 3.75), 'gun')
     m.sym(HEAD, 'jaw', (-4.25, 24.25, -4), (-3.25, 27.25, 1.75), 'steel')
     m.sym(HEAD, 'ear_hub', (-4.75, 25, -1.25), (-4.25, 27.5, 1.25), 'brass', hub=True)
-    m.box(HEAD, 'nape', (-3.25, 24.25, 3.25), (3.25, 30.25, 4.25), 'gun')
-    m.box(HEAD, 'brow', (-4, 29, -4.5), (4, 30, -3.25), 'steel')
+    m.box(HEAD, 'nape', (-3.25, 24.25, 3.25), (3.25, 31, 4.25), 'gun')
+    m.box(HEAD, 'brow', (-4, 29.5, -4.5), (4, 31, -3.25), 'steel')
     m.box(HEAD, 'chin', (-4.25, 22.75, -4.5), (4.25, 23.75, -3.25), 'gun')
-    m.sym(HEAD, 'visor_post', (-3.25, 23.75, -4.25), (-2.75, 29, -3.25), 'gun')
-    m.box(HEAD, 'brow_lamp', (-0.5, 29.25, -4.75), (0.5, 29.75, -4.5), 'lamp')
+    m.sym(HEAD, 'visor_post', (-3.25, 23.75, -4.25), (-2.75, 29.5, -3.25), 'gun')
+    m.box(HEAD, 'brow_lamp', (-0.5, 30, -4.75), (0.5, 30.5, -4.5), 'lamp')
     m.sym(HEAD, 'helmet_lug', (-4.5, 28.25, 1.5), (-4.25, 29.5, 2.75), 'chrome')
 
 
 def torso(m):
     # sedile e anello della vita stretto (la vita e' molto piu' stretta del petto)
-    m.box(BODY, 'seat', (-3, 12.5, -2.75), (3, 15, 2.75), 'gun')
+    m.box(BODY, 'seat', (-2.75, 12.5, -2.75), (2.75, 16.5, 2.75), 'gun')
     m.box(BODY, 'seat_lip', (-3, 15, -3.25), (3, 16.25, -2), 'steel')
     m.box(BODY, 'seat_back', (-3, 15, 2), (3, 18, 3.25), 'gun')
     m.box(BODY, 'waist_front', (-5.5, 12.5, -5), (5.5, 14.25, -3.25), 'gun')
@@ -126,11 +127,11 @@ def arms(m):
     m.sym(RARM, 'arm_cage_wall', (-8.5, 16.5, -2.75), (-6.25, 23.25, 2.75), 'gun')
     m.sym(RARM, 'arm_cage_front', (-6.25, 20.5, -3), (-3.75, 21.5, -2), 'steel')
     m.sym(RARM, 'arm_cage_back', (-6.25, 20.5, 2), (-3.75, 21.5, 3), 'steel')
-    m.sym(RARM, 'grip', (-6.25, 14.5, -2.75), (-3.25, 15, 2.75), 'chrome')
-    m.sym(RARM, 'grip_post_front', (-3.75, 15, -2.75), (-3.25, 16.25, -2), 'gun')
-    m.sym(RARM, 'grip_post_back', (-3.75, 15, 2), (-3.25, 16.25, 2.75), 'gun')
-    m.sym(RARM, 'grip_bar_front', (-6.25, 15.5, -2.75), (-3.75, 16.25, -2), 'gun')
-    m.sym(RARM, 'grip_bar_back', (-6.25, 15.5, 2), (-3.75, 16.25, 2.75), 'gun')
+    m.sym(RARM, 'grip', (-6.25, 16, -2.75), (-3.25, 16.5, 2.75), 'chrome')
+    m.sym(RARM, 'grip_post_front', (-3.75, 16.5, -2.75), (-3.25, 17.75, -2), 'gun')
+    m.sym(RARM, 'grip_post_back', (-3.75, 16.5, 2), (-3.25, 17.75, 2.75), 'gun')
+    m.sym(RARM, 'grip_bar_front', (-6.25, 17, -2.75), (-3.75, 17.75, -2), 'gun')
+    m.sym(RARM, 'grip_bar_back', (-6.25, 17, 2), (-3.75, 17.75, 2.75), 'gun')
     # braccio meccanico: trave, due pistoni, gomito grande
     m.sym(RARM, 'upper_beam', (-11.75, 18.75, -1.5), (-8.5, 23.5, 1.5), 'gun')
     m.sym(RARM, 'upper_ram_front', (-11.25, 19.25, -3.25), (-9.25, 23.25, -1.5), 'steel')

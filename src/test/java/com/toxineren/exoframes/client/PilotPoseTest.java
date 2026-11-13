@@ -65,8 +65,8 @@ class PilotPoseTest {
     @Test
     void handShiftAtRestMovesBothArmsOutwardAndDown() {
         // Perni del braccio classico a riposo nel modello del giocatore (pixel, y verso il basso, piedi a y = 24).
-        assertShift(-2f, 0.8f, 0f, PilotPose.handShiftPx(-5f, 2f, 0f)); // destro
-        assertShift(2f, 0.8f, 0f, PilotPose.handShiftPx(5f, 2f, 0f)); // sinistro
+        assertShift(-3.25f, 1.3f, 0f, PilotPose.handShiftPx(-5f, 2f, 0f)); // destro
+        assertShift(3.25f, 1.3f, 0f, PilotPose.handShiftPx(5f, 2f, 0f)); // sinistro
         // le costanti documentate sono il caso a riposo
         assertEquals(PilotPose.ARM_SHIFT_X_PX, PilotPose.handShiftPx(5f, 2f, 0f).x(), 1e-4);
         assertEquals(PilotPose.ARM_SHIFT_Y_PX, PilotPose.handShiftPx(5f, 2f, 0f).y(), 1e-4);
@@ -74,16 +74,16 @@ class PilotPoseTest {
 
     @Test
     void handShiftFollowsTheSneakingArm() {
-        // Accovacciati HumanoidModel porta le braccia a y = 5,2: (S - 1)(5,2 - 24) + 9,6 = 2,08.
-        assertShift(-2f, 2.08f, 0f, PilotPose.handShiftPx(-5f, 5.2f, 0f));
-        assertShift(2f, 2.08f, 0f, PilotPose.handShiftPx(5f, 5.2f, 0f));
+        // Accovacciati HumanoidModel porta le braccia a y = 5,2: (S - 1)(5,2 - 24) + 15,6 = 3,38.
+        assertShift(-3.25f, 3.38f, 0f, PilotPose.handShiftPx(-5f, 5.2f, 0f));
+        assertShift(3.25f, 3.38f, 0f, PilotPose.handShiftPx(5f, 5.2f, 0f));
     }
 
     @Test
     void handShiftScalesEveryAxisAboutTheFeet() {
         // Skin sottile (perno y = 2,5) e un perno spostato in z: ogni asse si scala di S - 1 attorno ai piedi.
-        assertShift(-2f, 1.0f, 0f, PilotPose.handShiftPx(-5f, 2.5f, 0f));
-        assertShift(2f, 0.8f, -0.4f, PilotPose.handShiftPx(5f, 2f, -1f));
+        assertShift(-3.25f, 1.625f, 0f, PilotPose.handShiftPx(-5f, 2.5f, 0f));
+        assertShift(3.25f, 1.3f, -0.65f, PilotPose.handShiftPx(5f, 2f, -1f));
     }
 
     private static void assertShift(float x, float y, float z, PilotPose.Shift shift) {

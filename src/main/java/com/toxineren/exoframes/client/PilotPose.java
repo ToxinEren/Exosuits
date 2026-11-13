@@ -31,16 +31,17 @@ import net.minecraft.world.entity.LivingEntity;
 public final class PilotPose {
     /**
      * Spostamento orizzontale, in pixel del modello, dal perno del braccio classico a riposo del pilota (x = 5 dal
-     * centro) a quello della tuta: 5 * (S - 1), verso l'esterno. Vale {@link #handShiftPx} per quel perno.
+     * centro) a quello della tuta: 5 * (S - 1), verso l'esterno (3,25 a S = 1,65). Vale {@link #handShiftPx} per quel
+     * perno.
      */
-    static final float ARM_SHIFT_X_PX = 2f;
+    static final float ARM_SHIFT_X_PX = 5f * (SuitScale.S - 1f);
 
     /**
      * Spostamento verticale, in pixel del modello con y verso il basso, dal perno del braccio classico a riposo del
-     * pilota (22 px dai piedi) a quello della tuta: sale di 22 * (S - 1) = 8,8 px, meno dei 9,6 del pilota. Vale
-     * {@link #handShiftPx} per quel perno.
+     * pilota (22 px dai piedi) a quello della tuta: sale di 22 * (S - 1), meno dei 24 * (S - 1) del pilota, quindi
+     * scende di 2 * (S - 1) (14,3 contro 15,6 e 1,3 px a S = 1,65). Vale {@link #handShiftPx} per quel perno.
      */
-    static final float ARM_SHIFT_Y_PX = 0.8f;
+    static final float ARM_SHIFT_Y_PX = SuitScale.PILOT_RAISE_PX - 22f * (SuitScale.S - 1f);
 
     /** Altezza dei piedi nello spazio del modello del giocatore, in pixel (y verso il basso). */
     private static final float FEET_Y_PX = 24f;
@@ -83,7 +84,7 @@ public final class PilotPose {
      * Spostamento dal perno di un braccio del pilota, in (x, y, z) pixel del modello, al perno del braccio della tuta.
      * La tuta e' il modello scalato di S attorno ai piedi (y = 24) e abbassato del sollevamento, e il suo osso del
      * braccio segue la posizione del braccio del modello di base: ((S - 1) x, (S - 1)(y - 24) + sollevamento,
-     * (S - 1) z). A riposo (perno (+-5, 2, 0)) da' (+-2, 0,8, 0); cambia accovacciati (y = 5,2) e con la skin sottile
+     * (S - 1) z). A riposo (perno (+-5, 2, 0)) da' (+-3,25, 1,3, 0) a S = 1,65; cambia accovacciati (y = 5,2) e con la skin sottile
      * (y = 2,5). Java puro.
      */
     static Shift handShiftPx(float x, float y, float z) {

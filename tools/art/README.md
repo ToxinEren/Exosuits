@@ -39,13 +39,13 @@ quello della pittura degli stati (`paint.check_wear`, sotto):
 - facce complanari con la stessa normale che si sovrappongono, in tutte e sei le direzioni (anche verso il basso),
   salvo la parte coperta da altre scatole (controllata cella per cella sulla griglia dei quarti di pixel, quindi
   anche una striscia scoperta di 0.25 px viene segnalata);
-- scatole troppo vicine al pilota, misurate come nel gioco: la tuta scalata di `exo.SUIT_SCALE` (1.4) attorno ai
-  piedi, il pilota a grandezza normale sollevato di `exo.PILOT_LIFT_PX` (24(S-1) = 9.6 px, collo e spalle
+- scatole troppo vicine al pilota, misurate come nel gioco: la tuta scalata di `exo.SUIT_SCALE` (1.65) attorno ai
+  piedi, il pilota a grandezza normale sollevato di `exo.PILOT_LIFT_PX` (24(S-1) = 15.6 px, collo e spalle
   allineati a quelli della tuta) e senza gambe (non si disegnano: stanno nelle cosce chiuse della tuta). Margini:
   0.25 px dal corpo e dalle braccia (dove sta il secondo strato della skin), 0.5 px dalla testa (il cappello);
 - scatole fuori dall'ingombro, in pixel non scalati: per le ossa del telaio (regione `frame`, `exo.FRAME_MIN/MAX`)
-  x -12.75..12.75, y 0..30.7, z -8..10; per le ossa dei pezzi e delle decalcomanie (`exo.SUIT_MIN/MAX`)
-  x -13.5..13.5, y 0..31.5, z -8.75..10.5;
+  x -12.75..12.75, y 0..31.25, z -8..10; per le ossa dei pezzi e delle decalcomanie (`exo.SUIT_MIN/MAX`)
+  x -13.5..13.5, y 0..32, z -8.75..10.5;
 - per ogni pezzo e regione di colore, la luminosita' media delle facce non cala da uno stato visivo al successivo
   (uno stato piu' alto non deve mai sembrare meno rovinato).
 
@@ -57,7 +57,8 @@ destre (scatole e rettangoli), che le decalcomanie siano piatte e trasparenti, d
 `SuitScaleTest.matchesTheArtGenerator` confronta `exo.SUIT_SCALE` con la scala del gioco.
 
 Misure in blocchi: il giocatore e' reso a 15/16, quindi un blocco vale 16 / 0.9375 = 17.07 px di modello non
-scalati, e una misura in px del modello vale px * 1.4 * 0.9375 / 16 blocchi.
+scalati, e una misura in px del modello vale px * 1.65 * 0.9375 / 16 blocchi: il telaio nudo e' alto 3.02 blocchi, la
+tuta con i pezzi Rottame 3.09 (misure complete in `docs/arte/README.md`).
 
 ## Struttura
 
@@ -182,7 +183,7 @@ cd tools/art/preview && npm install && node shot.js
 rifa' le viste standard in `tools/art/preview/out/` (ignorata da git): `fronte`, `retro`, `lato` (3/4 davanti, 3/4
 dietro, lato destro), `testa` e `gamba` (primi piani), `porta` (davanti, con griglia a blocchi di 17.07 px, porta
 1x2 in bianco con stipiti e architrave, box di collisione in piedi 0.6S x 1.8S blocchi in giallo). La tuta e'
-scalata di 1.4 attorno ai piedi, il pilota e' a grandezza normale, sollevato di 9.6 px e senza gambe, la maschera
+scalata di 1.65 attorno ai piedi, il pilota e' a grandezza normale, sollevato di 15.6 px e senza gambe, la maschera
 luminosa fa da emissiva, le ossa `_p1`/`_p2` si tingono con i colori predefiniti del Rottame (0x8A6F52, 0x4A4F55).
 Come nel gioco si vedono solo le ossa dei pezzi di uno stato (predefinito 0), mai le decalcomanie. Opzioni:
 `--views fronte,porta`, `--state 0..3` o `--state nudo` (telaio senza pezzi), `--colors RRGGBB,RRGGBB` (colori dei

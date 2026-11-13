@@ -11,7 +11,7 @@ Gli spallacci stanno nel pezzo Torso perche' gli attuatori delle spalle sono del
 speculari (un solo item per braccio e uno per gamba): si scrive il lato destro con sym(). Elmo e torso possono essere
 asimmetrici (fessure luminose sul petto a sinistra, toppa sullo spallaccio destro).
 Decalcomanie: due ossa piatte con texel trasparenti, nascoste dal renderer fino a M5 (materiale 'decal').
-Ingombro con i pezzi: x +-13.5, y 0..31.5, z -8.75..10.5 (exo.SUIT_MIN/MAX).
+Ingombro con i pezzi: x +-13.5, y 0..32, z -8.75..10.5 (exo.SUIT_MIN/MAX).
 """
 from exo import piece
 
@@ -38,11 +38,11 @@ def helmet(m):
     # elmo stretto e basso: calotta, tetto a gradino, piastra del viso a due gradini con una banda di visione
     # dietro tre sbarre verticali e tre feritoie per l'aria sul mento, tettuccio sopra la visiera
     p1, p2, n = piece('Helmet', 'p1'), piece('Helmet', 'p2'), piece('Helmet', 'n')
-    m.sym(p1, 'helm_side', (-5.25, 24.75, -4.75), (-4.75, 30.5, 4.5), 'paint')
-    m.box(p1, 'helm_back', (-4.75, 25.75, 4.25), (4.75, 30.5, 4.75), 'paint')
-    m.box(p1, 'helm_top', (-5.25, 30.5, -5.25), (5.25, 31, 4.75), 'paint')
-    m.box(p2, 'helm_top2', (-3.5, 31, -4), (3.5, 31.5, 3.5), 'paint')
-    m.box(p1, 'helm_face', (-4.75, 23.25, -5.25), (4.75, 30.5, -4.75), 'paint')
+    m.sym(p1, 'helm_side', (-5.25, 24.75, -4.75), (-4.75, 31.25, 4.5), 'paint')
+    m.box(p1, 'helm_back', (-4.75, 25.75, 4.25), (4.75, 31.25, 4.75), 'paint')
+    m.box(p1, 'helm_top', (-5.25, 31.25, -5.25), (5.25, 31.75, 4.75), 'paint')
+    m.box(p2, 'helm_top2', (-3.5, 31.75, -4), (3.5, 32, 3.5), 'paint')
+    m.box(p1, 'helm_face', (-4.75, 23.25, -5.25), (4.75, 31.25, -4.75), 'paint')
     m.box(p1, 'helm_jaw', (-3.5, 23.25, -5.75), (3.5, 25.75, -5.25), 'paint')
     m.box(n, 'helm_breather', (-2, 23.75, -6), (2, 25.25, -5.75), 'vent')
     m.box(n, 'visor_glass', (-3, 26.25, -5.5), (3, 27.5, -5.25), 'glass')

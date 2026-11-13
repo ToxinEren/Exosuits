@@ -32,17 +32,17 @@ FACES = ('north', 'east', 'south', 'west', 'up', 'down')
 
 # --- scala e pilota ---------------------------------------------------------------------------------------
 # Nel gioco la tuta si disegna scalata di SUIT_SCALE attorno ai piedi (0,0,0); il pilota resta a grandezza normale,
-# sollevato di PILOT_LIFT_PX pixel (9.6) perche' collo e spalle combacino con quelli della tuta, e senza gambe (stanno
+# sollevato di PILOT_LIFT_PX pixel (15.6) perche' collo e spalle combacino con quelli della tuta, e senza gambe (stanno
 # nelle cosce chiuse della tuta). Il modello qui e' scritto in pixel non scalati.
-SUIT_SCALE = 1.4
+SUIT_SCALE = 1.65
 PILOT_LIFT_PX = 24 * (SUIT_SCALE - 1)
 
 # Ingombri massimi (pixel non scalati): FRAME_* per le ossa del telaio nudo (regione 'frame', gli stessi che
 # controlla ExoframeGeometryTest), SUIT_* per le ossa dei pezzi (telaio con i pezzi montati).
 FRAME_MIN = (-12.75, 0.0, -8.0)
-FRAME_MAX = (12.75, 30.7, 10.0)
+FRAME_MAX = (12.75, 31.25, 10.0)
 SUIT_MIN = (-13.5, 0.0, -8.75)
-SUIT_MAX = (13.5, 31.5, 10.5)
+SUIT_MAX = (13.5, 32.0, 10.5)
 
 # Giocatore di riferimento (pixel, grandezza normale, in piedi su y = 0): (nome, minimo, massimo, distanza minima
 # delle scatole dalla superficie). 0.25 sul corpo e sugli arti: il secondo strato della skin sta a +0.25 e una
