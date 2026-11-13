@@ -9,7 +9,8 @@
   "icon": "icon.png",
   "environment": "*",
   "entrypoints": {
-    "main": ["com.toxineren.exoframes.platform.RedstoneExoframesFabric"]
+    "main": ["com.toxineren.exoframes.platform.RedstoneExoframesFabric"],
+    "client": ["com.toxineren.exoframes.platform.RedstoneExoframesFabricClient"]
   },
   "depends": {
     "fabricloader": "${loader_range}",

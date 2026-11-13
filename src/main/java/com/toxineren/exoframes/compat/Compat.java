@@ -3,6 +3,7 @@ package com.toxineren.exoframes.compat;
 import com.toxineren.exoframes.compat.impl.ArmorMaterialsImpl;
 import com.toxineren.exoframes.compat.impl.DamageClassifierImpl;
 import com.toxineren.exoframes.compat.impl.FrameAttributesImpl;
+import com.toxineren.exoframes.compat.impl.FrameStateAccessImpl;
 import com.toxineren.exoframes.compat.impl.ItemDataAccessImpl;
 import com.toxineren.exoframes.compat.impl.NetImpl;
 import com.toxineren.exoframes.compat.impl.PlatformImpl;
@@ -39,6 +40,10 @@ public final class Compat {
         return DamageHolder.INSTANCE;
     }
 
+    public static FrameStateAccess frameState() {
+        return FrameStateHolder.INSTANCE;
+    }
+
     private static final class PlatformHolder {
         static final Platform INSTANCE = new PlatformImpl();
     }
@@ -61,5 +66,9 @@ public final class Compat {
 
     private static final class DamageHolder {
         static final DamageClassifier INSTANCE = new DamageClassifierImpl();
+    }
+
+    private static final class FrameStateHolder {
+        static final FrameStateAccess INSTANCE = new FrameStateAccessImpl();
     }
 }

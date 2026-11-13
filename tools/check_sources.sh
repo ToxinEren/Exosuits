@@ -63,6 +63,17 @@ if [ -n "$bad" ]; then
     fail=1
 fi
 
+# 5. Ogni file che registra un pacchetto C2S (tranne Net e NetImpl) referenzia Compat.frameState(): i gestori lato
+#    server validano le richieste sullo stato del telaio del giocatore.
+bad=$(grep -rl 'registerC2S(' src/main/java | grep -vE "^$JAVA/compat/(Net|impl/NetImpl)\.java$" | while IFS= read -r f; do
+    grep -q 'Compat.frameState()' "$f" || echo "$f"
+done)
+if [ -n "$bad" ]; then
+    echo "FAIL: registrazione C2S senza Compat.frameState() (validazione lato server):" >&2
+    echo "$bad" >&2
+    fail=1
+fi
+
 if [ "$fail" -ne 0 ]; then
     exit 1
 fi
