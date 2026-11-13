@@ -1,14 +1,15 @@
 package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.compat.GameTests;
+import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 //? if <1.21 {
 /*import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
-import java.util.UUID;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
 *///?}
@@ -88,5 +89,17 @@ public final class GameTestsImpl implements GameTests {
     @Override
     public void writeRawItemData(ItemStack stack, CompoundTag root) {
         ItemPayload.write(stack, root.copy());
+    }
+
+    @Override
+    public boolean addRawStowed(MinecraftServer server, UUID frameId, CompoundTag entry) {
+        FrameStateSavedData data = FrameStateSavedData.get(server);
+        FrameRecord record = data.readOnly() ? null : data.placed(frameId);
+        if (record == null) {
+            return false;
+        }
+        record.stowed().add(entry.copy());
+        data.setDirty();
+        return true;
     }
 }

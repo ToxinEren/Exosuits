@@ -73,6 +73,24 @@ class SuitSummaryTagsTest {
     }
 
     @Test
+    void secondWriteReplacesTheFirst() {
+        Map<PieceSlot, PieceLook> six = new EnumMap<>(PieceSlot.class);
+        for (PieceSlot slot : PieceSlot.values()) {
+            six.put(slot, new PieceLook(Tier.ARMORED, PieceCondition.INTACT, PAINTED));
+        }
+        assertEquals(6, six.size());
+        SuitSummary two = new SuitSummary(Map.of(
+                PieceSlot.HELMET, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT),
+                PieceSlot.LEFT_LEG, new PieceLook(Tier.PROTOTYPE, PieceCondition.DAMAGED, Appearance.DEFAULT)));
+
+        CompoundTag root = new CompoundTag();
+        SuitSummaryTags.write(root, new SuitSummary(six));
+        SuitSummaryTags.write(root, two);
+        assertEquals(Optional.of(two), SuitSummaryTags.read(root));
+        assertEquals(2, root.getCompound(NbtKeys.VISUAL).getCompound(NbtKeys.PIECES).size());
+    }
+
+    @Test
     void bareFrameRoundTrips() {
         CompoundTag root = new CompoundTag();
         SuitSummaryTags.write(root, SuitSummary.BARE);

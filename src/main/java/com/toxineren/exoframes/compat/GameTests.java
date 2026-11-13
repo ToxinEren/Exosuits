@@ -1,7 +1,9 @@
 package com.toxineren.exoframes.compat;
 
+import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
@@ -34,4 +36,13 @@ public interface GameTests {
      * vecchie, che il codice della mod non scriverebbe mai.
      */
     void writeRawItemData(ItemStack stack, CompoundTag root);
+
+    /**
+     * Aggiunge {@code entry} cosi' com'e', senza validarla, in coda all'armatura stivata del telaio piazzato con
+     * questa identita' (vedi {@link FrameStateAccess#stow}) e segna il dato come da salvare. Esiste solo per i test:
+     * simula voci scritte da una versione vecchia del gioco o rovinate, che il codice della mod non scriverebbe mai.
+     *
+     * @return false se il telaio non e' piazzato o se il dato salvato e' in sola lettura
+     */
+    boolean addRawStowed(MinecraftServer server, UUID frameId, CompoundTag entry);
 }

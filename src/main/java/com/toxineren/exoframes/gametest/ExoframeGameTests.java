@@ -4,9 +4,12 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.NbtKeys;
+import com.toxineren.exoframes.compat.PlacedFrame;
+import com.toxineren.exoframes.compat.StowedStack;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
 import com.toxineren.exoframes.content.ModItems;
@@ -27,7 +30,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.function.Consumer;
+import net.minecraft.SharedConstants;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -36,6 +41,8 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
@@ -67,6 +74,8 @@ public final class ExoframeGameTests {
     /** Struttura vuota 8x8x8 della mod: data/redstone_exoframes/structures/empty.nbt (1.20.1) e structure/ (1.21). */
     private static final String EMPTY_STRUCTURE = RedstoneExoframes.MOD_ID + ":empty";
     private static final int MAX_TICKS = 100;
+    /** Versione dei dati di Minecraft 1.20.1. */
+    private static final int DATA_VERSION_1_20_1 = 3465;
     private static final List<EquipmentSlot> ARMOR_SLOTS =
             List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
 
@@ -90,6 +99,10 @@ public final class ExoframeGameTests {
         add(tests, "suitModelItemIsRegistered", ExoframeGameTests::suitModelItemIsRegistered);
         add(tests, "suitGrowsBoxAndEyes", ExoframeGameTests::suitGrowsBoxAndEyes);
         add(tests, "suitCrawlsUnderLowCeiling", ExoframeGameTests::suitCrawlsUnderLowCeiling);
+        add(tests, "registryPlaceEnterExitMovesOneRecord", ExoframeGameTests::registryPlaceEnterExitMovesOneRecord);
+        add(tests, "stowedArmorSurvivesEnterAndExit", ExoframeGameTests::stowedArmorSurvivesEnterAndExit);
+        add(tests, "stowedStackFromOlderVersionIsRead", ExoframeGameTests::stowedStackFromOlderVersionIsRead);
+        add(tests, "summaryTagRoundTrips", ExoframeGameTests::summaryTagRoundTrips);
         return tests;
     }
 
@@ -417,6 +430,181 @@ public final class ExoframeGameTests {
     }
 
     /** Verifica larghezza, altezza, occhi e occhi da accovacciato del giocatore. */
+    /**
+     * Registro dei telai: lo stesso {@code frameId} e' prima piazzato, poi indossato, poi piazzato altrove, e non sta
+     * mai in due posti; la modifica di un piazzato cambia lo stato che il giocatore poi indossa (lo stesso oggetto).
+     */
+    private static void registryPlaceEnterExitMovesOneRecord(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        FrameState state = new FrameState(RedstoneExoframes.config());
+        Vec3 first = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(2, 1, 2)));
+        UUID frameId = frames.place(level, state, first, 90f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+
+        PlacedFrame placed = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(placed != null, "placed frame not found after place");
+        helper.assertTrue(placed.frameId().equals(frameId) && placed.state() == state
+                && placed.dimension().equals(level.dimension()) && placed.position().equals(first)
+                && placed.yaw() == 90f && !placed.hasStowed(), "placed frame differs from what was placed: " + placed);
+        helper.assertTrue(placedIds(level).contains(frameId), "placed frame missing from placedIn");
+        helper.assertTrue(frames.updatePlaced(server, frameId, s -> s.setReinforced(true)), "updatePlaced refused");
+        helper.assertTrue(frames.placed(server, frameId).orElseThrow().state().reinforced(), "update not applied");
+
+        helper.assertTrue(frames.enter(player, frameId), "enter refused");
+        helper.assertTrue(frames.placed(server, frameId).isEmpty(), "frame still placed after enter");
+        helper.assertTrue(!placedIds(level).contains(frameId), "frame still in placedIn after enter");
+        helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)), "worn frame id differs after enter");
+        helper.assertTrue(frames.get(player).orElse(null) == state, "worn state is not the placed state");
+        helper.assertTrue(!frames.enter(player, frameId), "second enter of the same frame accepted");
+        helper.assertTrue(!frames.updatePlaced(server, frameId, s -> s.setUnlocked(true)), "worn frame updated as placed");
+        helper.assertTrue(!frames.removePlaced(server, frameId), "worn frame removed as placed");
+
+        Vec3 second = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(5, 1, 4)));
+        helper.assertTrue(Optional.of(frameId).equals(frames.exit(player, level, second, -45f)), "exit lost the id");
+        helper.assertTrue(frames.wornFrameId(player).isEmpty() && frames.get(player).isEmpty(),
+                "frame still worn after exit");
+        placed = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(placed != null && placed.state() == state && placed.position().equals(second)
+                && placed.yaw() == -45f && placed.dimension().equals(level.dimension()),
+                "frame not placed at the exit spot: " + placed);
+        helper.assertTrue(frames.exit(player, level, first, 0f).isEmpty(), "exit without a worn frame moved something");
+
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        helper.assertTrue(frames.placed(server, frameId).isEmpty() && !placedIds(level).contains(frameId),
+                "frame still placed after removePlaced");
+        helper.succeed();
+    }
+
+    /**
+     * Un elmo di ferro danneggiato stivato nel telaio indossato resta nel record attraverso uscita e nuovo ingresso, e
+     * torna identico, con il suo slot, sia dal telaio indossato sia da quello piazzato; ogni presa svuota la lista.
+     */
+    private static void stowedArmorSurvivesEnterAndExit(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(3, 1, 3)));
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        UUID frameId = frames.place(level, new FrameState(RedstoneExoframes.config()), spot, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "could not enter the placed frame");
+
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, helmet.copy()),
+                new StowedStack(EquipmentSlot.FEET, ItemStack.EMPTY)));
+        helper.assertTrue(frames.exit(player, level, spot, 0f).isPresent(), "exit failed");
+        helper.assertTrue(frames.placed(server, frameId).orElseThrow().hasStowed(), "placed frame lost its armor");
+        helper.assertTrue(frames.takeStowed(player).isEmpty(), "took stowed armor from a frame not worn");
+
+        helper.assertTrue(frames.enter(player, frameId), "second enter failed");
+        assertOneStowedHelmet(helper, frames.takeStowed(player), helmet, "worn frame");
+        helper.assertTrue(frames.takeStowed(player).isEmpty(), "takeStowed did not empty the list");
+
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, helmet.copy())));
+        helper.assertTrue(frames.exit(player, level, spot, 0f).isPresent(), "second exit failed");
+        assertOneStowedHelmet(helper, frames.takeStowedOfPlaced(server, frameId), helmet, "placed frame");
+        helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).isEmpty(),
+                "takeStowedOfPlaced did not empty the list");
+        helper.assertTrue(!frames.placed(server, frameId).orElseThrow().hasStowed(), "placed frame still has armor");
+
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        helper.succeed();
+    }
+
+    /**
+     * Una voce dell'armatura stivata scritta a mano nel formato di 1.20.1 ({@code Count}, {@code tag.Damage}) con
+     * {@code data_version} 3465 si legge come elmo di ferro con danno 5: su 1.21.1 passando dal correttore di dati, su
+     * 1.20.1 perche' e' il formato corrente, e li' il test fa anche un giro completo di scrittura e lettura. Poi una
+     * voce illeggibile (item sconosciuto): le prese la saltano e resta nel record.
+     */
+    private static void stowedStackFromOlderVersionIsRead(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        int current = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
+        Vec3 spot = Vec3.atBottomCenterOf(helper.absolutePos(new BlockPos(4, 1, 4)));
+        UUID frameId = frames.place(level, new FrameState(RedstoneExoframes.config()), spot, 0f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+
+        CompoundTag damage = new CompoundTag();
+        damage.putInt("Damage", 5);
+        CompoundTag item = new CompoundTag();
+        item.putString("id", "minecraft:iron_helmet");
+        item.putByte("Count", (byte) 1);
+        item.put("tag", damage);
+        helper.assertTrue(Compat.gameTests().addRawStowed(server, frameId, stowedEntry(DATA_VERSION_1_20_1, item)),
+                "raw stowed entry not added");
+        ItemStack expected = new ItemStack(Items.IRON_HELMET);
+        expected.setDamageValue(5);
+        assertOneStowedHelmet(helper, frames.takeStowedOfPlaced(server, frameId), expected, "1.20.1 entry");
+
+        if (current == DATA_VERSION_1_20_1) {
+            // 1.20.1: il formato scritto a mano e' quello corrente; giro completo di scrittura e lettura
+            ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+            helper.assertTrue(frames.enter(player, frameId), "enter refused");
+            frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, expected.copy())));
+            helper.assertTrue(frames.exit(player, level, spot, 0f).isPresent(), "exit failed");
+            assertOneStowedHelmet(helper, frames.takeStowedOfPlaced(server, frameId), expected, "round trip");
+        } else {
+            helper.assertTrue(current > DATA_VERSION_1_20_1, "unexpected data version " + current);
+        }
+
+        CompoundTag unknown = new CompoundTag();
+        unknown.putString("id", RedstoneExoframes.MOD_ID + ":no_such_item");
+        unknown.putByte("Count", (byte) 1);
+        unknown.putInt("count", 1);
+        helper.assertTrue(Compat.gameTests().addRawStowed(server, frameId, stowedEntry(current, unknown)),
+                "raw stowed entry not added");
+        helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).isEmpty(), "unreadable entry was taken");
+        helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).isEmpty(), "unreadable entry was taken later");
+        helper.assertTrue(frames.placed(server, frameId).orElseThrow().hasStowed(), "unreadable entry was dropped");
+
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        helper.succeed();
+    }
+
+    /** Il riassunto visivo scritto come tag si rilegge uguale; un tag senza riassunto da' vuoto. */
+    private static void summaryTagRoundTrips(GameTestHelper helper) {
+        FrameStateAccess frames = Compat.frameState();
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of(new Decal("minecraft:creeper", "red")));
+        SuitSummary summary = new SuitSummary(Map.of(
+                PieceSlot.TORSO, new PieceLook(Tier.ARMORED, PieceCondition.DAMAGED, painted),
+                PieceSlot.HELMET, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT)));
+        helper.assertTrue(Optional.of(summary).equals(frames.readSummaryTag(frames.writeSummaryTag(summary))),
+                "suit summary changed on round trip");
+        helper.assertTrue(Optional.of(SuitSummary.BARE).equals(
+                frames.readSummaryTag(frames.writeSummaryTag(SuitSummary.BARE))), "bare summary changed on round trip");
+        helper.assertTrue(frames.readSummaryTag(new CompoundTag()).isEmpty(), "summary read from an empty tag");
+        helper.succeed();
+    }
+
+    /** Le identita' dei telai piazzati nel livello. */
+    private static List<UUID> placedIds(ServerLevel level) {
+        return Compat.frameState().placedIn(level).stream().map(PlacedFrame::frameId).toList();
+    }
+
+    /** Una voce dell'armatura stivata scritta a mano: slot della testa, versione dei dati e stack dati. */
+    private static CompoundTag stowedEntry(int dataVersion, CompoundTag item) {
+        CompoundTag entry = new CompoundTag();
+        entry.putString(NbtKeys.SLOT, "head");
+        entry.putInt(NbtKeys.DATA_VERSION, dataVersion);
+        entry.put(NbtKeys.ITEM, item);
+        return entry;
+    }
+
+    /** Verifica che la lista abbia una sola voce, nello slot della testa, uguale allo stack atteso. */
+    private static void assertOneStowedHelmet(GameTestHelper helper, List<StowedStack> taken, ItemStack expected,
+            String where) {
+        helper.assertTrue(taken.size() == 1, where + ": expected one stowed stack, got " + taken);
+        StowedStack stowed = taken.get(0);
+        helper.assertTrue(stowed.slot() == EquipmentSlot.HEAD, where + ": stowed slot is " + stowed.slot());
+        helper.assertTrue(ItemStack.matches(expected, stowed.stack()) && stowed.stack().getDamageValue() == 5,
+                where + ": stowed stack " + stowed.stack() + " differs from " + expected);
+    }
+
     private static void assertSize(GameTestHelper helper, ServerPlayer player, String when, float width,
             float height, float eyes, float crouchingEyes) {
         helper.assertTrue(near(player.getBbWidth(), width) && near(player.getBbHeight(), height)

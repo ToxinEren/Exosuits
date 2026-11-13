@@ -364,6 +364,24 @@ class FrameStateSavedDataTest {
     }
 
     @Test
+    void placedEntryWithAnInvalidDimensionStaysUnread() {
+        CompoundTag badDim = placedRecordTag(stateTag());
+        badDim.putString(NbtKeys.DIM, "Not A Dimension!");
+        CompoundTag placed = new CompoundTag();
+        placed.put(FRAME_A.toString(), badDim);
+        placed.put(FRAME_B.toString(), placedRecordTag(stateTag()));
+        CompoundTag root = new CompoundTag();
+        root.putInt(NbtKeys.SCHEMA, 2);
+        root.put(NbtKeys.PLACED, placed);
+        CompoundTag original = root.copy();
+
+        FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+        assertNull(data.placed(FRAME_A));
+        assertEquals(List.of(FRAME_B), data.placedIn("minecraft:overworld"));
+        assertEquals(original.getCompound(NbtKeys.PLACED), data.write(new CompoundTag()).getCompound(NbtKeys.PLACED));
+    }
+
+    @Test
     void unreadEntryIsDroppedOnlyForThatPlayer() {
         FrameStateSavedData data = loadThrowingOnMarked(mixedRoot());
         data.dropUnread(BAD);

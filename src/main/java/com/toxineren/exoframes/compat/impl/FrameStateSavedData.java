@@ -22,6 +22,7 @@ import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
@@ -374,10 +375,16 @@ final class FrameStateSavedData extends SavedData {
         return new FrameRecord(frameId, state, stowed);
     }
 
-    /** Il posto di un record piazzato; lancia se un campo manca o e' del tipo sbagliato. */
+    /**
+     * Il posto di un record piazzato; lancia se un campo manca o e' del tipo sbagliato, o se la dimensione non e' un
+     * id valido (chi legge il registro ne fa una {@code ResourceKey}).
+     */
     private static PlacedSpot readSpot(CompoundTag entry) {
         if (!entry.contains(NbtKeys.DIM, Tag.TAG_STRING)) {
             throw new IllegalArgumentException("missing dimension");
+        }
+        if (ResourceLocation.tryParse(entry.getString(NbtKeys.DIM)) == null) {
+            throw new IllegalArgumentException("invalid dimension id");
         }
         ListTag pos = entry.getList(NbtKeys.POS, Tag.TAG_DOUBLE);
         if (pos.size() != 3) {
