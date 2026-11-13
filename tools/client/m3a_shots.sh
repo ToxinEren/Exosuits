@@ -49,7 +49,8 @@ add 06-colori "$wear rottame 0 3A6EA5 D9D9D9"
 add 07-mani "$wear rottame 0|item replace entity $u weapon.mainhand with minecraft:iron_pickaxe|item replace entity $u weapon.offhand with minecraft:shield"
 add 08-sdraiato "$wear nudo|execute as $u at @s run setblock ~ ~1 ~ minecraft:glass"
 
-mkdir -p "$out" || exit 2
+# La cartella la crea client_shot.sh, dopo i suoi controlli: con l'EULA non accettata o una variante sbagliata non
+# resta una cartella vuota.
 t0=$(date +%s)
 summary=()
 fail=0
@@ -61,7 +62,10 @@ for i in "${!names[@]}"; do
     bash "$here/client_shot.sh" "$variant" "$out/$name" "${cmds[@]}"
     code=$?
     secs=$(($(date +%s) - s0))
-    if [ "$code" -eq 2 ]; then
+    if [ "$code" -eq 130 ] || [ "$code" -eq 143 ]; then
+        echo "interrotto durante $name: gli scatti successivi non si fanno" >&2
+        exit "$code"
+    elif [ "$code" -eq 2 ]; then
         # Uso o ambiente sbagliati (EULA, programmi, variante, porta): uguale per tutti gli scatti, inutile insistere.
         echo "FAIL $variant $name: client_shot.sh e' uscito con 2 (vedi il messaggio sopra)" >&2
         exit 2

@@ -41,7 +41,7 @@ Nella cartella lascia:
 - `rcon.log`: comandi e risposte;
 - `log-check.txt`: avvisi ed errori del mod o dei mixin nei due log (righe WARN/ERROR che nominano il mod o i mixin, tracce che passano da `com.toxineren`, errori di applicazione dei mixin); vuoto se non ce ne sono. Non ferma lo script: lo segnala.
 
-Ogni comando dell'utente passa da `execute store success`: se il server lo rifiuta (sintassi, bersaglio inesistente, colore non valido di `/exoframe`...) lo script si ferma. Serve perché un errore dentro `execute as ... run` non arriva nella risposta RCON.
+Ogni comando dell'utente passa da `execute store success`: se il server lo rifiuta (sintassi, bersaglio inesistente, colore non valido di `/exoframe`...) lo script si ferma. Serve perché un errore dentro `execute as ... run` non arriva nella risposta RCON. Conta come rifiutato anche un comando che il server esegue ma con risultato 0, per esempio un `fill` che non cambia nessun blocco o un `execute as` senza bersagli.
 
 **`m3a_shots.sh`** fa l'insieme standard della parte 3a, una esecuzione e una sottocartella per scatto: `01-nudo`, `02-rottame-s0` … `05-rottame-s3`, `06-colori` (`3A6EA5` e `D9D9D9`), `07-mani` (piccone di ferro nella mano principale, scudo nell'altra), `08-sdraiato` (telaio nudo, posa strisciante forzata da un blocco di vetro sopra la testa; qui `front.png` non serve, perché la telecamera davanti finisce contro la testa: contano `back.png` e `quarter.png`). Negli scatti 01 e 02 c'è una colonna di tre blocchi di lana bianca a tre blocchi dal giocatore, verso ovest, come metro per l'altezza. Alla fine monta `stati-fronte.png` (le quattro viste frontali degli stati affiancate) e stampa un riepilogo. Una esecuzione per scatto invece di una lunga: ogni scatto parte dallo stesso stato e un errore resta nel suo scatto; costa un minuto in più a scatto.
 
@@ -55,17 +55,19 @@ Variabili d'ambiente:
 | `EXO_SHOT_USER` | Exo | nome del giocatore offline |
 | `EXO_SHOT_SETTLE` | 8 | secondi di attesa dopo i comandi, prima degli scatti |
 
-Lo script lavora sul checkout in cui si trova (compila il codice com'è, anche le modifiche non committate) in cartelle di esecuzione proprie, `versions/<variante>/run-shot-client` e `run-shot-server`, ignorate da git; non tocca `run/` e `run-gametest/`. Il mondo del server si ricrea a ogni esecuzione. Una sola esecuzione per variante alla volta (c'è un lucchetto); varianti diverse in parallelo vogliono porte diverse, ma con quattro processori il rendering software rallenta molto.
+Lo script lavora sul checkout in cui si trova (compila il codice com'è, anche le modifiche non committate) in cartelle di esecuzione proprie, `versions/<variante>/run-shot-client` e `run-shot-server`, ignorate da git; non tocca `run/` e `run-gametest/`. Il mondo del server si ricrea a ogni esecuzione. Server e RCON ascoltano solo su 127.0.0.1 e il client si collega a quell'indirizzo; la password RCON è nuova a ogni esecuzione, non si stampa, passa a `rcon.py` nella variabile d'ambiente `EXO_RCON_PASSWORD` (non sulla riga di comando) e resta solo in `server.properties` della cartella del server, leggibile solo dal proprietario. Una sola esecuzione per variante alla volta (c'è un lucchetto); varianti diverse in parallelo vogliono porte diverse, ma con quattro processori il rendering software rallenta molto.
 
 ## Errori
 
-Uscita 0: scatti salvati. Uscita 1: qualcosa si è fermato durante l'esecuzione, con una riga `ERRORE:` che dice cosa (build fallita, server o client che non partono, giocatore che non entra o viene espulso, comando rifiutato, scatto quasi tutto di un colore). Uscita 2: uso o ambiente sbagliati (variante sconosciuta, programmi mancanti, EULA non accettata, porta occupata, un'altra esecuzione sulla stessa variante). Uscita 130: interrotto. In ogni caso, anche con Ctrl-C, lo script ferma il server con `stop`, chiude il client e Xvfb, e copia i log.
+Uscita 0: scatti salvati. Uscita 1: qualcosa si è fermato durante l'esecuzione, con una riga `ERRORE:` che dice cosa (build fallita, server o client che non partono, giocatore che non entra o viene espulso, comando rifiutato, scatto quasi tutto di un colore). Uscita 2: uso o ambiente sbagliati (variante sconosciuta, programmi mancanti, EULA non accettata, porta occupata, un'altra esecuzione sulla stessa variante). Uscita 130: interrotto con Ctrl-C; 143: terminato con TERM. In ogni caso lo script ferma il server con `stop`, manda TERM ai suoi due processi Gradle (che annullano la build nel demone, così un server o un client non ancora partiti non partono più) e alle JVM del gioco di quell'esecuzione, dopo 30 s le uccide, chiude Xvfb e copia i log. La chiusura dura al massimo circa 35 s, e un secondo Ctrl-C non la interrompe.
 
 Uno scatto non si salva se il client non è più vivo o il giocatore ha lasciato il server: uno scatto del menu principale non passa mai per buono.
 
+**OK non vuol dire che l'immagine sia giusta.** Lo script controlla che il client sia vivo, che il giocatore sia nel server e che lo scatto abbia almeno 64 colori; non controlla che i tasti (F1, F5, il passo avanti) abbiano avuto effetto né che il terreno sia già disegnato. Un tasto perso darebbe, per esempio, un `front.png` in prima persona con uscita 0. Ogni scatto va guardato.
+
 ## Quanto dura
 
-Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 9-11 minuti per variante (misurati 528-659 s). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
+Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 8,5-10 minuti per variante (misurati 503-589 s sulle quattro varianti). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
 
 ## Cosa non copre
 

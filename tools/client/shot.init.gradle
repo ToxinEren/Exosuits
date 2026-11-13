@@ -9,7 +9,7 @@ allprojects { p ->
         def loom = p.extensions.findByName("loom")
         if (tag == null || loom == null) return
         def user = p.findProperty("exo.shot.user") ?: "Exo"
-        def server = p.findProperty("exo.shot.server") ?: "localhost:25601"
+        def server = p.findProperty("exo.shot.server") ?: "127.0.0.1:25601"
         def w = p.findProperty("exo.shot.width") ?: "960"
         def h = p.findProperty("exo.shot.height") ?: "540"
         loom.runs.findByName("client")?.with {

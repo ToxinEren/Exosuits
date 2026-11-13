@@ -29,8 +29,8 @@
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
 #
 # Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, scatto);
-# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata). Ogni errore stampa una riga
-# "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata); 130 Ctrl-C; 143 TERM. Ogni errore
+# stampa una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -62,7 +62,7 @@ fi
 [ "$(uname -s)" = Linux ] || fatal "lo strumento funziona solo su Linux (Xvfb); sul PC Windows segui la checklist"
 
 missing=()
-for prog in Xvfb xdotool import identify glxinfo python3 java flock; do
+for prog in Xvfb xdotool import identify convert glxinfo python3 java flock; do
     command -v "$prog" >/dev/null 2>&1 || missing+=("$prog")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
@@ -87,7 +87,9 @@ for n in "$port" "$width" "$height" "$settle"; do
 done
 case "$user" in '' | *[!A-Za-z0-9_]*) fatal "EXO_SHOT_USER: solo lettere, cifre e _ (nome di giocatore valido)" ;; esac
 rport=$((port + 10))
-rpass=exo-shot
+# Password RCON nuova a ogni esecuzione: non si stampa, non va sulla riga di comando (rcon.py la legge dalla variabile
+# d'ambiente EXO_RCON_PASSWORD) e resta solo in server.properties, nella cartella del server, con permessi 600.
+rpass=$(python3 -c 'import secrets; print(secrets.token_hex(12))') || fatal "non riesco a generare la password RCON"
 tag="exoshot$$"
 
 port_busy() { python3 -c 'import socket,sys; s=socket.socket(); s.settimeout(1); sys.exit(0 if s.connect_ex(("127.0.0.1", int(sys.argv[1]))) == 0 else 1)' "$1"; }
@@ -112,7 +114,11 @@ log() { echo "[$(($(date +%s) - t0))s] $*"; }
 # --- cartelle di esecuzione -----------------------------------------------------------------------------------------
 rm -rf "$sdir/world"
 echo "eula=true" >"$sdir/eula.txt"
-cat >"$sdir/server.properties" <<EOF
+# Server e RCON ascoltano solo su 127.0.0.1 (server-ip vale per entrambi): l'account offline ha op e RCON esegue
+# qualunque comando, quindi nessuno da fuori deve poterli raggiungere.
+rm -f "$sdir/server.properties"
+(umask 077 && cat >"$sdir/server.properties") <<EOF
+server-ip=127.0.0.1
 online-mode=false
 enforce-secure-profile=false
 level-type=minecraft\:flat
@@ -131,8 +137,9 @@ rcon.password=$rpass
 broadcast-rcon-to-ops=false
 motd=exo-shot
 EOF
-# options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica leggera per
-# il rendering software, mouse non grezzo (xdotool muove il puntatore per lo scatto a tre quarti).
+# options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica "Dettagliata"
+# (graphicsMode:1; 0 sarebbe "Rapida"), distanza di rendering 4 e 30 fps per il rendering software, mouse non grezzo
+# (xdotool muove il puntatore per lo scatto a tre quarti).
 cat >"$cdir/options.txt" <<EOF
 onboardAccessibility:false
 narrator:0
@@ -156,31 +163,50 @@ EOF
 xpid=""
 spid=""
 cpid=""
+# Chiusura, su ogni uscita: "stop" via RCON al server, TERM ai due processi Gradle dello script (il client di Gradle
+# annulla la build nel demone, cosi' un server o un client non ancora partiti non partono piu') e alle JVM del gioco
+# con il tag di questa esecuzione; dopo 30 s KILL a cio' che resta. Durante la chiusura un altro Ctrl-C non la
+# interrompe: dura al massimo circa 35 s.
 # shellcheck disable=SC2317 # chiamata dalla trap su EXIT
 cleanup() {
     local code=$?
-    trap - EXIT INT TERM
+    trap - EXIT
+    trap '' INT TERM
     if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then
-        python3 "$here/rcon.py" --no-check "$rport" "$rpass" stop >/dev/null 2>&1
+        EXO_RCON_PASSWORD="$rpass" python3 "$here/rcon.py" --no-check "$rport" stop >/dev/null 2>&1
     fi
+    local pids=()
+    [ -n "$spid" ] && pids+=("$spid")
+    [ -n "$cpid" ] && pids+=("$cpid")
+    [ "${#pids[@]}" -gt 0 ] && kill -TERM "${pids[@]}" 2>/dev/null
     pkill -TERM -f -- "-Dexo.shot.tag=$tag-client" 2>/dev/null
+    running() {
+        pgrep -f -- "-Dexo.shot.tag=$tag-" >/dev/null && return 0
+        local p
+        for p in "${pids[@]}"; do kill -0 "$p" 2>/dev/null && return 0; done
+        return 1
+    }
     for _ in $(seq 30); do
-        pgrep -f -- "-Dexo.shot.tag=$tag-" >/dev/null || break
+        running || break
         sleep 1
     done
-    if pgrep -f -- "-Dexo.shot.tag=$tag-" >/dev/null; then
-        echo "client o server non si chiudono da soli: li termino" >&2
+    if running; then
+        echo "client, server o Gradle non si chiudono da soli: li termino" >&2
+        [ "${#pids[@]}" -gt 0 ] && kill -KILL "${pids[@]}" 2>/dev/null
+        pkill -KILL -f -- "-Dexo.shot.tag=$tag-" 2>/dev/null
+        sleep 2
+        # Un processo del gioco partito dal demone proprio mentre il client di Gradle moriva.
         pkill -KILL -f -- "-Dexo.shot.tag=$tag-" 2>/dev/null
     fi
-    [ -n "$spid" ] && wait "$spid" 2>/dev/null
-    [ -n "$cpid" ] && wait "$cpid" 2>/dev/null
+    [ "${#pids[@]}" -gt 0 ] && wait "${pids[@]}" 2>/dev/null
     [ -n "$xpid" ] && kill "$xpid" 2>/dev/null && wait "$xpid" 2>/dev/null
     cp "$sdir/logs/latest.log" "$out/server.log" 2>/dev/null
     cp "$cdir/logs/latest.log" "$out/client.log" 2>/dev/null
     exit "$code"
 }
 trap cleanup EXIT
-trap 'echo "interrotto" >&2; exit 130' INT TERM
+trap 'echo "interrotto (Ctrl-C), chiusura in corso" >&2; exit 130' INT
+trap 'echo "terminato (TERM), chiusura in corso" >&2; exit 143' TERM
 
 fail() { log "ERRORE: $*"; exit 1; }
 
@@ -202,7 +228,7 @@ esac
 log "schermo :$n ${width}x${height}, $(echo "$glx" | sed -n 's/.*OpenGL renderer string: *//p' | head -n 1)"
 
 gradle=(./gradlew --console=plain -I "$here/shot.init.gradle" "-Pexo.shot.tag=$tag" "-Pexo.shot.user=$user"
-        "-Pexo.shot.server=localhost:$port" "-Pexo.shot.width=$width" "-Pexo.shot.height=$height")
+        "-Pexo.shot.server=127.0.0.1:$port" "-Pexo.shot.width=$width" "-Pexo.shot.height=$height")
 
 # Attende una riga nel log di Gradle; esce con errore se la build fallisce, il processo muore o scade il tempo.
 wait_for() { # log regex secondi pid descrizione
@@ -246,14 +272,15 @@ done
 [ "$joined" -eq 1 ] || fail "il giocatore $user non e' entrato nel mondo entro 900 s (vedi $out/gradle-client.log)"
 log "giocatore entrato"
 
-rc() { python3 "$here/rcon.py" "$rport" "$rpass" "$@" >>"$out/rcon.log"; }
+rc() { EXO_RCON_PASSWORD="$rpass" python3 "$here/rcon.py" "$rport" "$@" >>"$out/rcon.log"; }
 # Un comando dell'utente si considera riuscito solo se "execute store success" lo registra come riuscito: un errore
 # dentro "execute as ... run" (per esempio un colore non valido di /exoframe) non arriva nella risposta RCON, che
 # resta vuota. Gli errori di sintassi invece arrivano nella risposta e li ferma rcon.py.
 checked() {
     local reply
     rc "scoreboard players set #exo exo_shot -1" "execute store success score #exo exo_shot run $1" || return 1
-    reply=$(python3 "$here/rcon.py" "$rport" "$rpass" "scoreboard players get #exo exo_shot") || return 1
+    reply=$(EXO_RCON_PASSWORD="$rpass" python3 "$here/rcon.py" "$rport" "scoreboard players get #exo exo_shot") \
+        || return 1
     echo "$reply" >>"$out/rcon.log"
     case "$reply" in *"#exo has 1 "*) return 0 ;; esac
     return 1

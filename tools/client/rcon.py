@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Client RCON minimo per il server di prova locale di tools/client/client_shot.sh.
 
-Uso: python3 tools/client/rcon.py [--no-check] <porta> <password> <comando> [comando ...]
+Uso: EXO_RCON_PASSWORD=<password> python3 tools/client/rcon.py [--no-check] <porta> <comando> [comando ...]
+
+La password arriva dalla variabile d'ambiente EXO_RCON_PASSWORD, non dagli argomenti: gli argomenti di un processo
+li vede con ps chiunque sia sulla stessa macchina.
 
 Manda i comandi in ordine (senza la barra iniziale) e stampa ogni risposta. Un comando la cui risposta ha la forma di
 un errore di Minecraft (sintassi, bersaglio inesistente, oggetto sconosciuto, colore non valido del mod...) ferma
 l'esecuzione: la riga RIFIUTATO va su stderr e l'uscita e' 1. RCON non dice se un comando e' riuscito, quindi il
 controllo legge il testo della risposta (il server risponde sempre in inglese): l'elenco e' in FAILURE_PATTERNS.
 Con --no-check le risposte non si controllano (serve per "stop" alla chiusura).
-Uscite: 0 tutto accettato, 1 comando rifiutato, 2 connessione o autenticazione fallita, 64 uso sbagliato.
+Uscite: 0 tutto accettato, 1 comando rifiutato, 2 connessione o autenticazione fallita, 64 uso sbagliato o
+password mancante.
 Solo libreria standard."""
+import os
 import re
 import socket
 import struct
@@ -64,10 +69,11 @@ def main(argv):
     if argv and argv[0] == '--no-check':
         check = False
         argv = argv[1:]
-    if len(argv) < 3:
+    password = os.environ.get('EXO_RCON_PASSWORD', '')
+    if len(argv) < 2 or not password:
         print(__doc__, file=sys.stderr)
         return 64
-    port, password, commands = int(argv[0]), argv[1], argv[2:]
+    port, commands = int(argv[0]), argv[1:]
     try:
         sock = socket.create_connection(('127.0.0.1', port), timeout=15)
         sock.sendall(packet(1, TYPE_AUTH, password))
