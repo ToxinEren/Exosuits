@@ -38,7 +38,8 @@ import net.minecraft.world.phys.shapes.Shapes;
  * l'entita' rinasce e il giocatore fa un passo fuori dal telaio; ogni volta tutto nello stesso tick. Alla morte
  * ({@link #onDeath}) il telaio resta nel mondo con l'armatura stivata dentro. Il registro e' la verita' (§4.5): ogni
  * effetto sul giocatore e sul mondo segue l'esito di {@link FrameStateAccess#enter} e {@link FrameStateAccess#exit}, e
- * nulla (telaio, armatura, segnaposto) si perde o si duplica. Qui sta anche il pacchetto C2S dell'uscita ({@link #registerNet()}).
+ * nulla (telaio, armatura, segnaposto) si perde o si duplica. Qui sta anche il pacchetto C2S dell'uscita
+ * ({@link #registerNet()}).
  */
 public final class FrameEntry {
     /** Messaggio sulla barra delle azioni quando il telaio non ha una cella con carica. */
@@ -76,12 +77,13 @@ public final class FrameEntry {
      * <p>
      * Poi, nello stesso tick: {@link FrameStateAccess#enter}, e se rifiuta ci si ferma; l'armatura gia' stivata nel
      * telaio (quella lasciata dal proprietario morendo) resta nel record e torna all'uscita come il resto, quindi
-     * entrare non consegna nulla e nulla cade a terra; l'armatura indossata che non e' un segnaposto si stiva nel record con il
-     * suo slot (accanto a quella gia' stivata: due voci per lo stesso slot vanno bene) e solo dopo lascia gli slot;
-     * {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del telaio
-     * con il suo yaw (il pitch resta il suo); l'entita' si elimina; le dimensioni del giocatore si ricalcolano subito.
-     * Gli slot armatura cambiano in silenzio ({@link Placeholders#setArmorSlot}). Il punto del telaio diventa la prima
-     * posizione sicura del giocatore ({@link SafeSpots}).
+     * entrare non consegna nulla e nulla cade a terra; l'armatura indossata che non e' un segnaposto si stiva nel
+     * record con il suo slot (accanto a quella gia' stivata: due voci per lo stesso slot vanno bene) e solo dopo lascia
+     * gli slot; {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del
+     * telaio con il suo yaw (il pitch resta il suo); l'entita' si elimina; le dimensioni del giocatore si ricalcolano
+     * subito. Gli slot armatura cambiano in silenzio ({@link Placeholders#setArmorSlot}). Il punto del telaio diventa
+     * la prima posizione sicura del giocatore ({@link SafeSpots}); una riga nel log dice chi e' entrato in quale
+     * telaio.
      *
      * @return true se il giocatore e' entrato
      */

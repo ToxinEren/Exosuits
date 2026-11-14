@@ -19,7 +19,7 @@ import net.minecraft.world.phys.Vec3;
  * L'ultima posizione sicura di chi indossa un telaio (design, par. 5.4 e 5.5): dimensione e punto dei piedi
  * dell'ultima volta in cui il giocatore, dentro il telaio, stava a terra. E' il punto della tuta, quindi non cambia
  * finche' il giocatore e' in aria, su un veicolo o morto. Serve dove sotto il giocatore non c'e' suolo (la morte nel
- * vuoto, l'uscita sopra il vuoto): il telaio va li' ({@link FrameEntry}).
+ * vuoto, l'uscita sopra il vuoto, o fuori dal bordo del mondo): il telaio va li' ({@link FrameEntry}).
  * <p>
  * Solo in memoria, per server e per giocatore (UUID, cosi' sopravvive al giocatore nuovo che nasce al respawn): la
  * mappa esterna ha il server come chiave debole confrontata per identita', quindi nulla sopravvive al server ne' passa

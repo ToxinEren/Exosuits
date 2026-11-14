@@ -30,7 +30,8 @@ import net.minecraft.nbt.Tag;
  * ({@link NbtKeys#COLOR_PRIMARY}, {@link NbtKeys#COLOR_SECONDARY}, {@link NbtKeys#DECALS}) e
  * {@link NbtKeys#CARRY_MILLI}; {@link NbtKeys#CELL} con {@link NbtKeys#ENERGY} e {@link NbtKeys#CAPACITY} (assente
  * = nessuna cella); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED}; {@link NbtKeys#OWNER} (assente = nessun
- * proprietario); {@link NbtKeys#UNLOCKED}. {@link NbtKeys#STOWED} non e' ancora scritto ne' letto.
+ * proprietario); {@link NbtKeys#UNLOCKED}. L'armatura stivata ({@link NbtKeys#STOWED}) non fa parte dello stato: la
+ * scrive e la legge il registro dei telai ({@link FrameStateSavedData}), accanto allo stato di ogni record.
  * <p>
  * La lettura e' tollerante: id sconosciuti di slot, livello o modulo vengono ignorati con un solo avviso per id
  * (conversioni condivise con gli item in {@link SchemaIds}); un proprietario malformato vale assente;

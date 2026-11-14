@@ -34,9 +34,10 @@ public final class SuitBoneRules {
 
     /**
      * Le ossa di cui le regole decidono la visibilita', ognuna una volta: prima le sei di primo livello e le sei del
-     * telaio, poi quelle dei pezzi per slot, stato e regione, infine le decalcomanie. L'ordine conta per chi le
-     * applica: in GeckoLib mostrare o nascondere un osso fa lo stesso con i figli, quindi le ossa che contengono le
-     * altre vanno decise per prime.
+     * telaio, poi quelle dei pezzi per slot, stato e regione, infine le decalcomanie. L'ordine non cambia il risultato:
+     * in GeckoLib {@code setHidden} segna solo l'osso dato (nascosto lui e, nel disegno, i suoi figli), non tocca il
+     * segno dei figli; un osso nascosto non disegna i figli qualunque sia il loro segno, e uno visibile li disegna come
+     * li ha decisi la loro regola. Percio' un osso che contiene ossa da vedere non deve essere nascosto.
      */
     public static final List<String> BONES;
 

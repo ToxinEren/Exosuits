@@ -3277,7 +3277,7 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
-    /** Quante volte il giocatore finto ha avuto il messaggio del telaio lasciato altrove ({@link FrameEntry#ELSEWHERE}). */
+    /** Quante volte il giocatore finto ha avuto il messaggio del telaio lasciato altrove ({@code ELSEWHERE}). */
     private static int elsewhereMessages(ServerPlayer player) {
         int count = 0;
         for (Component message : Compat.gameTests().messagesTo(player)) {
