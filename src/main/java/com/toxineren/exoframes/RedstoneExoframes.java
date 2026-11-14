@@ -9,6 +9,7 @@ import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
+import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.EventResult;
@@ -41,6 +42,7 @@ public final class RedstoneExoframes {
         ExoframeCommand.register();
         TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati
         SafeSpots.register(); // ultima posizione sicura di chi indossa un telaio, ogni secondo, solo sul server
+        SlotGuard.register(); // segnaposto allineati al registro a ogni tick, lancio dei segnaposto annullato
         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
         EntityEvent.LIVING_DEATH.register((entity, source) -> {
             if (entity instanceof ServerPlayer player) {

@@ -65,8 +65,16 @@ public final class SafeSpots {
                 || player.isPassenger() || Compat.frameState().wornFrameId(player).isEmpty()) {
             return;
         }
-        SPOTS.computeIfAbsent(player.server, server -> new HashMap<>())
-                .put(player.getUUID(), new Spot(player.level().dimension(), player.position()));
+        remember(player, player.level().dimension(), player.position());
+    }
+
+    /**
+     * Ricorda il punto come ultima posizione sicura del giocatore. Lo chiamano il tick e l'ingresso nel telaio
+     * ({@link FrameEntry#enter}, con il punto del telaio, cosi' chi cade nel vuoto appena entrato ne ha gia' una).
+     */
+    static void remember(ServerPlayer player, ResourceKey<Level> dimension, Vec3 position) {
+        SPOTS.computeIfAbsent(player.server, server -> new HashMap<>()).put(player.getUUID(),
+                new Spot(dimension, position));
     }
 
     /** L'ultima posizione sicura ricordata per il giocatore su questo server, o vuoto. */

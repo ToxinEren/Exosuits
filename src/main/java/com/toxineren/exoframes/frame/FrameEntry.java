@@ -59,7 +59,8 @@ public final class FrameEntry {
      * l'armatura indossata che non e' un segnaposto si stiva nel record con il suo slot e solo dopo lascia gli slot;
      * {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del telaio
      * con il suo yaw (il pitch resta il suo); l'entita' si elimina; le dimensioni del giocatore si ricalcolano subito.
-     * Gli slot armatura cambiano in silenzio ({@code setArmorSlot}).
+     * Gli slot armatura cambiano in silenzio ({@link Placeholders#setArmorSlot}). Il punto del telaio diventa la prima
+     * posizione sicura del giocatore ({@link SafeSpots}).
      *
      * @return true se il giocatore e' entrato
      */
@@ -115,6 +116,7 @@ public final class FrameEntry {
         player.stopRiding();
         player.teleportTo(level, spot.x, spot.y, spot.z, record.yaw(), player.getXRot());
         frame.discard();
+        SafeSpots.remember(player, level.dimension(), spot);
         player.refreshDimensions();
         return true;
     }
@@ -124,10 +126,9 @@ public final class FrameEntry {
      * voluta (il tasto). Se non ne indossa uno, o non e' vivo (un pacchetto del tasto arrivato dopo la morte: la
      * morte la gestisce solo {@link #onDeath}), non tocca nulla e da' falso. Altrimenti, in quest'ordine:
      * <ol>
-     * <li>tutti i segnaposto lasciano il giocatore, in silenzio: slot armatura, inventario principale, mano secondaria
-     * ({@link DebugWear#remove}) e lo stack tenuto sul cursore; uno stack vero in uno slot armatura resta dov'e';</li>
-     * <li>l'armatura stivata esce dal record ({@link FrameStateAccess#takeStowed}) e ogni stack torna nel suo slot se e'
-     * vuoto, in silenzio, altrimenti va al giocatore con {@link Handouts#give}: cio' che esce dal record gli e' gia'
+     * <li>tutti i segnaposto lasciano il giocatore, in silenzio, da ogni posto in cui possono stare
+     * ({@link Placeholders#removeAll}); uno stack vero in uno slot armatura resta dov'e';</li>
+     * <li>l'armatura stivata torna al giocatore ({@link #returnStowed}): cio' che esce dal record gli e' gia'
      * restituito prima che succeda altro;</li>
      * <li>il record diventa piazzato nel punto di riposo del telaio (vedi {@link #restingSpot}), con il yaw del
      * giocatore riportato a [-180, 180) come per l'oggetto telaio ({@link FrameStateAccess#exit});</li>
@@ -146,25 +147,19 @@ public final class FrameEntry {
         if (!player.isAlive() || frames.wornFrameId(player).isEmpty()) {
             return false;
         }
-        removePlaceholders(player);
-        for (StowedStack entry : frames.takeStowed(player)) {
-            EquipmentSlot slot = entry.slot();
-            if (DebugWear.ARMOR_SLOTS.contains(slot) && player.getItemBySlot(slot).isEmpty()) {
-                setArmorSlot(player, slot, entry.stack());
-            } else {
-                Handouts.give(player, entry.stack());
-            }
-        }
+        Placeholders.removeAll(player);
+        returnStowed(player, frames);
         return leaveFrame(player, frames);
     }
 
     /**
      * La morte di chi indossa un telaio (design, par. 5.5), su {@code EntityEvent.LIVING_DEATH}: l'evento arriva in
      * testa a {@code ServerPlayer.die}, prima che il gioco faccia cadere o tenga l'inventario. Se il giocatore indossa
-     * un telaio: i segnaposto lo lasciano come in {@link #exit} (cosi' non cadono a terra e, con
-     * {@code keepInventory}, non passano al giocatore rinato); l'armatura stivata resta nel record; il record diventa
-     * piazzato nel punto di riposo del telaio ({@link #restingSpot}) e l'entita' nasce li' se il chunk ha le entita'
-     * caricate. Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
+     * un telaio: i segnaposto lo lasciano come in {@link #exit}, da ogni posto in cui possono stare, griglia di
+     * fabbricazione e menu aperto compresi (cosi' non cadono a terra, ne' ora ne' quando il gioco toglie il giocatore
+     * morto, e con {@code keepInventory} non passano al giocatore rinato); l'armatura stivata resta nel record; il
+     * record diventa piazzato nel punto di riposo del telaio ({@link #restingSpot}) e l'entita' nasce li' se il chunk
+     * ha le entita' caricate. Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
      */
     public static void onDeath(ServerPlayer player) {
         try {
@@ -172,7 +167,7 @@ public final class FrameEntry {
             if (frames.wornFrameId(player).isEmpty()) {
                 return;
             }
-            removePlaceholders(player);
+            Placeholders.removeAll(player);
             leaveFrame(player, frames);
         } catch (RuntimeException e) {
             RedstoneExoframes.LOGGER.error("Could not leave the frame of player {} at death", player.getUUID(), e);
@@ -193,22 +188,18 @@ public final class FrameEntry {
      * La parte comune della vestizione: i quattro segnaposto negli slot armatura e {@code summary} sullo stack del
      * torso. Non cancella mai un oggetto vero: cio' che trova ancora in uno slot armatura e non e' un segnaposto va al
      * giocatore con {@link Handouts#give}; i segnaposto gia' indossati si sostituiscono. Gli slot cambiano in
-     * silenzio ({@code setArmorSlot}). Non ricalcola le dimensioni: lo fa chi chiama, alla fine.
+     * silenzio ({@link Placeholders#setArmorSlot}). Non ricalcola le dimensioni: lo fa chi chiama, alla fine.
      */
     public static void dress(ServerPlayer player, SuitSummary summary) {
         Objects.requireNonNull(player, "player must not be null");
         Objects.requireNonNull(summary, "summary must not be null");
         List<ItemStack> displaced = new ArrayList<>();
-        for (EquipmentSlot slot : DebugWear.ARMOR_SLOTS) {
+        for (EquipmentSlot slot : Placeholders.ARMOR_SLOTS) {
             ItemStack old = player.getItemBySlot(slot);
-            if (!old.isEmpty() && !DebugWear.isPlaceholder(old)) {
+            if (!old.isEmpty() && !Placeholders.isPlaceholder(old)) {
                 displaced.add(old);
             }
-            ItemStack placeholder = new ItemStack(DebugWear.PLACEHOLDERS.get(slot).get());
-            if (slot == EquipmentSlot.CHEST) {
-                Compat.itemData().setSuitSummary(placeholder, summary);
-            }
-            setArmorSlot(player, slot, placeholder);
+            Placeholders.setArmorSlot(player, slot, Placeholders.create(slot, summary));
         }
         for (ItemStack stack : displaced) {
             Handouts.give(player, stack);
@@ -221,9 +212,9 @@ public final class FrameEntry {
      */
     private static void stowWornArmor(ServerPlayer player, FrameStateAccess frames) {
         List<StowedStack> worn = new ArrayList<>();
-        for (EquipmentSlot slot : DebugWear.ARMOR_SLOTS) {
+        for (EquipmentSlot slot : Placeholders.ARMOR_SLOTS) {
             ItemStack stack = player.getItemBySlot(slot);
-            if (!stack.isEmpty() && !DebugWear.isPlaceholder(stack)) {
+            if (!stack.isEmpty() && !Placeholders.isPlaceholder(stack)) {
                 worn.add(new StowedStack(slot, stack));
             }
         }
@@ -232,15 +223,23 @@ public final class FrameEntry {
         }
         frames.stow(player, worn);
         for (StowedStack entry : worn) {
-            setArmorSlot(player, entry.slot(), ItemStack.EMPTY);
+            Placeholders.setArmorSlot(player, entry.slot(), ItemStack.EMPTY);
         }
     }
 
-    /** Tutti i segnaposto lasciano il giocatore, in silenzio: l'inventario ({@link DebugWear#remove}) e il cursore. */
-    private static void removePlaceholders(ServerPlayer player) {
-        DebugWear.remove(player);
-        if (DebugWear.isPlaceholder(player.containerMenu.getCarried())) {
-            player.containerMenu.setCarried(ItemStack.EMPTY);
+    /**
+     * L'armatura stivata nel record indossato torna al giocatore ({@link FrameStateAccess#takeStowed}): ogni stack nel
+     * suo slot se e' vuoto, in silenzio, altrimenti con {@link Handouts#give}. Chi chiama toglie prima i segnaposto,
+     * cosi' gli slot sono liberi. Una voce che non si legge resta nel record (vedi {@code takeStowed}).
+     */
+    static void returnStowed(ServerPlayer player, FrameStateAccess frames) {
+        for (StowedStack entry : frames.takeStowed(player)) {
+            EquipmentSlot slot = entry.slot();
+            if (Placeholders.ARMOR_SLOTS.contains(slot) && player.getItemBySlot(slot).isEmpty()) {
+                Placeholders.setArmorSlot(player, slot, entry.stack());
+            } else {
+                Handouts.give(player, entry.stack());
+            }
         }
     }
 
@@ -272,10 +271,12 @@ public final class FrameEntry {
     /**
      * Dove va il telaio che il giocatore lascia (design, par. 5.4), uguale per l'uscita e per la morte: il suolo sotto
      * la posizione del giocatore ({@link FramePlacement#groundBelow}); se sotto non c'e' suolo (o il punto e' sotto il
-     * limite inferiore del mondo), l'ultima posizione sicura ({@link SafeSpots#last}), in qualunque dimensione sia; in
-     * mancanza anche di quella, il punto di rinascita del mondo (quello condiviso dell'overworld), appoggiato al suolo
-     * sotto se c'e'. Non carica chunk ne' dimensioni: {@code getLevel} da' solo livelli gia' caricati e
-     * {@code groundBelow} non carica chunk.
+     * limite inferiore del mondo), l'ultima posizione sicura ({@link SafeSpots#last}), in qualunque dimensione sia,
+     * appoggiata al suolo che c'e' ora sotto di essa se il suo chunk e' caricato (il pavimento puo' essere stato tolto
+     * dopo), cosi' com'e' stata ricordata se il chunk non e' caricato, e scartata se il chunk e' caricato e sotto non
+     * c'e' piu' suolo; in mancanza anche di quella, il punto di rinascita del mondo (quello condiviso dell'overworld),
+     * appoggiato al suolo sotto se c'e'. Non carica chunk ne' dimensioni: {@code getLevel} da' solo livelli gia'
+     * caricati e {@code groundBelow} non carica chunk.
      */
     private static RestingSpot restingSpot(ServerPlayer player) {
         ServerLevel here = player.serverLevel();
@@ -288,7 +289,15 @@ public final class FrameEntry {
         if (safe.isPresent()) {
             ServerLevel level = server.getLevel(safe.get().dimension());
             if (level != null) {
-                return new RestingSpot(level, safe.get().position());
+                Vec3 position = safe.get().position();
+                ChunkPos chunk = new ChunkPos(BlockPos.containing(position));
+                if (!level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
+                    return new RestingSpot(level, position);
+                }
+                Optional<Vec3> floor = FramePlacement.groundBelow(level, position);
+                if (floor.isPresent()) {
+                    return new RestingSpot(level, floor.get());
+                }
             }
         }
         ServerLevel overworld = server.overworld();
@@ -298,18 +307,5 @@ public final class FrameEntry {
 
     /** Il livello e il punto dei piedi in cui il telaio lasciato si piazza. */
     private record RestingSpot(ServerLevel level, Vec3 position) {
-    }
-
-    /**
-     * Scrive uno slot armatura in silenzio: direttamente nella lista {@code armor} dell'inventario, non con
-     * {@code setItemSlot}, che chiama {@code LivingEntity.onEquipItem} (suono dell'equipaggiamento ed evento di gioco
-     * {@code EQUIP}, che sveglia i sensori sculk) su 1.20.1 e 1.21.1. Il resto segue da solo come per ogni cambio
-     * dell'inventario: al tick dopo {@code LivingEntity.detectEquipmentUpdates} confronta gli slot con l'ultimo
-     * valore visto, aggiorna i modificatori degli attributi e manda l'equipaggiamento a chi vede il giocatore, e il
-     * menu dell'inventario manda lo slot al giocatore stesso.
-     */
-    private static void setArmorSlot(ServerPlayer player, EquipmentSlot slot, ItemStack stack) {
-        player.getInventory().armor.set(slot.getIndex(), stack);
-        player.getInventory().setChanged();
     }
 }

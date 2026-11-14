@@ -35,15 +35,20 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Comando {@code /exoframe}, livello di permesso 2. Per ora solo rami di debug: quello che veste chi lo esegue con i
- * segnaposto del telaio ({@link DebugWear}):
+ * Comando {@code /exoframe}, livello di permesso 2 (operatori). Per ora solo rami di debug: quello che mette addosso a
+ * chi lo esegue un telaio vero, con il suo record indossato nel registro ({@link DebugWear}), e lo veste con i
+ * segnaposto:
  * <ul>
  * <li>{@code /exoframe debug wear nudo}: telaio senza pezzi;</li>
  * <li>{@code /exoframe debug wear rottame [stato 0..3] [primario RRGGBB] [secondario RRGGBB]}: sei pezzi
  * {@link Tier#SCRAP} nella condizione data (0 intatto, 1 danneggiato, 2 critico, 3 rotto; 0 se omessa) e con i
  * colori dati in esadecimale senza {@code #} (non dipinti se omessi);</li>
- * <li>{@code /exoframe debug wear via}: toglie i segnaposto.</li>
+ * <li>{@code /exoframe debug wear via}: elimina il telaio che il giocatore indossa, comunque ci sia entrato (anche uno
+ * entrato da un telaio piazzato, con i suoi pezzi e la sua cella): l'armatura stivata gli torna, il record si toglie
+ * dal registro e i segnaposto se ne vanno.</li>
  * </ul>
+ * {@code nudo} e {@code rottame} creano il record indossato se il giocatore non ne ha uno, altrimenti ne sostituiscono
+ * pezzi e cella (quelli che c'erano si eliminano), sempre con una cella carica; l'armatura stivata non si tocca.
  * e il ramo che piazza un telaio nel mondo ({@link FramePlacement}) al suolo sotto i piedi di chi lo esegue, con il suo
  * orientamento e lui come proprietario (rifiutato, come l'oggetto telaio, se li' il telaio non ci sta):
  * <ul>

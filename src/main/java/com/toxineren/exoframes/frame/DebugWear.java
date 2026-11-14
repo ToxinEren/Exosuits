@@ -1,76 +1,94 @@
 package com.toxineren.exoframes.frame;
 
+import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
+import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModItems;
-import dev.architectury.registry.registries.RegistrySupplier;
-import java.util.List;
+import com.toxineren.exoframes.core.armor.Piece;
+import com.toxineren.exoframes.core.armor.PieceCondition;
+import com.toxineren.exoframes.core.armor.PieceSlot;
+import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.Map;
 import java.util.Objects;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.item.Item;
-import net.minecraft.world.item.ItemStack;
 
 /**
- * Vestizione di prova del telaio: mette i quattro segnaposto negli slot armatura vanilla e scrive il riassunto visivo
- * sullo stack del torso, cosi' il layer di rendering ha qualcosa da disegnare. Non tocca lo stato del telaio
- * ({@link Compat#frameState()}): serve solo a vedere la tuta. Lo usa il comando di debug. Dopo aver messo o tolto i
- * segnaposto ricalcola le dimensioni del giocatore ({@link SuitSize}): la grandezza reale cambia subito. La mappa dei
- * segnaposto per slot sta qui sola, e la vestizione vera ({@link FrameEntry#dress}) la usa.
+ * Il telaio di prova del comando di debug (design, par. 5.5): un telaio vero, con il suo record indossato nel registro
+ * ({@link Compat#frameState()}), cosi' l'autoriparazione degli slot ({@link SlotGuard}) non scambia i suoi segnaposto
+ * per segnaposto rimasti senza stato. Dopo aver vestito o svestito il giocatore ne ricalcola subito le dimensioni
+ * ({@link SuitSize}).
  */
 public final class DebugWear {
-    /** Il segnaposto di ciascuno slot armatura vanilla. */
-    static final Map<EquipmentSlot, RegistrySupplier<Item>> PLACEHOLDERS = Map.of(
-            EquipmentSlot.HEAD, ModItems.EXOFRAME_HELMET,
-            EquipmentSlot.CHEST, ModItems.EXOFRAME_TORSO,
-            EquipmentSlot.LEGS, ModItems.EXOFRAME_LEGS,
-            EquipmentSlot.FEET, ModItems.EXOFRAME_BOOTS);
-    /** Gli slot armatura nell'ordine in cui si vestono. */
-    static final List<EquipmentSlot> ARMOR_SLOTS =
-            List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
-
     private DebugWear() {
     }
 
     /**
-     * Veste il giocatore con i quattro segnaposto e scrive {@code summary} sullo stack del torso
-     * ({@link FrameEntry#dress}), poi ricalcola subito le dimensioni. Cio' che occupava gli slot armatura va
-     * nell'inventario, o a terra ai piedi del giocatore se non entra ({@link Handouts#give}); i segnaposto gia'
-     * indossati si scartano (si sostituiscono, non finiscono nell'inventario).
+     * Crea il record indossato del giocatore se non ne ha uno, con lui come proprietario, oppure ne sostituisce pezzi
+     * e cella, cosi' che il riassunto dello stato sia esattamente {@code summary}: per ogni slot del riassunto un
+     * pezzo nuovo del suo livello, con la durabilita' piu' alta che da' la sua condizione e con il suo aspetto; gli
+     * altri slot vuoti (i pezzi che c'erano si eliminano); una cella carica. L'armatura stivata nel record non si
+     * tocca. Poi lo veste ({@link FrameEntry#dress}) e ricalcola subito le dimensioni: cio' che occupava gli slot
+     * armatura va nell'inventario, o a terra ai piedi del giocatore se non entra ({@link Handouts#give}).
      */
     public static void wear(ServerPlayer player, SuitSummary summary) {
+        Objects.requireNonNull(player, "player must not be null");
         Objects.requireNonNull(summary, "summary must not be null");
-        FrameEntry.dress(player, summary);
+        FrameStateAccess frames = Compat.frameState();
+        frames.update(player, state -> rebuild(state, player, summary));
+        FrameState state = frames.get(player).orElseThrow(
+                () -> new IllegalStateException("no worn frame for " + player.getUUID() + " after update"));
+        FrameEntry.dress(player, SuitSummary.of(state));
         player.refreshDimensions(); // grandezza reale nello stesso tick, senza aspettare SuitSize.tick
     }
 
     /**
-     * Toglie tutti i segnaposto dall'inventario del giocatore: slot armatura, inventario principale e mano
-     * secondaria. Non rimette l'armatura di prima. Restituisce quanti item ha tolto.
+     * Elimina il telaio che il giocatore indossa, comunque ci sia entrato: i segnaposto lo lasciano da ogni posto in
+     * cui possono stare ({@link Placeholders#removeAll}), l'armatura stivata nel record gli torna come all'uscita (nel
+     * suo slot, o con {@link Handouts#give}), poi il record indossato si toglie dal registro; le dimensioni si
+     * ricalcolano subito. Senza un record indossato toglie solo i segnaposto.
+     *
+     * @return quanti segnaposto ha tolto
      */
     public static int remove(ServerPlayer player) {
-        Inventory inventory = player.getInventory();
-        int removed = 0;
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (isPlaceholder(stack)) {
-                removed += stack.getCount();
-                inventory.setItem(i, ItemStack.EMPTY);
-            }
+        Objects.requireNonNull(player, "player must not be null");
+        FrameStateAccess frames = Compat.frameState();
+        int removed = Placeholders.removeAll(player);
+        if (frames.wornFrameId(player).isPresent()) {
+            FrameEntry.returnStowed(player, frames);
+            frames.clear(player);
         }
         player.refreshDimensions(); // grandezza vanilla nello stesso tick, senza aspettare SuitSize.tick
         return removed;
     }
 
-    /** Vero se lo stack e' uno dei quattro segnaposto del telaio. */
-    public static boolean isPlaceholder(ItemStack stack) {
-        for (RegistrySupplier<Item> placeholder : PLACEHOLDERS.values()) {
-            if (stack.is(placeholder.get())) {
-                return true;
+    /** Pezzi e cella dello stato sostituiti da quelli di {@code summary}; il proprietario resta, o diventa lui. */
+    private static void rebuild(FrameState state, ServerPlayer player, SuitSummary summary) {
+        if (state.owner() == null) {
+            state.setOwner(player.getUUID());
+        }
+        for (PieceSlot slot : PieceSlot.values()) {
+            state.unmount(slot);
+        }
+        for (Map.Entry<PieceSlot, PieceLook> entry : summary.pieces().entrySet()) {
+            PieceLook look = entry.getValue();
+            Piece piece = Piece.fresh(entry.getKey(), look.tier(), RedstoneExoframes.config().tiers);
+            piece.damage(piece.maxDurability() - durabilityFor(piece.maxDurability(), look.condition()));
+            state.mount(piece);
+            state.setAppearance(entry.getKey(), look.appearance());
+        }
+        state.insertCell(ModItems.REDSTONE_CELL.get().toCell(CellItem.charged()));
+    }
+
+    /** La durabilita' piu' alta, fra 0 e {@code max}, che da' la condizione. */
+    private static int durabilityFor(int max, PieceCondition condition) {
+        for (int durability = max; durability > 0; durability--) {
+            if (PieceCondition.of(durability, max) == condition) {
+                return durability;
             }
         }
-        return false;
+        return 0;
     }
 }

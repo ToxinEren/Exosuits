@@ -34,7 +34,9 @@ import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.Handouts;
+import com.toxineren.exoframes.frame.Placeholders;
 import com.toxineren.exoframes.frame.SafeSpots;
+import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -61,6 +63,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -68,6 +71,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -177,6 +181,20 @@ public final class ExoframeGameTests {
         add(tests, "deathWithKeepInventoryStillLeavesTheFrame",
                 ExoframeGameTests::deathWithKeepInventoryStillLeavesTheFrame);
         add(tests, "exitWithoutGroundUsesTheLastSafeSpot", ExoframeGameTests::exitWithoutGroundUsesTheLastSafeSpot);
+        add(tests, "slotGuardRestoresARemovedPlaceholder", ExoframeGameTests::slotGuardRestoresARemovedPlaceholder);
+        add(tests, "slotGuardDeletesStrayCopies", ExoframeGameTests::slotGuardDeletesStrayCopies);
+        add(tests, "slotGuardMovesForeignArmorOut", ExoframeGameTests::slotGuardMovesForeignArmorOut);
+        add(tests, "placeholdersWithoutStateAreRemoved", ExoframeGameTests::placeholdersWithoutStateAreRemoved);
+        add(tests, "rejoinRestoresPlaceholders", ExoframeGameTests::rejoinRestoresPlaceholders);
+        add(tests, "summaryFollowsTheState", ExoframeGameTests::summaryFollowsTheState);
+        add(tests, "slotGuardDeletesPlaceholdersInGridAndContainer",
+                ExoframeGameTests::slotGuardDeletesPlaceholdersInGridAndContainer);
+        add(tests, "thrownPlaceholderIsNotDropped", ExoframeGameTests::thrownPlaceholderIsNotDropped);
+        add(tests, "debugWearViaGivesBackStowedArmor", ExoframeGameTests::debugWearViaGivesBackStowedArmor);
+        add(tests, "enteringRemembersTheFrameSpotAsSafe", ExoframeGameTests::enteringRemembersTheFrameSpotAsSafe);
+        add(tests, "safeSpotFollowsTheFloorDown", ExoframeGameTests::safeSpotFollowsTheFloorDown);
+        add(tests, "deathClearsPlaceholdersFromTheCraftingGrid",
+                ExoframeGameTests::deathClearsPlaceholdersFromTheCraftingGrid);
         return tests;
     }
 
@@ -261,9 +279,10 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * {@link DebugWear#wear} su un giocatore con un elmo di ferro: i quattro slot armatura hanno i segnaposto, il
-     * torso porta il riassunto (sei pezzi SCRAP INTACT non dipinti) e l'elmo di ferro e' finito nell'inventario, dove
-     * resta dopo {@link DebugWear#remove}.
+     * {@link DebugWear#wear} su un giocatore con un elmo di ferro: il giocatore ha un record indossato vero, con lui
+     * come proprietario, una cella carica e uno stato che da' il riassunto chiesto (sei pezzi SCRAP INTACT non
+     * dipinti); i quattro slot armatura hanno i segnaposto, il torso porta il riassunto e l'elmo di ferro e' finito
+     * nell'inventario, dove resta dopo {@link DebugWear#remove}, che toglie anche il record.
      */
     private static void debugWearPutsPlaceholdersAndSummary(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -276,6 +295,10 @@ public final class ExoframeGameTests {
 
         DebugWear.wear(player, summary);
 
+        FrameState state = Compat.frameState().get(player).orElse(null);
+        helper.assertTrue(state != null && SuitSummary.of(state).equals(summary)
+                && player.getUUID().equals(state.owner()) && state.cell() != null && !state.cell().isEmpty(),
+                "worn record missing or not matching the summary: " + state);
         assertPlaceholdersWorn(helper, player);
         Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
         helper.assertTrue(Optional.of(summary).equals(written), "wrong suit summary on the torso: " + written);
@@ -285,21 +308,30 @@ public final class ExoframeGameTests {
         DebugWear.remove(player);
         helper.assertTrue(countPlaceholders(player) == 0,
                 countPlaceholders(player) + " placeholders left after remove");
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isEmpty(), "worn record left after remove");
         helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 1,
                 "iron helmet not in the inventory after remove");
         helper.succeed();
     }
 
     /**
-     * {@link DebugWear#remove} toglie i segnaposto dagli slot armatura e dal resto dell'inventario. Un secondo
-     * {@code wear} sostituisce i segnaposto gia' indossati senza metterli nell'inventario.
+     * {@link DebugWear#remove} toglie il record indossato e i segnaposto dagli slot armatura e dal resto
+     * dell'inventario. Un secondo {@code wear} sostituisce i segnaposto gia' indossati senza metterli nell'inventario
+     * e tiene lo stesso record, con i pezzi nuovi.
      */
     private static void debugWearRemoveClearsEverything(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
         DebugWear.wear(player, SuitSummary.BARE);
-        DebugWear.wear(player, SuitSummary.BARE);
+        UUID frameId = frames.wornFrameId(player).orElse(null);
+        Map<PieceSlot, PieceLook> helmet = Map.of(PieceSlot.HELMET,
+                new PieceLook(Tier.SCRAP, PieceCondition.DAMAGED, Appearance.DEFAULT));
+        DebugWear.wear(player, new SuitSummary(helmet));
         helper.assertTrue(countPlaceholders(player) == 4,
                 "wearing twice left " + countPlaceholders(player) + " placeholders, expected 4");
+        helper.assertTrue(frameId != null && Optional.of(frameId).equals(frames.wornFrameId(player))
+                && SuitSummary.of(frames.get(player).orElseThrow()).equals(new SuitSummary(helmet)),
+                "second wear did not replace the pieces of the same record: " + frames.get(player));
         player.getInventory().items.set(5, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
         player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
 
@@ -307,6 +339,9 @@ public final class ExoframeGameTests {
 
         helper.assertTrue(countPlaceholders(player) == 0,
                 countPlaceholders(player) + " placeholders left after remove");
+        helper.assertTrue(frames.wornFrameId(player).isEmpty(), "worn record left after remove");
+        helper.assertTrue(Compat.gameTests().orphanedStowed(helper.getLevel().getServer(), frameId).isEmpty(),
+                "remove left orphaned entries");
         for (EquipmentSlot slot : ARMOR_SLOTS) {
             helper.assertTrue(player.getItemBySlot(slot).isEmpty(), "armor slot not empty after remove: " + slot);
         }
@@ -314,8 +349,9 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Il comando {@code /exoframe debug wear rottame 2 <primario> <secondario>}: sei pezzi SCRAP CRITICAL con i
-     * colori dati. Prima un colore malformato fa fallire il comando senza cambiare nulla.
+     * Il comando {@code /exoframe debug wear rottame 2 <primario> <secondario>}: un record indossato con sei pezzi
+     * SCRAP CRITICAL con i colori dati, e lo stesso riassunto sul torso. Prima un colore malformato fa fallire il
+     * comando senza cambiare nulla (nessun record). Alla fine {@code via} toglie il record.
      */
     private static void debugWearWithStateAndColors(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -330,8 +366,8 @@ public final class ExoframeGameTests {
             failed = true;
         }
         helper.assertTrue(failed, "a malformed color did not fail the command");
-        helper.assertTrue(player.getItemBySlot(EquipmentSlot.CHEST).is(Items.IRON_CHESTPLATE),
-                "a failed command changed the armor slots");
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.CHEST).is(Items.IRON_CHESTPLATE)
+                && Compat.frameState().wornFrameId(player).isEmpty(), "a failed command changed something");
 
         runCommand(dispatcher, source, "exoframe debug wear rottame 2 Ab12Ef 00ff00");
         assertPlaceholdersWorn(helper, player);
@@ -345,13 +381,19 @@ public final class ExoframeGameTests {
                 "wrong look for " + slot + ": " + look));
         helper.assertTrue(countInMainInventory(player, Items.IRON_CHESTPLATE) == 1,
                 "iron chestplate not moved to the inventory");
+        Optional<SuitSummary> recorded = Compat.frameState().get(player).map(SuitSummary::of);
+        helper.assertTrue(recorded.equals(written), "record state gives " + recorded + ", torso " + written);
+        runCommand(dispatcher, source, "exoframe debug wear via");
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isEmpty() && countPlaceholders(player) == 0,
+                "via left the record or placeholders");
         helper.succeed();
     }
 
     /**
      * Segnaposto del torso con riassunto assente o malformato, come da {@code /give}, altre mod o dati vecchi: la
      * lettura non lancia (vuota senza riassunto o con {@code visual} non compound, telaio nudo se le voci sono tutte
-     * sconosciute), {@code via} li toglie ovunque e {@code nudo} sostituisce quello indossato.
+     * sconosciute), {@code via} li toglie ovunque anche senza un record, {@code nudo} sostituisce quello indossato e
+     * crea il record nudo, e {@code via} lo toglie.
      */
     private static void debugWearHandlesTorsoWithoutValidSummary(GameTestHelper helper) {
         ItemStack bare = new ItemStack(ModItems.EXOFRAME_TORSO.get());
@@ -399,6 +441,11 @@ public final class ExoframeGameTests {
                 countPlaceholders(player) + " placeholders after nudo, expected the 4 worn ones");
         Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
         helper.assertTrue(Optional.of(SuitSummary.BARE).equals(written), "wrong summary after nudo: " + written);
+        helper.assertTrue(Compat.frameState().get(player).map(SuitSummary::of).equals(Optional.of(SuitSummary.BARE)),
+                "no bare worn record after nudo");
+        runCommand(dispatcher, source, "exoframe debug wear via");
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isEmpty() && countPlaceholders(player) == 0,
+                "via left the record or placeholders");
         helper.succeed();
     }
 
@@ -422,6 +469,9 @@ public final class ExoframeGameTests {
                 player.getBoundingBox().inflate(4), entity -> entity.getItem().is(Items.IRON_HELMET));
         helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
                 "expected one dropped iron helmet next to the player, found " + dropped.size());
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isPresent(), "no worn record after wear");
+        dropped.forEach(Entity::discard);
+        DebugWear.remove(player);
         helper.succeed();
     }
 
@@ -476,8 +526,9 @@ public final class ExoframeGameTests {
 
     /**
      * In uno spazio alto 2 la tuta non sta ne' in piedi (2,97) ne' accovacciata (2,475): il gioco la mette da solo a
-     * carponi (0,8 x 0,99). Il segnaposto va nello slot senza DebugWear, che ricalcolerebbe da solo: qui il ricalcolo
-     * deve arrivare dal tick del giocatore (TickEvent.PLAYER_PRE). I giocatori finti non li fa girare il server.
+     * carponi (0,8 x 0,99). Il giocatore ha un record indossato e il segnaposto del torso va nello slot senza
+     * DebugWear, che ricalcolerebbe da solo: qui il ricalcolo deve arrivare dal tick del giocatore (la grandezza in
+     * TickEvent.PLAYER_PRE, l'autoriparazione degli slot in PLAYER_POST). I giocatori finti non li fa girare il server.
      */
     private static void suitCrawlsUnderLowCeiling(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -492,6 +543,7 @@ public final class ExoframeGameTests {
         player.doTick();
         helper.assertTrue(player.getPose() == Pose.STANDING, "player without the suit not standing: " + size(player));
 
+        Compat.frameState().update(player, state -> { });
         player.setItemSlot(EquipmentSlot.CHEST, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
         player.doTick();
         player.doTick();
@@ -500,6 +552,7 @@ public final class ExoframeGameTests {
                 "wrong crawling box: " + size(player));
         helper.assertTrue(near((float) player.getBoundingBox().getYsize(), 0.6f * 1.65f),
                 "crawling bounding box not rebuilt: " + player.getBoundingBox());
+        DebugWear.remove(player);
         helper.succeed();
     }
 
@@ -1823,7 +1876,8 @@ public final class ExoframeGameTests {
         ItemStack head = player.getItemBySlot(EquipmentSlot.HEAD);
         helper.assertTrue(ItemStack.matches(helmet, head) && head.getDamageValue() == 5,
                 "helmet not back on the head: " + head);
-        helper.assertTrue(countPlaceholders(player) == 0 && !DebugWear.isPlaceholder(player.containerMenu.getCarried()),
+        helper.assertTrue(countPlaceholders(player) == 0
+                && !Placeholders.isPlaceholder(player.containerMenu.getCarried()),
                 "placeholders left on the player");
         helper.assertTrue(frames.wornFrameId(player).isEmpty() && frames.get(player).isEmpty(),
                 "frame still worn after exit");
@@ -2035,10 +2089,11 @@ public final class ExoframeGameTests {
         Entity view = level.getEntity(frameId);
         helper.assertTrue(view instanceof ExoframeEntity && !view.isRemoved() && view.position().equals(feet),
                 "frame entity missing or not at the feet: " + view);
-        helper.assertTrue(countPlaceholders(player) == 0 && !DebugWear.isPlaceholder(player.containerMenu.getCarried()),
+        helper.assertTrue(countPlaceholders(player) == 0
+                && !Placeholders.isPlaceholder(player.containerMenu.getCarried()),
                 "placeholders left on the dead player");
         List<ItemEntity> drops = deathDrops(level, feet);
-        helper.assertTrue(drops.stream().noneMatch(drop -> DebugWear.isPlaceholder(drop.getItem())),
+        helper.assertTrue(drops.stream().noneMatch(drop -> Placeholders.isPlaceholder(drop.getItem())),
                 "a placeholder was dropped: " + drops);
         helper.assertTrue(drops.stream().anyMatch(drop -> drop.getItem().is(Items.DIRT)),
                 "the inventory did not drop (dirt not on the ground): " + drops);
@@ -2158,6 +2213,323 @@ public final class ExoframeGameTests {
     }
 
     /**
+     * Un segnaposto tolto dal suo slot (sul cursore, come dopo un clic nello slot) torna nello slot al tick, e la
+     * copia sul cursore sparisce; senza il segnaposto del torso il giocatore ha la grandezza vanilla, e il tick che lo
+     * rimette gli ridà subito quella della tuta, senza aspettare il tick della grandezza.
+     */
+    private static void slotGuardRestoresARemovedPlaceholder(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        player.getInventory().armor.set(EquipmentSlot.HEAD.getIndex(), ItemStack.EMPTY);
+        player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_HELMET.get()));
+        player.getInventory().armor.set(EquipmentSlot.CHEST.getIndex(), ItemStack.EMPTY);
+        player.refreshDimensions();
+        assertSize(helper, player, "torso taken away", 0.6f, 1.8f, 1.62f, 1.27f);
+
+        SlotGuard.tick(player);
+
+        assertPlaceholdersWorn(helper, player);
+        helper.assertTrue(countPlaceholders(player) == 4 && player.containerMenu.getCarried().isEmpty(),
+                "placeholders not back in their slots only: " + countPlaceholders(player) + ", cursor "
+                        + player.containerMenu.getCarried());
+        helper.assertTrue(Optional.of(SuitSummary.BARE).equals(
+                Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST))), "torso without summary");
+        assertSize(helper, player, "after the guard's tick", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Copie dei segnaposto nell'inventario principale, nella mano secondaria e sul cursore di chi indossa il telaio:
+     * il tick le elimina e lascia i quattro negli slot armatura, gli stessi stack (non riscritti).
+     */
+    private static void slotGuardDeletesStrayCopies(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        SlotGuard.tick(player);
+        List<ItemStack> worn = List.copyOf(player.getInventory().armor);
+        player.getInventory().items.set(5, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        player.getInventory().items.set(7, new ItemStack(Items.DIRT, 2));
+        player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_BOOTS.get()));
+
+        SlotGuard.tick(player);
+
+        helper.assertTrue(countPlaceholders(player) == 4 && player.containerMenu.getCarried().isEmpty(),
+                countPlaceholders(player) + " placeholders left, cursor " + player.containerMenu.getCarried());
+        for (int i = 0; i < worn.size(); i++) {
+            helper.assertTrue(player.getInventory().armor.get(i) == worn.get(i), "armor slot " + i + " rewritten");
+        }
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == 2, "a real item was touched");
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un elmo di ferro messo nello slot della testa di chi indossa il telaio: al tick torna nell'inventario, intero, e
+     * nello slot c'e' di nuovo il segnaposto.
+     */
+    private static void slotGuardMovesForeignArmorOut(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        player.getInventory().armor.set(EquipmentSlot.HEAD.getIndex(), helmet.copy());
+
+        SlotGuard.tick(player);
+
+        assertPlaceholdersWorn(helper, player);
+        ItemStack back = findInMainInventory(player, Items.IRON_HELMET);
+        helper.assertTrue(ItemStack.matches(helmet, back) && countInMainInventory(player, Items.IRON_HELMET) == 1,
+                "iron helmet not back in the inventory: " + back);
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Segnaposto senza un record indossato (come dopo un rientro, o da {@code /give}): il tick li elimina tutti, dagli
+     * slot armatura, dall'inventario, dalla mano secondaria e dal cursore, e il giocatore torna subito alla grandezza
+     * vanilla. Un oggetto vero resta.
+     */
+    private static void placeholdersWithoutStateAreRemoved(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        for (EquipmentSlot slot : ARMOR_SLOTS) {
+            player.setItemSlot(slot, placeholderFor(slot));
+        }
+        player.getInventory().items.set(2, new ItemStack(ModItems.EXOFRAME_HELMET.get()));
+        player.getInventory().items.set(3, new ItemStack(Items.DIRT, 4));
+        player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        SuitSize.tick(player);
+        assertSize(helper, player, "with a torso placeholder", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+
+        SlotGuard.tick(player);
+
+        helper.assertTrue(countPlaceholders(player) == 0 && player.containerMenu.getCarried().isEmpty(),
+                countPlaceholders(player) + " placeholders left, cursor " + player.containerMenu.getCarried());
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == 4, "a real item was touched");
+        assertSize(helper, player, "after the guard's tick", 0.6f, 1.8f, 1.62f, 1.27f);
+        helper.succeed();
+    }
+
+    /**
+     * Un record indossato e nessun segnaposto, come dopo un rientro nel gioco: un tick rimette i quattro segnaposto
+     * con il riassunto dello stato sul torso; il tick dopo non riscrive nulla.
+     */
+    private static void rejoinRestoresPlaceholders(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        frames.update(player, state -> {
+            state.mount(scrapPiece(PieceSlot.TORSO));
+            state.mount(scrapPiece(PieceSlot.LEFT_ARM));
+            state.setAppearance(PieceSlot.TORSO, new Appearance(0x112233, Appearance.UNPAINTED, List.of()));
+        });
+        SuitSummary expected = SuitSummary.of(frames.get(player).orElseThrow());
+
+        SlotGuard.tick(player);
+
+        assertPlaceholdersWorn(helper, player);
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(Optional.of(expected).equals(written), "wrong summary after the tick: " + written);
+        helper.assertTrue(countPlaceholders(player) == 4, countPlaceholders(player) + " placeholders, expected 4");
+        List<ItemStack> worn = List.copyOf(player.getInventory().armor);
+        SlotGuard.tick(player);
+        for (int i = 0; i < worn.size(); i++) {
+            helper.assertTrue(player.getInventory().armor.get(i) == worn.get(i), "armor slot " + i + " rewritten");
+        }
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un pezzo si rompe nello stato del telaio indossato: al tick dopo il riassunto sul torso lo dice.
+     */
+    private static void summaryFollowsTheState(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        Map<PieceSlot, PieceLook> pieces = new EnumMap<>(PieceSlot.class);
+        for (PieceSlot slot : PieceSlot.values()) {
+            pieces.put(slot, new PieceLook(Tier.SCRAP, PieceCondition.INTACT, Appearance.DEFAULT));
+        }
+        DebugWear.wear(player, new SuitSummary(pieces));
+        SlotGuard.tick(player);
+
+        frames.mutate(player, state -> {
+            Piece helmet = state.pieces().get(PieceSlot.HELMET);
+            helmet.damage(helmet.durability());
+        });
+        SlotGuard.tick(player);
+
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(written.isPresent()
+                && written.get().pieces().get(PieceSlot.HELMET).condition() == PieceCondition.BROKEN
+                && written.get().pieces().get(PieceSlot.TORSO).condition() == PieceCondition.INTACT,
+                "summary on the torso does not follow the state: " + written);
+        assertPlaceholdersWorn(helper, player);
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Segnaposto nella griglia 2x2 di fabbricazione e in una cassa aperta (spostati li' con un clic accovacciato):
+     * il tick li elimina mentre la cassa e' ancora aperta; i quattro negli slot armatura restano, e cosi' gli oggetti
+     * veri.
+     */
+    private static void slotGuardDeletesPlaceholdersInGridAndContainer(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        player.inventoryMenu.getCraftSlots().setItem(1, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        SimpleContainer chest = new SimpleContainer(27);
+        chest.setItem(4, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        chest.setItem(5, new ItemStack(Items.DIRT, 3));
+        player.containerMenu = ChestMenu.threeRows(1, player.getInventory(), chest);
+        try {
+            SlotGuard.tick(player);
+
+            helper.assertTrue(player.inventoryMenu.getCraftSlots().getItem(1).isEmpty(),
+                    "placeholder left in the crafting grid");
+            helper.assertTrue(chest.getItem(4).isEmpty() && chest.getItem(5).is(Items.DIRT)
+                    && chest.getItem(5).getCount() == 3, "chest contents wrong: " + chest);
+            assertPlaceholdersWorn(helper, player);
+            helper.assertTrue(countPlaceholders(player) == 4, countPlaceholders(player) + " placeholders");
+        } finally {
+            player.containerMenu = player.inventoryMenu;
+        }
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un segnaposto lanciato (qui tolto dallo slot della testa e poi lanciato, come con il tasto Q sullo slot): nessun
+     * oggetto a terra porta un segnaposto e nessuna copia torna al giocatore; il tick rimette quello dello slot.
+     */
+    private static void thrownPlaceholderIsNotDropped(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        DebugWear.wear(player, SuitSummary.BARE);
+        ItemStack thrown = player.getInventory().armor.get(EquipmentSlot.HEAD.getIndex());
+        player.getInventory().armor.set(EquipmentSlot.HEAD.getIndex(), ItemStack.EMPTY);
+
+        player.drop(thrown, true);
+
+        List<ItemEntity> near = deathDrops(level, player.position());
+        helper.assertTrue(near.stream().noneMatch(drop -> Placeholders.isPlaceholder(drop.getItem())),
+                "a thrown placeholder is on the ground: " + near);
+        helper.assertTrue(countPlaceholders(player) == 3 && player.containerMenu.getCarried().isEmpty(),
+                "a copy of the thrown placeholder came back: " + countPlaceholders(player));
+        SlotGuard.tick(player);
+        assertPlaceholdersWorn(helper, player);
+        helper.assertTrue(countPlaceholders(player) == 4, countPlaceholders(player) + " placeholders after the tick");
+        near.forEach(Entity::discard);
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * {@code /exoframe debug wear via} su chi e' entrato davvero in un telaio con un elmo di ferro: l'elmo torna in
+     * testa, il record indossato non c'e' piu' e nulla resta fra le voci dei telai tolti; nessun segnaposto.
+     */
+    private static void debugWearViaGivesBackStowedArmor(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 5.5));
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.EXOFRAME_HELMET.get()),
+                "helmet not stowed on entering");
+        CommandSourceStack source = player.createCommandSourceStack().withPermission(2).withSuppressedOutput();
+
+        runCommand(server.getCommands().getDispatcher(), source, "exoframe debug wear via");
+
+        ItemStack head = player.getItemBySlot(EquipmentSlot.HEAD);
+        helper.assertTrue(ItemStack.matches(helmet, head), "helmet not back on the head: " + head);
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isEmpty()
+                && Compat.frameState().placed(server, frameId).isEmpty(), "frame still in the registry");
+        helper.assertTrue(Compat.gameTests().orphanedStowed(server, frameId).isEmpty(),
+                "via left orphaned entries: " + Compat.gameTests().orphanedStowed(server, frameId));
+        helper.assertTrue(countPlaceholders(player) == 0, "placeholders left after via");
+        helper.succeed();
+    }
+
+    /** Entrando nel telaio il suo punto diventa la prima posizione sicura del giocatore, prima di ogni tick. */
+    private static void enteringRemembersTheFrameSpotAsSafe(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        Vec3 spot = helper.absoluteVec(new Vec3(1.5, 2.0, 6.5));
+        wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(1.5, 2.0, 6.5));
+        helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(level.dimension(), spot))),
+                "frame spot not remembered as safe: " + SafeSpots.last(player) + ", expected " + spot);
+        leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /**
+     * Il pavimento sotto l'ultima posizione sicura e' stato tolto (il chunk e' caricato): uscendo sopra il vuoto il
+     * telaio va sul suolo che c'e' ora sotto quella posizione, non in aria.
+     */
+    private static void safeSpotFollowsTheFloorDown(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(6.5, 2.0, 2.5));
+        Vec3 safe = player.position();
+        rememberSafeSpot(helper, player, level, safe);
+        helper.setBlock(new BlockPos(6, 1, 2), Blocks.AIR);
+        helper.setBlock(new BlockPos(6, 0, 2), Blocks.STONE);
+        player.setOnGround(false);
+        player.moveTo(safe.x, level.getMinBuildHeight() - 10.0, safe.z, 0f, 0f);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        PlacedFrame record = Compat.frameState().placed(server, frameId).orElse(null);
+        Vec3 floor = safe.add(0.0, -1.0, 0.0);
+        helper.assertTrue(record != null && record.position().distanceTo(floor) < 1e-6,
+                "frame not on the floor below the safe spot: " + record + ", expected " + floor);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Un segnaposto nella griglia 2x2 di fabbricazione di chi muore nel telaio: la morte lo toglie, e quando il gioco
+     * toglie il giocatore morto (al respawn, {@code removePlayerImmediately}: la griglia si svuota a terra) non cade
+     * nulla e il segnaposto non e' in nessun inventario.
+     */
+    private static void deathClearsPlaceholdersFromTheCraftingGrid(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(4.5, 2.0, 1.5));
+        player.inventoryMenu.getCraftSlots().setItem(2, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        Vec3 feet = player.position();
+
+        player.kill();
+
+        helper.assertTrue(player.isDeadOrDying(), "player did not die");
+        helper.assertTrue(player.inventoryMenu.getCraftSlots().getItem(2).isEmpty(),
+                "placeholder still in the crafting grid after the death");
+        level.removePlayerImmediately(player, Entity.RemovalReason.KILLED);
+        List<ItemEntity> drops = deathDrops(level, feet);
+        helper.assertTrue(drops.stream().noneMatch(drop -> Placeholders.isPlaceholder(drop.getItem())),
+                "a placeholder was dropped: " + drops);
+        helper.assertTrue(countPlaceholders(player) == 0 && !Placeholders.isPlaceholder(
+                player.containerMenu.getCarried()), "placeholders left on the dead player");
+        drops.forEach(Entity::discard);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /** Il segnaposto dello slot, come lo darebbe {@code /give}: senza riassunto. */
+    private static ItemStack placeholderFor(EquipmentSlot slot) {
+        return new ItemStack(switch (slot) {
+            case HEAD -> ModItems.EXOFRAME_HELMET.get();
+            case CHEST -> ModItems.EXOFRAME_TORSO.get();
+            case LEGS -> ModItems.EXOFRAME_LEGS.get();
+            default -> ModItems.EXOFRAME_BOOTS.get();
+        });
+    }
+
+    /**
      * Mette il giocatore dentro un telaio con lo stato dato, in piedi su un blocco di pietra posato sotto il punto
      * relativo alla struttura, con un clic come un giocatore vero ({@link FrameEntry#enter}); da' l'identita' del
      * telaio.
@@ -2212,9 +2584,11 @@ public final class ExoframeGameTests {
                 && countPlaceholders(player) == 0, when + ": player's armor changed");
     }
 
-    /** Toglie il record indossato del test (l'armatura stivata la riprende prima chi chiama) e i segnaposto. */
+    /**
+     * Toglie il record indossato del test e i segnaposto ({@link DebugWear#remove}); l'armatura ancora stivata torna
+     * al giocatore.
+     */
     private static void leaveTestFrame(ServerPlayer player) {
-        Compat.frameState().clear(player);
         DebugWear.remove(player);
     }
 
@@ -2452,7 +2826,7 @@ public final class ExoframeGameTests {
     private static int countPlaceholders(ServerPlayer player) {
         int count = 0;
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            if (DebugWear.isPlaceholder(player.getInventory().getItem(i))) {
+            if (Placeholders.isPlaceholder(player.getInventory().getItem(i))) {
                 count += player.getInventory().getItem(i).getCount();
             }
         }
