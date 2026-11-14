@@ -31,9 +31,10 @@
 # l'esecuzione): dove sta l'entita' telaio e quante ce ne sono, i segnaposto negli slot armatura solo mentre il
 # giocatore e' dentro, l'armatura di ferro restituita all'uscita nei suoi slot (e non al rientro dopo la morte), il
 # passo fuori dal telaio a ogni uscita, niente a terra dopo la morte; "data get entity"
-# sull'entita' telaio scrive in rcon.log il suo stato. Dove e' finito un pezzo (l'elmo sulla testa, il braccio sul
-# lato destro del telaio) nessun comando lo controlla, perche' il registro non si legge con i comandi: lo dicono solo
-# gli scatti 02 e 03, da guardare; la cella la prova l'ingresso riuscito. Alla fine la telecamera torna in prima
+# sull'entita' telaio scrive in rcon.log il suo stato. Dove e' finito un pezzo lo controlla, a ogni ingresso, il
+# riassunto visivo che il segnaposto del torso porta nei suoi dati (visual.pieces): l'elmo e il braccio destro ci
+# sono, il braccio sinistro no (il clic sul lato destro del telaio non lo ha messo sul sinistro); gli scatti 02 e 03
+# lo mostrano. La cella la prova l'ingresso riuscito. Alla fine la telecamera torna in prima
 # persona e client_shot.sh fa i suoi tre scatti (back, front, quarter) con il giocatore otto blocchi davanti al
 # telaio. Dura circa due minuti a cache calde (misurati 115-132 s sulle quattro varianti). Le variabili d'ambiente
 # sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
@@ -51,9 +52,12 @@ u=${EXO_SHOT_USER:-Exo}
 
 # La cella carica: dati dello stack come NBT su 1.20.1, nel componente custom_data su 1.21.1. Una variante sconosciuta
 # la rifiuta client_shot.sh.
+# Allo stesso modo il riassunto visivo nel segnaposto del torso (slot 102) sta in tag o in components.
 case "$variant" in
-    1.20.1-*) cell='redstone_exoframes:redstone_cell{exoframes:{energy:10000}}' ;;
-    *) cell='redstone_exoframes:redstone_cell[minecraft:custom_data={exoframes:{energy:10000}}]' ;;
+    1.20.1-*) cell='redstone_exoframes:redstone_cell{exoframes:{energy:10000}}'
+              visual="Inventory[{Slot:102b}].tag.exoframes.visual.pieces" ;;
+    *) cell='redstone_exoframes:redstone_cell[minecraft:custom_data={exoframes:{energy:10000}}]'
+       visual="Inventory[{Slot:102b}].components.\"minecraft:custom_data\".exoframes.visual.pieces" ;;
 esac
 
 frame='@e[type=redstone_exoframes:exoframe]'
@@ -70,6 +74,9 @@ dressed=("$(slot_has 103 redstone_exoframes:exoframe_helmet)" "$(slot_has 102 re
 undressed=("$(lacks redstone_exoframes:exoframe_helmet)" "$(lacks redstone_exoframes:exoframe_torso)"
            "$(lacks redstone_exoframes:exoframe_legs)" "$(lacks redstone_exoframes:exoframe_boots)")
 empty_hand="execute unless data entity $u Inventory[{Slot:0b}]"
+# i pezzi montati, dal riassunto visivo: elmo e braccio destro si', braccio sinistro no
+pieces=("execute if data entity $u $visual.helmet" "execute if data entity $u $visual.right_arm"
+        "execute unless data entity $u $visual.left_arm")
 
 steps=(
     "gamemode survival $u" "gamerule doImmediateRespawn true" "gamerule spawnRadius 0"
@@ -93,7 +100,8 @@ steps=(
     "tp $u 0.5 -60 1.2 0 0" "@tieni F5 0.2" "@attendi 2" "@scatto 05-prima-di-entrare"
     "@click destro" "@scatto 06-entrato-subito" "@attendi 0.5" "@scatto 07-entrato-mezzo-secondo"
     "@attendi 2" "@scatto 08-dentro-da-dietro"
-    "${dressed[@]}" "execute unless entity $frame" "$(lacks minecraft:iron_helmet)" "$(lacks minecraft:iron_chestplate)"
+    "${dressed[@]}" "${pieces[@]}" "execute unless entity $frame"
+    "$(lacks minecraft:iron_helmet)" "$(lacks minecraft:iron_chestplate)"
     "@tieni F5 0.2" "@attendi 2" "@scatto 09-dentro-davanti"
     # 6. uscire tenendo V
     "@tieni v 2 10-uscita-tasto-tenuto 0.6" "@attendi 1" "@scatto 11-uscito"
@@ -103,7 +111,7 @@ steps=(
     "$view" "@tieni F5 0.2" "@tieni F5 0.2" "@attendi 2" "@scatto 12-telaio-dopo-uscita"
     # 7. rientrare, spostarsi dentro la tuta e morire
     "tp $u 0.5 -60 1.2 0 0" "@attendi 1" "@click destro" "@attendi 1"
-    "${dressed[@]}" "execute unless entity $frame"
+    "${dressed[@]}" "${pieces[@]}" "execute unless entity $frame"
     "tp $u 3.5 -60 2.5 180 0" "@attendi 2" "@scatto 13-rientrato-spostato"
     "kill $u" "@attendi 3"
     "$(frame_at 3.5 2.5)" "${one_frame[@]}" "execute unless entity @e[type=item]"
@@ -112,7 +120,7 @@ steps=(
     "tp $u 3.5 -60 -1.5 0 10" "@attendi 3" "@scatto 14-telaio-dopo-morte"
     # 8. il proprietario rientra: l'armatura rimasta nel telaio resta li'; esce con V e la ritrova nei suoi slot
     "tp $u 3.5 -60 1.2 0 0" "@attendi 1" "@click destro" "@attendi 1"
-    "${dressed[@]}" "$(lacks minecraft:iron_helmet)" "$(lacks minecraft:iron_chestplate)"
+    "${dressed[@]}" "${pieces[@]}" "$(lacks minecraft:iron_helmet)" "$(lacks minecraft:iron_chestplate)"
     "execute unless entity $frame" "execute unless entity @e[type=item]"
     "@tieni v 2" "@attendi 1"
     "$(frame_at 3.5 2.5)" "${one_frame[@]}" "${undressed[@]}" "$(player_at 3.5 1.5)"
