@@ -100,6 +100,9 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
@@ -242,6 +245,13 @@ public final class ExoframeGameTests {
         add(tests, "exitStepsOutOfTheFrame", ExoframeGameTests::exitStepsOutOfTheFrame);
         add(tests, "exitInAShaftStaysInPlace", ExoframeGameTests::exitInAShaftStaysInPlace);
         add(tests, "exitStepsAroundFireAndDrops", ExoframeGameTests::exitStepsAroundFireAndDrops);
+        add(tests, "exitDoesNotStepThroughADoorLeafOnItsSide",
+                ExoframeGameTests::exitDoesNotStepThroughADoorLeafOnItsSide);
+        add(tests, "exitStepsBackFromADoorwayWithTheLeafAhead",
+                ExoframeGameTests::exitStepsBackFromADoorwayWithTheLeafAhead);
+        add(tests, "exitDoesNotStepThroughIronBars", ExoframeGameTests::exitDoesNotStepThroughIronBars);
+        add(tests, "exitDoesNotStepThroughAFenceOrAGate", ExoframeGameTests::exitDoesNotStepThroughAFenceOrAGate);
+        add(tests, "exitDoesNotStepIntoAnotherFrame", ExoframeGameTests::exitDoesNotStepIntoAnotherFrame);
         add(tests, "worldBorderKeepsFramesInside", ExoframeGameTests::worldBorderKeepsFramesInside);
         add(tests, "exoframeItemRefusesADeepDrop", ExoframeGameTests::exoframeItemRefusesADeepDrop);
         add(tests, "deadPlayerCannotMountOrUnmount", ExoframeGameTests::deadPlayerCannotMountOrUnmount);
@@ -3074,9 +3084,174 @@ public final class ExoframeGameTests {
     }
 
     /**
+     * Il passo fuori non attraversa una porta chiusa con l'anta dalla parte del giocatore (design, par. 5.5): in un
+     * corridoio largo un blocco che finisce contro una porta di ferro chiusa, con l'anta sul lato del blocco verso il
+     * giocatore e oltre l'anta un posto libero con il pavimento, il giocatore esce e resta dov'e'.
+     */
+    private static void exitDoesNotStepThroughADoorLeafOnItsSide(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        // giocatore in (3.5, 2, 3.5) rivolto a sud (+Z); la porta in (3, 2, 4) con l'anta da z = 4 a 4 + 3/16
+        helper.setBlock(new BlockPos(3, 1, 4), Blocks.STONE);
+        for (int y = 2; y <= 3; y++) {
+            for (BlockPos wall : List.of(new BlockPos(2, y, 3), new BlockPos(4, y, 3), new BlockPos(3, y, 2),
+                    new BlockPos(2, y, 4), new BlockPos(4, y, 4))) {
+                helper.setBlock(wall, Blocks.STONE);
+            }
+        }
+        placeClosedIronDoor(helper, new BlockPos(3, 2, 4), Direction.SOUTH);
+        assertThinAlongZ(helper, new BlockPos(3, 2, 4), 0.0, 3.0 / 16.0);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+        assertRoomToStand(helper, spot.add(0.0, 0.0, 1.0));
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        helper.assertTrue(player.position().equals(spot), "player stepped through the closed door to "
+                + player.position());
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il giocatore esce stando nel vano di una porta di ferro chiusa, con l'anta sul lato lontano del blocco e oltre
+     * l'anta un posto libero con il pavimento; ai lati c'e' il muro: il passo non va oltre l'anta ma dietro, dove c'e'
+     * posto.
+     */
+    private static void exitStepsBackFromADoorwayWithTheLeafAhead(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        // la porta in (3, 2, 4) con l'anta da z = 4 + 13/16 a 5; il giocatore nel vano, rivolto a sud (+Z)
+        for (int x = 2; x <= 4; x++) {
+            for (int z = 3; z <= 5; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        for (int y = 2; y <= 3; y++) {
+            helper.setBlock(new BlockPos(2, y, 4), Blocks.STONE);
+            helper.setBlock(new BlockPos(4, y, 4), Blocks.STONE);
+        }
+        placeClosedIronDoor(helper, new BlockPos(3, 2, 4), Direction.NORTH);
+        assertThinAlongZ(helper, new BlockPos(3, 2, 4), 13.0 / 16.0, 1.0);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 4.4));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+        assertRoomToStand(helper, spot.add(0.0, 0.0, 1.0));
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        Vec3 behind = spot.add(0.0, 0.0, -1.0);
+        helper.assertTrue(player.position().distanceTo(behind) < 1e-6, "player did not step back out of the doorway: "
+                + player.position() + ", expected " + behind);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Premuto contro una fila di sbarre di ferro, con oltre le sbarre un posto libero con il pavimento: guardando le
+     * sbarre di fronte e poi di sbieco (30 gradi), il passo non le attraversa e va a sinistra, dalla sua parte.
+     */
+    private static void exitDoesNotStepThroughIronBars(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (int x = 1; x <= 5; x++) {
+            for (int z = 2; z <= 5; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+            for (int y = 2; y <= 3; y++) {
+                helper.setBlock(new BlockPos(x, y, 4), Blocks.IRON_BARS);
+            }
+        }
+        assertThinAlongZ(helper, new BlockPos(3, 2, 4), 7.0 / 16.0, 9.0 / 16.0);
+        // il centro del telaio a 0,41 dalla faccia delle sbarre: il riquadro della tuta (largo 0,8) le sfiora
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 4.03));
+        double near = helper.absoluteVec(new Vec3(0.0, 0.0, 4.0 + 7.0 / 16.0)).z;
+
+        assertStepAvoids(helper, player, frameId, 0f, near);
+        assertStepAvoids(helper, player, frameId, -30f, near);
+
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Premuto contro una staccionata, con oltre un posto libero con il pavimento, il passo non la attraversa e va a
+     * sinistra; lo stesso con un cancello chiuso al posto della staccionata davanti a lui.
+     */
+    private static void exitDoesNotStepThroughAFenceOrAGate(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (int x = 1; x <= 5; x++) {
+            for (int z = 2; z <= 5; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+            helper.setBlock(new BlockPos(x, 2, 4), Blocks.OAK_FENCE);
+        }
+        assertThinAlongZ(helper, new BlockPos(3, 2, 4), 6.0 / 16.0, 10.0 / 16.0);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.97));
+        double near = helper.absoluteVec(new Vec3(0.0, 0.0, 4.0 + 6.0 / 16.0)).z;
+
+        assertStepAvoids(helper, player, frameId, 0f, near);
+        helper.setBlock(new BlockPos(3, 2, 4), Blocks.OAK_FENCE_GATE);
+        assertThinAlongZ(helper, new BlockPos(3, 2, 4), 6.0 / 16.0, 10.0 / 16.0);
+        assertStepAvoids(helper, player, frameId, 0f, near);
+
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Telai parcheggiati in fila a un blocco l'uno dall'altro contro un muro: chi esce da quello in mezzo guardando il
+     * muro non finisce nel riquadro di un vicino (a sinistra e a destra) ma dietro, e i suoi occhi non stanno in
+     * nessuno dei tre telai.
+     */
+    private static void exitDoesNotStepIntoAnotherFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (int x = 1; x <= 5; x++) {
+            for (int z = 2; z <= 3; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+            for (int y = 2; y <= 4; y++) {
+                helper.setBlock(new BlockPos(x, y, 4), Blocks.STONE);
+            }
+        }
+        ExoframeEntity east = placeFrame(helper, new FrameState(RedstoneExoframes.config()), new Vec3(4.5, 2.0, 3.5),
+                0f);
+        ExoframeEntity west = placeFrame(helper, new FrameState(RedstoneExoframes.config()), new Vec3(2.5, 2.0, 3.5),
+                0f);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+        assertRoomToStand(helper, spot.add(1.0, 0.0, 0.0));
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        Vec3 behind = spot.add(0.0, 0.0, -1.0);
+        ExoframeEntity own = (ExoframeEntity) level.getEntity(frameId);
+        Vec3 eyes = player.getEyePosition();
+        helper.assertTrue(player.position().distanceTo(behind) < 1e-6, "player did not step behind: "
+                + player.position() + ", expected " + behind);
+        for (ExoframeEntity frame : List.of(east, west, own)) {
+            helper.assertTrue(!frame.getBoundingBox().contains(eyes), "eyes inside frame " + frame.frameId());
+        }
+        removeFrame(server, east);
+        removeFrame(server, west);
+        removeFrame(server, own);
+        helper.succeed();
+    }
+
+    /**
      * Il bordo del mondo (stretto qui intorno alla struttura del test e poi rimesso com'era): l'oggetto telaio non
      * piazza fuori dal bordo e resta in mano, intero, e {@code FramePlacement.place} rifiuta; chi esce dal telaio fuori
-     * dal bordo non lo lascia li' ma all'ultima posizione sicura, dentro, e un messaggio gli dice dove.
+     * dal bordo non lo lascia li' ma all'ultima posizione sicura, dentro, e un messaggio gli dice dove e perche': il
+     * suolo era fuori dal bordo ({@code ELSEWHERE_BORDER}), non mancava.
      */
     private static void worldBorderKeepsFramesInside(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -3113,7 +3288,10 @@ public final class ExoframeGameTests {
             PlacedFrame record = Compat.frameState().placed(server, frameId).orElse(null);
             helper.assertTrue(record != null && record.position().equals(inside),
                     "frame not left at the last safe spot inside the border: " + record + ", expected " + inside);
-            helper.assertTrue(elsewhereMessages(player) == 1, "player not told where the frame went");
+            helper.assertTrue(messages(player, FrameEntry.ELSEWHERE_BORDER) == 1 && elsewhereMessages(player) == 0,
+                    "player not told once that the ground was outside the border: border messages "
+                    + messages(player, FrameEntry.ELSEWHERE_BORDER) + ", no-ground messages "
+                    + elsewhereMessages(player));
         } finally {
             border.setCenter(centerX, centerZ);
             border.setSize(size);
@@ -3279,10 +3457,14 @@ public final class ExoframeGameTests {
 
     /** Quante volte il giocatore finto ha avuto il messaggio del telaio lasciato altrove ({@code ELSEWHERE}). */
     private static int elsewhereMessages(ServerPlayer player) {
+        return messages(player, FrameEntry.ELSEWHERE);
+    }
+
+    /** Quante volte il giocatore finto ha avuto il messaggio con la chiave di traduzione data. */
+    private static int messages(ServerPlayer player, String key) {
         int count = 0;
         for (Component message : Compat.gameTests().messagesTo(player)) {
-            if (message.getContents() instanceof TranslatableContents contents
-                    && contents.getKey().equals(FrameEntry.ELSEWHERE)) {
+            if (message.getContents() instanceof TranslatableContents contents && contents.getKey().equals(key)) {
                 count++;
             }
         }
@@ -3367,6 +3549,64 @@ public final class ExoframeGameTests {
         helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(helper.getLevel().dimension(),
                 spot))), "safe spot not remembered: " + SafeSpots.last(player) + ", expected " + spot);
         return spot;
+    }
+
+    /** Una porta di ferro chiusa, le due meta', con la meta' inferiore nel punto relativo e l'orientamento dato. */
+    private static void placeClosedIronDoor(GameTestHelper helper, BlockPos lower, Direction facing) {
+        BlockState door = Blocks.IRON_DOOR.defaultBlockState().setValue(DoorBlock.FACING, facing)
+                .setValue(DoorBlock.OPEN, false);
+        helper.setBlock(lower, door.setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
+        helper.setBlock(lower.above(), door.setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+    }
+
+    /**
+     * Premessa dei test del passo fuori: la forma di collisione del blocco nel punto relativo sta tutta fra
+     * {@code minZ} e {@code maxZ} del blocco (lungo z), cioe' e' l'ostacolo sottile che il test vuole.
+     */
+    private static void assertThinAlongZ(GameTestHelper helper, BlockPos relative, double minZ, double maxZ) {
+        BlockPos pos = helper.absolutePos(relative);
+        AABB bounds = helper.getLevel().getBlockState(pos).getCollisionShape(helper.getLevel(), pos).bounds();
+        helper.assertTrue(Math.abs(bounds.minZ - minZ) < 1e-6 && Math.abs(bounds.maxZ - maxZ) < 1e-6,
+                "obstacle at " + relative + " is not the thin shape the test expects: " + bounds);
+    }
+
+    /**
+     * Premessa dei test del passo fuori: un giocatore vanilla in piedi con i piedi nel punto assoluto {@code feet} ha
+     * spazio e un pavimento sotto i piedi: il passo non ci va per cio' che sta in mezzo, non perche' manchi il posto.
+     */
+    private static void assertRoomToStand(GameTestHelper helper, Vec3 feet) {
+        AABB box = new AABB(feet.x - 0.3, feet.y, feet.z - 0.3, feet.x + 0.3, feet.y + 1.8, feet.z + 0.3);
+        helper.assertTrue(helper.getLevel().noCollision(box) && !helper.getLevel().noCollision(box.move(0, -0.01, 0)),
+                "premise: no room to stand at " + feet);
+    }
+
+    /**
+     * Il giocatore, nel telaio piazzato {@code frameId} (fermo nel punto in cui era stato indossato), ci rientra
+     * rivolto a {@code yaw}, controlla che il posto davanti a un blocco oltre l'ostacolo abbia spazio e pavimento, ed
+     * esce: il passo va a sinistra, dalla sua parte dell'ostacolo, il cui lato vicino e' al {@code near} assoluto (z).
+     * Alla fine il giocatore e' fuori, il telaio piazzato.
+     */
+    private static void assertStepAvoids(GameTestHelper helper, ServerPlayer player, UUID frameId, float yaw,
+            double near) {
+        ServerLevel level = helper.getLevel();
+        if (Compat.frameState().wornFrameId(player).isEmpty()) {
+            PlacedFrame record = Compat.frameState().placed(level.getServer(), frameId).orElseThrow();
+            Vec3 at = record.position();
+            player.moveTo(at.x, at.y, at.z, yaw, 0f);
+            helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) level.getEntity(frameId)), "enter refused");
+        }
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, yaw, 0f);
+        double radians = Math.toRadians(yaw);
+        assertRoomToStand(helper, spot.add(-Math.sin(radians), 0.0, Math.cos(radians)));
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        Vec3 left = spot.add(Math.cos(radians), 0.0, Math.sin(radians));
+        helper.assertTrue(player.getBoundingBox().maxZ <= near + 1e-9, "player stepped through the obstacle to "
+                + player.position() + " facing " + yaw);
+        helper.assertTrue(player.position().distanceTo(left) < 1e-6, "player facing " + yaw + " did not step left: "
+                + player.position() + ", expected " + left);
     }
 
     /** Gli oggetti a terra entro 2,5 blocchi da {@code center}, come li lascia nel suo tick una morte in quel punto. */

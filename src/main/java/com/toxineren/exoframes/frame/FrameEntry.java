@@ -49,10 +49,15 @@ public final class FrameEntry {
     /** Messaggio sulla barra delle azioni a chi non e' il proprietario di un telaio che contiene ancora armatura. */
     public static final String HOLDS_ARMOR = "message." + RedstoneExoframes.MOD_ID + ".holds_armor";
     /**
-     * Messaggio in chat a chi lascia il telaio (uscendo o morendo) quando il telaio non resta sotto di lui ma va
+     * Messaggio in chat a chi lascia il telaio (uscendo o morendo) quando sotto di lui non c'e' suolo e il telaio va
      * all'ultima posizione sicura o al punto di rinascita del mondo: coordinate x, y, z e dimensione.
      */
     public static final String ELSEWHERE = "message." + RedstoneExoframes.MOD_ID + ".frame_elsewhere";
+    /**
+     * Come {@link #ELSEWHERE}, quando sotto il giocatore il suolo c'era ma stava fuori dal bordo del mondo, dove il
+     * telaio non si potrebbe toccare.
+     */
+    public static final String ELSEWHERE_BORDER = "message." + RedstoneExoframes.MOD_ID + ".frame_elsewhere_border";
 
     /** Distanza in blocchi dal centro del telaio del posto in cui il giocatore fa il passo fuori. */
     private static final double STEP = 1.0;
@@ -270,7 +275,8 @@ public final class FrameEntry {
      * La parte comune dell'uscita e della morte: il record indossato diventa piazzato nel punto di riposo, con il yaw
      * del giocatore; l'entita' nasce se il chunk del punto ha le entita' caricate; le dimensioni si ricalcolano. Una
      * riga nel log dice dove e' andato il telaio ({@code event}: lasciato, lasciato alla morte), e se non e' rimasto
-     * sotto il giocatore un messaggio glielo dice ({@link #ELSEWHERE}).
+     * sotto il giocatore un messaggio glielo dice: {@link #ELSEWHERE} se sotto non c'era suolo,
+     * {@link #ELSEWHERE_BORDER} se il suolo c'era ma fuori dal bordo del mondo; la riga del log dice lo stesso.
      *
      * @return il punto di riposo, o vuoto se il registro ha rifiutato l'uscita
      */
@@ -290,10 +296,10 @@ public final class FrameEntry {
             FramePlacement.spawnView(level, record);
         }
         player.refreshDimensions();
-        FrameLog.event(frameId.get(), event + spot.where().note, player, level, spot.position());
+        FrameLog.event(frameId.get(), event + spot.logNote(), player, level, spot.position());
         if (spot.where() != Where.BELOW) {
             Vec3 at = spot.position();
-            player.sendSystemMessage(Component.translatable(ELSEWHERE, Mth.floor(at.x), Mth.floor(at.y),
+            player.sendSystemMessage(Component.translatable(spot.why().message, Mth.floor(at.x), Mth.floor(at.y),
                     Mth.floor(at.z), level.dimension().location().toString()));
         }
         return Optional.of(spot);
@@ -304,8 +310,10 @@ public final class FrameEntry {
      * telaio (il clic successivo lo prenderebbe al posto di qualunque blocco), il giocatore va in un posto libero a un
      * blocco dal centro del telaio, nell'ordine davanti (dove guarda), a sinistra, a destra, dietro. Un posto va bene
      * se c'e' spazio per un giocatore vanilla in piedi, il pavimento e' al massimo un blocco sotto (il giocatore ci
-     * si appoggia), sta dentro il bordo del mondo e non c'e' lava ne' fuoco. Senza un posto cosi', o su un veicolo, il
-     * giocatore resta dov'e'. Yaw e pitch restano i suoi.
+     * si appoggia), sta dentro il bordo del mondo, non c'e' lava ne' fuoco, non sta nel riquadro di un altro telaio
+     * ({@link #standingSpot}) e la strada fino a li' e' libera ({@link #wayIsFree}): il passo non porta mai il
+     * giocatore dove non potrebbe camminare. Senza un posto cosi', o su un veicolo, il giocatore resta dov'e'. Yaw e
+     * pitch restano i suoi.
      */
     private static void stepOut(ServerPlayer player, RestingSpot spot) {
         Vec3 frame = spot.position();
@@ -322,7 +330,7 @@ public final class FrameEntry {
         for (double[] direction : directions) {
             Vec3 candidate = new Vec3(frame.x + direction[0] * STEP, frame.y, frame.z + direction[1] * STEP);
             Optional<Vec3> target = standingSpot(player, level, candidate);
-            if (target.isPresent()) {
+            if (target.isPresent() && wayIsFree(player, level, candidate)) {
                 Vec3 to = target.get();
                 player.teleportTo(level, to.x, to.y, to.z, player.getYRot(), player.getXRot());
                 return;
@@ -331,9 +339,31 @@ public final class FrameEntry {
     }
 
     /**
+     * Vero se fra il giocatore e {@code candidate} (un posto all'altezza del telaio, prima di scendere al pavimento)
+     * non c'e' nulla in cui un giocatore non puo' passare. Il riquadro guardato contiene quello di un giocatore vanilla
+     * in piedi (0,6 x 1,8) dove sta il giocatore, lo stesso abbassato all'altezza del telaio e quello in
+     * {@code candidate}: quindi ogni strada fra i due posti, dritta o di sbieco, e anche quella lungo gli assi con cui
+     * il gioco muove un'entita' ({@code Entity.collideBoundingBox}, prima y e poi x e z). Non deve urtare nulla per
+     * {@code noCollision}: forme di collisione dei blocchi, entita' che fanno da ostacolo, il bordo del mondo. Cosi'
+     * una porta chiusa (con l'anta su qualunque lato del suo blocco), sbarre, vetri, staccionate, cancelli chiusi,
+     * muretti o una botola aperta fra il giocatore e il posto lo scartano, anche di sbieco; un ostacolo accanto alla
+     * strada ma dentro il riquadro lo scarta lo stesso (nel dubbio niente passo). La discesa dal posto al pavimento e'
+     * gia' libera: {@link #standingSpot} la misura con lo stesso riquadro. I telai non contano: non sono ostacoli per
+     * {@code noCollision}, e il giocatore sta lasciando il suo.
+     */
+    private static boolean wayIsFree(ServerPlayer player, ServerLevel level, Vec3 candidate) {
+        Vec3 from = player.position();
+        AABB way = new AABB(Math.min(from.x, candidate.x) - PLAYER_HALF_WIDTH, Math.min(from.y, candidate.y),
+                Math.min(from.z, candidate.z) - PLAYER_HALF_WIDTH, Math.max(from.x, candidate.x) + PLAYER_HALF_WIDTH,
+                Math.max(from.y, candidate.y) + PLAYER_HEIGHT, Math.max(from.z, candidate.z) + PLAYER_HALF_WIDTH);
+        return level.noCollision(player, way);
+    }
+
+    /**
      * I piedi di un giocatore vanilla in piedi in {@code candidate}, appoggiato al pavimento che sta al massimo un
-     * blocco sotto; vuoto se li' non c'e' spazio, se il pavimento manca o e' piu' in basso, fuori dal bordo del mondo, o
-     * con lava o fuoco nel riquadro o nel blocco sotto i piedi.
+     * blocco sotto; vuoto se li' non c'e' spazio, se il pavimento manca o e' piu' in basso, fuori dal bordo del mondo,
+     * con lava o fuoco nel riquadro o nel blocco sotto i piedi, o se il riquadro tocca quello di un telaio (il clic
+     * successivo prenderebbe quel telaio, come {@link FramePlacement#place} rifiuta un telaio dentro un altro).
      */
     private static Optional<Vec3> standingSpot(ServerPlayer player, ServerLevel level, Vec3 candidate) {
         AABB box = new AABB(candidate.x - PLAYER_HALF_WIDTH, candidate.y, candidate.z - PLAYER_HALF_WIDTH,
@@ -356,7 +386,10 @@ public final class FrameEntry {
             BlockState state = level.getBlockState(pos);
             return state.getFluidState().is(FluidTags.LAVA) || state.is(BlockTags.FIRE);
         });
-        return hot ? Optional.empty() : Optional.of(feet);
+        if (hot || !level.getEntitiesOfClass(ExoframeEntity.class, standing).isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(feet);
     }
 
     /**
@@ -367,16 +400,17 @@ public final class FrameEntry {
      * essa se il suo chunk e' caricato (il pavimento puo' essere stato tolto dopo), cosi' com'e' stata ricordata se il
      * chunk non e' caricato, e scartata se il chunk e' caricato e sotto non c'e' piu' suolo o se sta fuori dal bordo;
      * in mancanza anche di quella, il punto di rinascita del mondo (quello condiviso dell'overworld), appoggiato al
-     * suolo sotto se c'e'. Non carica chunk ne' dimensioni: {@code getLevel} da' solo livelli gia' caricati e
-     * {@code groundBelow} non carica chunk.
+     * suolo sotto se c'e'. Fuori dal suolo sotto il giocatore il punto porta il perche': sotto non c'era suolo, o il
+     * suolo c'era ma fuori dal bordo. Non carica chunk ne' dimensioni: {@code getLevel} da' solo livelli gia' caricati
+     * e {@code groundBelow} non carica chunk.
      */
     private static RestingSpot restingSpot(ServerPlayer player) {
         ServerLevel here = player.serverLevel();
-        Optional<Vec3> ground = FramePlacement.groundBelow(here, player.position())
-                .filter(feet -> FramePlacement.insideBorder(here, feet));
-        if (ground.isPresent()) {
-            return new RestingSpot(here, ground.get(), Where.BELOW);
+        Optional<Vec3> ground = FramePlacement.groundBelow(here, player.position());
+        if (ground.isPresent() && FramePlacement.insideBorder(here, ground.get())) {
+            return new RestingSpot(here, ground.get(), Where.BELOW, Why.NONE);
         }
+        Why why = ground.isPresent() ? Why.BORDER : Why.NO_GROUND;
         MinecraftServer server = here.getServer();
         Optional<SafeSpots.Spot> safe = SafeSpots.last(player);
         if (safe.isPresent()) {
@@ -387,20 +421,21 @@ public final class FrameEntry {
                 Optional<Vec3> floor = level.getChunkSource().hasChunk(chunk.x, chunk.z)
                         ? FramePlacement.groundBelow(level, position) : Optional.of(position);
                 if (floor.isPresent() && FramePlacement.insideBorder(level, floor.get())) {
-                    return new RestingSpot(level, floor.get(), Where.SAFE_SPOT);
+                    return new RestingSpot(level, floor.get(), Where.SAFE_SPOT, why);
                 }
             }
         }
         ServerLevel overworld = server.overworld();
         Vec3 spawn = Vec3.atBottomCenterOf(overworld.getSharedSpawnPos());
-        return new RestingSpot(overworld, FramePlacement.groundBelow(overworld, spawn).orElse(spawn), Where.SPAWN);
+        return new RestingSpot(overworld, FramePlacement.groundBelow(overworld, spawn).orElse(spawn), Where.SPAWN,
+                why);
     }
 
     /** Dove e' finito il telaio lasciato, rispetto al giocatore; {@code note} completa la riga del log. */
     private enum Where {
         BELOW(""),
-        SAFE_SPOT(" (no ground below the player: at the last safe spot)"),
-        SPAWN(" (no ground below the player and no usable safe spot: at the world spawn)");
+        SAFE_SPOT(": at the last safe spot"),
+        SPAWN(" and no usable safe spot: at the world spawn");
 
         private final String note;
 
@@ -409,7 +444,32 @@ public final class FrameEntry {
         }
     }
 
-    /** Il livello e il punto dei piedi in cui il telaio lasciato si piazza, e perche' li'. */
-    private record RestingSpot(ServerLevel level, Vec3 position, Where where) {
+    /**
+     * Perche' il telaio non e' rimasto sotto il giocatore: {@code note} apre la nota della riga del log,
+     * {@code message} e' la chiave del messaggio al giocatore.
+     */
+    private enum Why {
+        NONE("", ""),
+        NO_GROUND("no ground below the player", ELSEWHERE),
+        BORDER("the ground below the player is outside the world border", ELSEWHERE_BORDER);
+
+        private final String note;
+        private final String message;
+
+        Why(String note, String message) {
+            this.note = note;
+            this.message = message;
+        }
+    }
+
+    /**
+     * Il livello e il punto dei piedi in cui il telaio lasciato si piazza, dove sta rispetto al giocatore e perche'
+     * ({@link Why#NONE} se e' rimasto sotto di lui).
+     */
+    private record RestingSpot(ServerLevel level, Vec3 position, Where where, Why why) {
+        /** Il seguito della riga del log: vuoto se il telaio e' sotto il giocatore, altrimenti dove e perche'. */
+        String logNote() {
+            return where == Where.BELOW ? "" : " (" + why.note + where.note + ")";
+        }
     }
 }

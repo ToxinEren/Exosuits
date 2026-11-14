@@ -32,6 +32,7 @@
   "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell",
   "message.redstone_exoframes.already_inside": "You are already inside an exoframe",
   "message.redstone_exoframes.frame_elsewhere": "There was no ground below you: your exoframe was left at %s %s %s (%s)",
+  "message.redstone_exoframes.frame_elsewhere_border": "The ground below you was outside the world border: your exoframe was left at %s %s %s (%s)",
   "message.redstone_exoframes.holds_armor": "This exoframe still holds armor: take it out first (sneak and right-click)",
   "key.redstone_exoframes.exit": "Leave the exoframe",
   "key.categories.redstone_exoframes": "Redstone Exoframes",

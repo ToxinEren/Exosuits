@@ -32,6 +32,7 @@
   "message.redstone_exoframes.no_cell": "Al telaio serve una cella carica",
   "message.redstone_exoframes.already_inside": "Sei già dentro un telaio",
   "message.redstone_exoframes.frame_elsewhere": "Sotto di te non c'era suolo: il telaio è stato lasciato in %s %s %s (%s)",
+  "message.redstone_exoframes.frame_elsewhere_border": "Il suolo sotto di te era fuori dal bordo del mondo: il telaio è stato lasciato in %s %s %s (%s)",
   "message.redstone_exoframes.holds_armor": "Questo telaio contiene ancora un'armatura: prima tirala fuori (accovacciato e clic destro)",
   "key.redstone_exoframes.exit": "Esci dal telaio",
   "key.categories.redstone_exoframes": "Redstone Exoframes",
