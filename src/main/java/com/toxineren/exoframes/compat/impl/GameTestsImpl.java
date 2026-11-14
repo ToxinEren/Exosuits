@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat.impl;
 
+import com.mojang.authlib.GameProfile;
 import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
 import java.nio.file.Path;
@@ -7,12 +8,16 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.Connection;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.PacketFlow;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,13 +32,11 @@ import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.phys.Vec3;
 //? if >=1.21 {
 import net.minecraft.core.Holder;
+import net.minecraft.server.level.ClientInformation;
+import net.minecraft.server.network.CommonListenerCookie;
 //?}
 //? if <1.21 {
-/*import com.mojang.authlib.GameProfile;
-import io.netty.channel.embedded.EmbeddedChannel;
-import net.minecraft.network.Connection;
-import net.minecraft.network.protocol.PacketFlow;
-import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
+/*import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 *///?}
 //? if fabric {
 /*import net.minecraft.gametest.framework.GameTestRegistry;
@@ -57,8 +60,11 @@ import net.neoforged.neoforge.gametest.GameTestHooks;
  * fabric-api.gametest), al posto dell'entrypoint {@code fabric-gametest}, che il modulo di Fabric registra a ogni
  * avvio e che renderebbe i test eseguibili con {@code /test} su un client normale. Il modulo di Fabric usa la mod
  * dell'entrypoint solo per i metodi {@code @GameTest}; i nostri test nascono da un {@code @GameTestGenerator}.
- * Giocatore finto: su 1.20.1 la connessione e' agganciata a un {@code EmbeddedChannel} come fa gia' 1.21.1 (senza canale Forge lancia un NPE in
- * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli).
+ * Giocatore finto: costruito qui su entrambe le versioni, come lo costruisce {@code makeMockServerPlayerInLevel} di
+ * 1.21.1 (connessione agganciata a un {@code EmbeddedChannel}: senza canale Forge 1.20.1 lancia un NPE in
+ * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli), sempre in creativa
+ * come quello vanilla ma con {@code isSpectator()} vero, quello della modalita' di gioco: quello vanilla dice sempre
+ * falso, e i test dello spettatore non si potrebbero fare.
  */
 public final class GameTestsImpl implements GameTests {
     @Override
@@ -84,28 +90,57 @@ public final class GameTestsImpl implements GameTests {
     }
 
     @Override
-    @SuppressWarnings("removal") // su 1.21.1 makeMockServerPlayerInLevel e' deprecato per la rimozione, ma c'e' ancora
     public ServerPlayer mockServerPlayer(GameTestHelper helper) {
-        //? if <1.21 {
-        /*ServerPlayer player = new ServerPlayer(helper.getLevel().getServer(), helper.getLevel(),
-                new GameProfile(UUID.randomUUID(), "test-mock-player")) {
-            @Override
-            public boolean isSpectator() {
-                return false;
-            }
-
-            @Override
-            public boolean isCreative() {
-                return true;
-            }
-        };
+        GameProfile profile = new GameProfile(UUID.randomUUID(), "test-mock-player");
+        //? if >=1.21 {
+        CommonListenerCookie cookie = CommonListenerCookie.createInitial(profile, false);
+        MockPlayer player = new MockPlayer(helper.getLevel().getServer(), helper.getLevel(), profile,
+                cookie.clientInformation());
+        //?} else {
+        /*MockPlayer player = new MockPlayer(helper.getLevel().getServer(), helper.getLevel(), profile);*/
+        //?}
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
         new EmbeddedChannel(connection); // channelActive imposta il canale della connessione
-        helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player);
-        return player;
-        *///?} else {
-        return helper.makeMockServerPlayerInLevel();
+        //? if >=1.21 {
+        helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player, cookie);
+        //?} else {
+        /*helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player);*/
         //?}
+        return player;
+    }
+
+    @Override
+    public List<Component> messagesTo(ServerPlayer player) {
+        return player instanceof MockPlayer mock ? List.copyOf(mock.messages) : List.of();
+    }
+
+    /**
+     * Il giocatore finto di {@link #mockServerPlayer}: sempre in creativa come quello vanilla, spettatore secondo la sua
+     * modalita' di gioco, e ricorda i messaggi di sistema che riceve ({@link #messagesTo}).
+     */
+    private static final class MockPlayer extends ServerPlayer {
+        private final List<Component> messages = new ArrayList<>();
+
+        //? if >=1.21 {
+        MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, ClientInformation information) {
+            super(server, level, profile, information);
+        }
+        //?} else {
+        /*MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
+            super(server, level, profile);
+        }*/
+        //?}
+
+        @Override
+        public boolean isCreative() {
+            return true;
+        }
+
+        @Override
+        public void sendSystemMessage(Component message, boolean overlay) {
+            messages.add(message);
+            super.sendSystemMessage(message, overlay);
+        }
     }
 
     @Override

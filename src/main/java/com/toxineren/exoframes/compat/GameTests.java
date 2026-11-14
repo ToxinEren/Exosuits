@@ -7,6 +7,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -29,11 +30,19 @@ public interface GameTests {
 
     /**
      * Crea un giocatore finto connesso nel livello del test, con una connessione dotata di canale (su Forge 1.20.1
-     * il giocatore finto vanilla non ha canale e fa fallire l'ingresso nel mondo). Il giocatore resta nella lista
-     * dei giocatori del server per il resto dell'esecuzione: i test non devono contare i giocatori ne' scorrere la
-     * lista aspettandosi di trovarci solo i propri.
+     * il giocatore finto vanilla non ha canale e fa fallire l'ingresso nel mondo). Come quello vanilla dice sempre di
+     * essere in creativa ({@code isCreative()}); a differenza di quello vanilla {@code isSpectator()} segue la sua
+     * modalita' di gioco, cosi' {@code setGameMode(GameType.SPECTATOR)} ne fa uno spettatore. Il giocatore resta
+     * nella lista dei giocatori del server per il resto dell'esecuzione: i test non devono contare i giocatori ne'
+     * scorrere la lista aspettandosi di trovarci solo i propri.
      */
     ServerPlayer mockServerPlayer(GameTestHelper helper);
+
+    /**
+     * I messaggi di sistema (chat e barra delle azioni) arrivati al giocatore finto di {@link #mockServerPlayer}, in
+     * ordine, dalla sua creazione; vuota per un altro giocatore. Esiste solo per i test.
+     */
+    List<Component> messagesTo(ServerPlayer player);
 
     /**
      * Scrive {@code root} cosi' com'e', senza validarlo, come tag radice {@link NbtKeys#ROOT} dello stack, nello stesso

@@ -27,6 +27,7 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameInteractions;
+import com.toxineren.exoframes.frame.FrameLog;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.Handouts;
 import dev.architectury.event.events.common.CommandRegistrationEvent;
@@ -66,7 +67,8 @@ import net.minecraft.world.phys.Vec3;
  * Solo per gli operatori (livello 2; senza, i rami non esistono per quella sorgente):
  * <ul>
  * <li>{@code /exoframe remove}: elimina per sempre il telaio piazzato che guarda (mai uno indossato); quello che puo'
- * diventare oggetto resta a terra ai suoi piedi, vedi {@link #removeFrame}.</li>
+ * diventare oggetto resta a terra ai suoi piedi, vedi {@link #removeFrame}. La conferma va anche alla console e agli
+ * altri operatori, come per i comandi di amministrazione del gioco.</li>
  * </ul>
  * e i rami di debug: quello che mette addosso a chi lo esegue un telaio vero, con il suo record indossato nel
  * registro ({@link DebugWear}), e lo veste con i segnaposto:
@@ -80,9 +82,10 @@ import net.minecraft.world.phys.Vec3;
  * dal registro e i segnaposto se ne vanno.</li>
  * </ul>
  * {@code nudo} e {@code rottame} creano il record indossato se il giocatore non ne ha uno, altrimenti ne sostituiscono
- * pezzi e cella (quelli che c'erano si eliminano), sempre con una cella carica; l'armatura stivata non si tocca.
- * e il ramo che piazza un telaio nel mondo ({@link FramePlacement}) al suolo sotto i piedi di chi lo esegue, con il suo
- * orientamento e lui come proprietario (rifiutato, come l'oggetto telaio, se li' il telaio non ci sta):
+ * pezzi e cella (quelli che c'erano si eliminano), sempre con una cella carica; l'armatura stivata non si tocca. Il
+ * ramo {@code place} piazza un telaio nel mondo ({@link FramePlacement}) al suolo sotto i piedi di chi lo esegue, con il
+ * suo orientamento e lui come proprietario (rifiutato, come l'oggetto telaio, se li' il telaio non ci sta o se il punto
+ * e' fuori dal bordo del mondo):
  * <ul>
  * <li>{@code /exoframe debug place nudo}: telaio vuoto;</li>
  * <li>{@code /exoframe debug place rottame}: i sei pezzi Rottame e una cella carica, fatti con gli oggetti come se li
@@ -180,10 +183,20 @@ public final class ExoframeCommand {
         return 1;
     }
 
+    /**
+     * {@code via}: con un telaio indossato lo elimina ({@link DebugWear#remove}) e lo dice; senza, toglie solo i
+     * segnaposto e dice quanti. Il risultato e' il numero di segnaposto tolti.
+     */
     private static int debugRemove(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         ServerPlayer player = context.getSource().getPlayerOrException();
+        boolean wearing = Compat.frameState().wornFrameId(player).isPresent();
         int removed = DebugWear.remove(player);
-        context.getSource().sendSuccess(() -> Component.translatable(LANG + "wear.removed", removed), false);
+        if (wearing) {
+            context.getSource().sendSuccess(() -> Component.translatable(LANG + "wear.removed"), false);
+        } else {
+            context.getSource().sendSuccess(() -> Component.translatable(LANG + "wear.placeholders_removed",
+                    removed), false);
+        }
         return removed;
     }
 
@@ -284,13 +297,15 @@ public final class ExoframeCommand {
             return 0;
         }
         frame.get().discard();
+        FrameLog.event(frameId, "removed", player, (ServerLevel) level, feet);
+        // come i comandi di amministrazione del gioco: la conferma va anche alla console e agli altri operatori
         if (deleted.isEmpty()) {
-            source.sendSuccess(() -> Component.translatable(COMMANDS + "remove.done"), false);
+            source.sendSuccess(() -> Component.translatable(COMMANDS + "remove.done"), true);
         } else {
             String names = String.join(", ", deleted);
             RedstoneExoframes.LOGGER.warn("Frame {} removed by {}; pieces without an item deleted with it: {}",
                     frameId, player.getScoreboardName(), names);
-            source.sendSuccess(() -> Component.translatable(COMMANDS + "remove.done_deleted", names), false);
+            source.sendSuccess(() -> Component.translatable(COMMANDS + "remove.done_deleted", names), true);
         }
         return 1;
     }
@@ -334,13 +349,13 @@ public final class ExoframeCommand {
             state.insertCell(ModItems.REDSTONE_CELL.get().toCell(CellItem.charged()));
         }
         float yaw = player.getYRot();
-        boolean placed = FramePlacement.groundBelow(level, player.position())
-                .flatMap(feet -> FramePlacement.place(level, state, feet, yaw))
-                .isPresent();
-        if (!placed) {
+        Optional<ExoframeEntity> placed = FramePlacement.groundBelow(level, player.position())
+                .flatMap(feet -> FramePlacement.place(level, state, feet, yaw));
+        if (placed.isEmpty()) {
             context.getSource().sendFailure(Component.translatable(ExoframeItem.NO_ROOM));
             return 0;
         }
+        FrameLog.event(placed.get().frameId(), "placed", player, level, placed.get().position());
         context.getSource().sendSuccess(() -> Component.translatable(LANG + feedback), false);
         return 1;
     }

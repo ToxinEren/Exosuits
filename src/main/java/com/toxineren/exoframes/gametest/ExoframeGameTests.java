@@ -66,6 +66,8 @@ import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -80,6 +82,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
@@ -87,13 +90,17 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoItem;
 
@@ -213,6 +220,13 @@ public final class ExoframeGameTests {
         add(tests, "debugNeedsOperator", ExoframeGameTests::debugNeedsOperator);
         add(tests, "registryFileIsReadBack", ExoframeGameTests::registryFileIsReadBack);
         add(tests, "quitSavesTheRegistryWithThePlayers", ExoframeGameTests::quitSavesTheRegistryWithThePlayers);
+        add(tests, "exitStepsOutOfTheFrame", ExoframeGameTests::exitStepsOutOfTheFrame);
+        add(tests, "exitInAShaftStaysInPlace", ExoframeGameTests::exitInAShaftStaysInPlace);
+        add(tests, "exitStepsAroundFireAndDrops", ExoframeGameTests::exitStepsAroundFireAndDrops);
+        add(tests, "worldBorderKeepsFramesInside", ExoframeGameTests::worldBorderKeepsFramesInside);
+        add(tests, "exoframeItemRefusesADeepDrop", ExoframeGameTests::exoframeItemRefusesADeepDrop);
+        add(tests, "deadPlayerCannotMountOrUnmount", ExoframeGameTests::deadPlayerCannotMountOrUnmount);
+        add(tests, "spectatorCannotLeaveWithTheKey", ExoframeGameTests::spectatorCannotLeaveWithTheKey);
         return tests;
     }
 
@@ -1795,25 +1809,57 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Il proprietario che entra nel telaio lasciato con la sua armatura dentro (dopo una morte) la riprende
-     * nell'inventario; nel record resta solo quella che indossava entrando.
+     * Il proprietario muore nel telaio con l'inventario pieno (con {@code keepInventory}, cosi' resta pieno: senza, e'
+     * pieno di nuovo quando ha raccolto le sue cose) e gli stivali di ferro stivati restano nel telaio; poi entra: gli
+     * stivali restano nel record (entrare non consegna nulla), e uscendo tornano nel loro slot, interi. In nessun
+     * momento c'e' qualcosa a terra, e l'inventario resta quello che era.
      */
     private static void ownerGetsBackArmorLeftInTheFrame(GameTestHelper helper) {
         ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
-        FrameStateAccess frames = Compat.frameState();
-        ExoframeEntity frame = frameWithStowedBoots(helper, owner, charged(ownedBy(owner)), new Vec3(4.5, 1.0, 4.5));
-        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
-        helmet.setDamageValue(5);
-        owner.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        GameRules.BooleanValue keepInventory = level.getGameRules().getRule(GameRules.RULE_KEEPINVENTORY);
+        boolean before = keepInventory.get();
+        keepInventory.set(true, server);
+        try {
+            ItemStack boots = new ItemStack(Items.IRON_BOOTS);
+            boots.setDamageValue(5);
+            owner.setItemSlot(EquipmentSlot.FEET, boots.copy());
+            UUID frameId = wearFrameAt(helper, owner, charged(ownedBy(owner)), new Vec3(4.5, 2.0, 4.5));
+            Vec3 feet = owner.position();
+            List<ItemStack> items = owner.getInventory().items;
+            for (int i = 0; i < items.size(); i++) {
+                items.set(i, new ItemStack(Items.DIRT, 64));
+            }
 
-        helper.assertTrue(FrameEntry.enter(owner, frame), "owner could not enter");
+            owner.kill();
+            helper.assertTrue(owner.isDeadOrDying(), "owner did not die");
+            helper.assertTrue(deathDrops(level, feet).isEmpty(), "something on the ground after the death: "
+                    + deathDrops(level, feet));
+            helper.assertTrue(owner.getItemBySlot(EquipmentSlot.FEET).isEmpty()
+                    && countInMainInventory(owner, Items.IRON_BOOTS) == 0, "a second copy of the boots on the owner");
+            owner.setHealth(owner.getMaxHealth()); // di nuovo vivo, come dopo la rinascita
 
-        helper.assertTrue(countInMainInventory(owner, Items.IRON_BOOTS) == 1, "boots left in the frame not given back");
-        helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                SuitSize.standingBox(frame.position()).inflate(2.0), e -> e.getItem().is(Items.IRON_BOOTS)).isEmpty(),
-                "boots dropped instead of given");
-        assertOneStowedHelmet(helper, frames.takeStowed(owner), helmet, "owner's frame");
-        leaveTestFrame(owner);
+            helper.assertTrue(level.getEntity(frameId) instanceof ExoframeEntity frame
+                    && FrameEntry.enter(owner, frame), "owner could not enter the frame left by the death");
+            helper.assertTrue(deathDrops(level, feet).isEmpty(), "entering put something on the ground: "
+                    + deathDrops(level, feet));
+            helper.assertTrue(countInMainInventory(owner, Items.IRON_BOOTS) == 0
+                    && countInMainInventory(owner, Items.DIRT) == items.size() * 64, "entering handed armor out");
+            assertPlaceholdersWorn(helper, owner);
+
+            helper.assertTrue(FrameEntry.exit(owner), "exit refused");
+            ItemStack worn = owner.getItemBySlot(EquipmentSlot.FEET);
+            helper.assertTrue(ItemStack.matches(boots, worn) && worn.getDamageValue() == 5,
+                    "boots not back in their slot: " + worn);
+            helper.assertTrue(countInMainInventory(owner, Items.DIRT) == items.size() * 64
+                    && countInMainInventory(owner, Items.IRON_BOOTS) == 0, "inventory changed on the way out");
+            helper.assertTrue(deathDrops(level, feet).isEmpty(), "leaving put something on the ground: "
+                    + deathDrops(level, feet));
+            removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        } finally {
+            keepInventory.set(before, server);
+        }
         helper.succeed();
     }
 
@@ -1863,7 +1909,9 @@ public final class ExoframeGameTests {
      * L'uscita (design, par. 5.5): l'elmo stivato torna in testa con la sua durabilita', in silenzio (nessun evento
      * EQUIP); i segnaposto spariscono dagli slot armatura, dall'inventario principale, dalla mano secondaria e dal
      * cursore; il record e' piazzato ai piedi del giocatore con il suo yaw riportato a [-180, 180), l'entita' c'e', nel
-     * punto e con il riassunto dello stato; il giocatore resta dov'e' e ha subito la grandezza vanilla.
+     * punto e con il riassunto dello stato; il giocatore ha subito la grandezza vanilla e fa un passo fuori dal
+     * telaio, a un blocco dal suo centro (qui non c'e' pavimento davanti ne' ai lati, e il passo va dietro); nessun
+     * messaggio sul telaio altrove.
      */
     private static void exitReturnsArmorAndLeavesTheFrame(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -1871,6 +1919,7 @@ public final class ExoframeGameTests {
         MinecraftServer server = level.getServer();
         FrameStateAccess frames = Compat.frameState();
         helper.setBlock(new BlockPos(4, 1, 4), Blocks.STONE);
+        helper.setBlock(new BlockPos(4, 1, 5), Blocks.STONE);
         player.doTick(); // dopo il primo tick onEquipItem non tace piu' per firstTick
         ItemStack helmet = new ItemStack(Items.IRON_HELMET);
         helmet.setDamageValue(5);
@@ -1908,8 +1957,14 @@ public final class ExoframeGameTests {
                 && view.position().equals(feet) && view.getYRot() == -160f
                 && view.summary().equals(SuitSummary.of(state)), "frame entity missing or wrong: "
                 + level.getEntity(frameId));
-        helper.assertTrue(player.position().equals(feet), "player moved to " + player.position());
+        // yaw 200 guarda a nord-est: davanti, a sinistra e a destra non c'e' pavimento, dietro (verso sud) si'
+        double yaw = Math.toRadians(200.0);
+        Vec3 behind = feet.add(Math.sin(yaw), 0.0, -Math.cos(yaw));
+        helper.assertTrue(player.position().distanceTo(behind) < 1e-6 && player.getYRot() == 200f,
+                "player did not step out behind: " + player.position() + " yaw " + player.getYRot() + ", expected "
+                        + behind);
         assertSize(helper, player, "after exit", 0.6f, 1.8f, 1.62f, 1.27f);
+        helper.assertTrue(elsewhereMessages(player) == 0, "told that the frame went elsewhere");
         removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
         helper.succeed();
     }
@@ -1947,7 +2002,7 @@ public final class ExoframeGameTests {
                 "the player's own helmet left the head: " + player.getItemBySlot(EquipmentSlot.HEAD));
         helper.assertTrue(countPlaceholders(player) == 0, "placeholders left on the player");
         helper.assertTrue(countInMainInventory(player, Items.DIRT) == items.size() * 64, "inventory contents changed");
-        ItemEntity drop = assertDroppedAtFeet(helper, player, Items.IRON_HELMET);
+        ItemEntity drop = assertDroppedAt(helper, feet, Items.IRON_HELMET);
         assertStillOnTheGround(helper, drop, stowed, "stowed helmet given to a full inventory");
         helper.assertTrue(frames.placed(server, frameId).isPresent(), "frame not placed after exit");
         removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
@@ -2116,6 +2171,8 @@ public final class ExoframeGameTests {
                 "a placeholder was dropped: " + drops);
         helper.assertTrue(drops.stream().anyMatch(drop -> drop.getItem().is(Items.DIRT)),
                 "the inventory did not drop (dirt not on the ground): " + drops);
+        helper.assertTrue(drops.stream().noneMatch(drop -> drop.getItem().is(Items.IRON_HELMET)),
+                "a second copy of the stowed helmet was dropped: " + drops);
         assertOneStowedHelmet(helper, frames.takeStowedOfPlaced(server, frameId), helmet, "frame left by the death");
         drops.forEach(Entity::discard);
         removeFrame(server, (ExoframeEntity) view);
@@ -2182,6 +2239,9 @@ public final class ExoframeGameTests {
             helper.assertTrue(player.isDeadOrDying(), "player did not die");
             helper.assertTrue(countPlaceholders(player) == 0, "placeholders kept in the inventory");
             helper.assertTrue(countInMainInventory(player, Items.DIRT) == 3, "the kept inventory changed");
+            helper.assertTrue(player.getItemBySlot(EquipmentSlot.FEET).isEmpty()
+                    && countInMainInventory(player, Items.IRON_BOOTS) == 0,
+                    "a second copy of the stowed boots kept by the player");
             PlacedFrame record = frames.placed(server, frameId).orElse(null);
             helper.assertTrue(record != null && record.position().equals(feet) && record.hasStowed(),
                     "frame not left at the feet with the boots inside: " + record);
@@ -2227,6 +2287,8 @@ public final class ExoframeGameTests {
                 "frame entity not at the last safe spot: " + view);
         helper.assertTrue(player.position().equals(below) && countPlaceholders(player) == 0,
                 "player moved or kept placeholders: " + player.position());
+        helper.assertTrue(elsewhereMessages(player) == 1, "player not told once where the frame went: "
+                + Compat.gameTests().messagesTo(player));
         removeFrame(server, (ExoframeEntity) view);
         helper.succeed();
     }
@@ -2836,6 +2898,285 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
+    /**
+     * Il passo fuori (design, par. 5.5): uscito su un pavimento aperto, il giocatore e' a un blocco davanti al centro
+     * del telaio, nella direzione in cui guarda, con il suo yaw e il suo pitch; i suoi occhi non stanno nel riquadro
+     * del telaio, e guardando avanti la linea di vista non prende il telaio ma il blocco che ha davanti.
+     */
+    private static void exitStepsOutOfTheFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (int x = 2; x <= 4; x++) {
+            for (int z = 2; z <= 5; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        BlockPos target = new BlockPos(3, 3, 6);
+        helper.setBlock(target, Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 0f); // guarda a sud, +Z, verso il blocco
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        Vec3 front = spot.add(0.0, 0.0, 1.0);
+        helper.assertTrue(player.position().distanceTo(front) < 1e-6 && player.getYRot() == 0f
+                && player.getXRot() == 0f, "player not one step in front: " + player.position() + ", expected "
+                + front);
+        ExoframeEntity frame = (ExoframeEntity) level.getEntity(frameId);
+        helper.assertTrue(frame != null && frame.position().equals(spot), "frame not left where the player stood");
+        Vec3 eyes = player.getEyePosition();
+        helper.assertTrue(!frame.getBoundingBox().contains(eyes), "eyes still inside the frame's box: " + eyes);
+        Vec3 end = eyes.add(player.getLookAngle().scale(4.5));
+        HitResult block = level.clip(new ClipContext(eyes, end, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE,
+                player));
+        EntityHitResult entity = ProjectileUtil.getEntityHitResult(player, eyes, end,
+                player.getBoundingBox().expandTowards(player.getLookAngle().scale(4.5)).inflate(1.0),
+                e -> e instanceof ExoframeEntity, eyes.distanceToSqr(end));
+        helper.assertTrue(entity == null, "the frame is still in the line of sight: " + entity);
+        helper.assertTrue(block instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+                && hit.getBlockPos().equals(helper.absolutePos(target)), "the block in front cannot be targeted: "
+                + block);
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /** In un pozzo largo un blocco non c'e' un posto accanto al telaio: il giocatore esce e resta dov'e'. */
+    private static void exitInAShaftStaysInPlace(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (int x = 2; x <= 4; x++) {
+            for (int z = 2; z <= 4; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        for (int y = 2; y <= 4; y++) {
+            for (BlockPos wall : List.of(new BlockPos(2, y, 3), new BlockPos(4, y, 3), new BlockPos(3, y, 2),
+                    new BlockPos(3, y, 4))) {
+                helper.setBlock(wall, Blocks.STONE);
+            }
+        }
+        Vec3 spot = player.position();
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        helper.assertTrue(player.position().equals(spot), "player moved out of the shaft to " + player.position());
+        helper.assertTrue(Compat.frameState().placed(server, frameId).isPresent(), "frame not placed");
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il posto davanti ha fuoco, quello a sinistra non ha pavimento entro un blocco, quello a destra e' buono: il passo
+     * va a destra. Poi, rientrato, con la lava davanti e il posto a destra senza spazio (un muro): il passo va dietro.
+     */
+    private static void exitStepsAroundFireAndDrops(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        // giocatore in (3.5, 2, 3.5) rivolto a sud (+Z): davanti (3, 2, 4), sinistra (4, 2, 3), destra (2, 2, 3)
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 1, 4), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 2, 4), Blocks.FIRE);
+        helper.setBlock(new BlockPos(2, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 10f);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+        Vec3 right = spot.add(-1.0, 0.0, 0.0);
+        helper.assertTrue(player.position().distanceTo(right) < 1e-6 && player.getXRot() == 10f,
+                "player did not step to the right: " + player.position() + ", expected " + right);
+        ExoframeEntity frame = (ExoframeEntity) level.getEntity(frameId);
+        helper.setBlock(new BlockPos(3, 2, 4), Blocks.LAVA);
+        helper.setBlock(new BlockPos(2, 2, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 1, 2), Blocks.STONE);
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 10f);
+        helper.assertTrue(FrameEntry.enter(player, frame), "second enter refused");
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 10f);
+
+        helper.assertTrue(FrameEntry.exit(player), "second exit refused");
+        Vec3 behind = spot.add(0.0, 0.0, -1.0);
+        helper.assertTrue(player.position().distanceTo(behind) < 1e-6, "player did not step behind: "
+                + player.position() + ", expected " + behind);
+        helper.setBlock(new BlockPos(3, 2, 4), Blocks.AIR);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il bordo del mondo (stretto qui intorno alla struttura del test e poi rimesso com'era): l'oggetto telaio non
+     * piazza fuori dal bordo e resta in mano, intero, e {@code FramePlacement.place} rifiuta; chi esce dal telaio fuori
+     * dal bordo non lo lascia li' ma all'ultima posizione sicura, dentro, e un messaggio gli dice dove.
+     */
+    private static void worldBorderKeepsFramesInside(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        WorldBorder border = level.getWorldBorder();
+        double centerX = border.getCenterX();
+        double centerZ = border.getCenterZ();
+        double size = border.getSize();
+        helper.setBlock(new BlockPos(1, 1, 1), Blocks.STONE);
+        helper.setBlock(new BlockPos(6, 1, 6), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(1.5, 2.0, 1.5));
+        Vec3 inside = player.position();
+        try {
+            // il bordo copre i blocchi da 0 a 3 della struttura; (6, 6) resta fuori
+            Vec3 corner = helper.absoluteVec(new Vec3(0.0, 0.0, 0.0));
+            border.setCenter(corner.x + 2.0, corner.z + 2.0);
+            border.setSize(4.0);
+            Vec3 outside = helper.absoluteVec(new Vec3(6.5, 2.0, 6.5));
+            helper.assertTrue(!border.isWithinBounds(BlockPos.containing(outside))
+                    && border.isWithinBounds(BlockPos.containing(inside)), "test border not where expected");
+
+            helper.assertTrue(FramePlacement.place(level, ownedBy(player), outside, 0f).isEmpty(),
+                    "a frame was placed outside the world border");
+            player.setGameMode(GameType.SURVIVAL);
+            useExoframeItem(helper, player, new BlockPos(6, 1, 6), false);
+            helper.assertTrue(player.getMainHandItem().is(ModItems.EXOFRAME.get())
+                    && player.getMainHandItem().getCount() == 1, "refused item not left untouched");
+            assertNothingPlacedAt(helper, outside);
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+
+            player.moveTo(outside.x, outside.y, outside.z, 0f, 0f);
+            helper.assertTrue(FrameEntry.exit(player), "exit refused");
+            PlacedFrame record = Compat.frameState().placed(server, frameId).orElse(null);
+            helper.assertTrue(record != null && record.position().equals(inside),
+                    "frame not left at the last safe spot inside the border: " + record + ", expected " + inside);
+            helper.assertTrue(elsewhereMessages(player) == 1, "player not told where the frame went");
+        } finally {
+            border.setCenter(centerX, centerZ);
+            border.setSize(size);
+            player.setGameMode(GameType.CREATIVE);
+        }
+        Entity view = level.getEntity(frameId);
+        if (view instanceof ExoframeEntity frame) {
+            removeFrame(server, frame);
+        } else {
+            Compat.frameState().removePlaced(server, frameId);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * L'oggetto telaio usato sul fianco di un blocco: con il suolo tre blocchi sotto il punto richiesto piazza li'; con
+     * il suolo quattro blocchi sotto rifiuta come se non ci fosse spazio e resta in mano, intero.
+     */
+    private static void exoframeItemRefusesADeepDrop(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        player.setGameMode(GameType.SURVIVAL);
+        helper.setBlock(new BlockPos(1, 4, 2), Blocks.STONE);
+        helper.setBlock(new BlockPos(2, 0, 2), Blocks.STONE);
+        helper.setBlock(new BlockPos(4, 5, 5), Blocks.STONE);
+        helper.setBlock(new BlockPos(5, 0, 5), Blocks.STONE);
+
+        ExoframeEntity placed = useExoframeItemOnSide(helper, player, new BlockPos(1, 4, 2));
+        Vec3 threeBelow = helper.absoluteVec(new Vec3(2.5, 1.0, 2.5));
+        helper.assertTrue(placed != null && placed.position().equals(threeBelow),
+                "frame not placed three blocks down: " + (placed == null ? null : placed.position()));
+        helper.assertTrue(useExoframeItemOnSide(helper, player, new BlockPos(4, 5, 5)) == null,
+                "frame placed four blocks down");
+        helper.assertTrue(player.getMainHandItem().is(ModItems.EXOFRAME.get())
+                && player.getMainHandItem().getCount() == 1, "refused item not left untouched");
+        assertNothingPlacedAt(helper, helper.absoluteVec(new Vec3(5.5, 1.0, 5.5)));
+        player.setGameMode(GameType.CREATIVE);
+        removeFrame(server, placed);
+        helper.succeed();
+    }
+
+    /**
+     * Un giocatore morto (un pacchetto arrivato dopo la morte) non monta e non smonta: il pezzo resta in mano, quello
+     * montato resta sul telaio, e il clic passa.
+     */
+    private static void deadPlayerCannotMountOrUnmount(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        player.setGameMode(GameType.SURVIVAL);
+        FrameState state = ownedBy(player);
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(3.5, 1.0, 3.5), 0f);
+        float health = player.getHealth();
+        player.setHealth(0f);
+        try {
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_TORSO.get()));
+            helper.assertTrue(!click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "a dead player's click acted");
+            helper.assertTrue(!state.pieces().containsKey(PieceSlot.TORSO)
+                    && player.getMainHandItem().is(ModItems.SCRAP_TORSO.get()), "a dead player mounted a piece");
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            player.setShiftKeyDown(true);
+            helper.assertTrue(!click(frame, player, 0.0, 2.5, 0.0).consumesAction(), "a dead player's click acted");
+            helper.assertTrue(state.pieces().containsKey(PieceSlot.HELMET)
+                    && countInMainInventory(player, ModItems.SCRAP_HELMET.get()) == 0,
+                    "a dead player unmounted a piece");
+        } finally {
+            player.setShiftKeyDown(false);
+            player.setHealth(health);
+            player.setGameMode(GameType.CREATIVE);
+        }
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /** Uno spettatore che indossa un telaio non ne esce con il tasto: il telaio resta indossato, e nulla nasce. */
+    private static void spectatorCannotLeaveWithTheKey(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(5.5, 2.0, 2.5));
+        Vec3 spot = player.position();
+        player.setGameMode(GameType.SPECTATOR);
+        try {
+            helper.assertTrue(player.isSpectator(), "the mock player is not a spectator");
+            helper.assertTrue(!FrameEntry.exit(player), "a spectator left the frame");
+            helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)), "frame no longer worn");
+            assertNothingPlacedAt(helper, spot);
+        } finally {
+            player.setGameMode(GameType.CREATIVE);
+        }
+        leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /** Quante volte il giocatore finto ha avuto il messaggio del telaio lasciato altrove ({@link FrameEntry#ELSEWHERE}). */
+    private static int elsewhereMessages(ServerPlayer player) {
+        int count = 0;
+        for (Component message : Compat.gameTests().messagesTo(player)) {
+            if (message.getContents() instanceof TranslatableContents contents
+                    && contents.getKey().equals(FrameEntry.ELSEWHERE)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * Usa l'oggetto telaio (uno, in mano) sulla faccia est del blocco dato, relativo alla struttura; l'unico telaio
+     * piazzato nella colonna del blocco accanto, o null se l'uso e' stato rifiutato.
+     */
+    private static ExoframeEntity useExoframeItemOnSide(GameTestHelper helper, ServerPlayer player,
+            BlockPos relative) {
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.EXOFRAME.get()));
+        BlockPos clicked = helper.absolutePos(relative);
+        BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(clicked).add(0.5, 0.0, 0.0), Direction.EAST,
+                clicked, false);
+        InteractionResult result = ModItems.EXOFRAME.get().useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                hit));
+        if (!result.consumesAction()) {
+            return null;
+        }
+        BlockPos column = clicked.east();
+        List<ExoframeEntity> found = helper.getLevel().getEntitiesOfClass(ExoframeEntity.class,
+                new AABB(column.getX(), column.getY() - 8, column.getZ(), column.getX() + 1, column.getY() + 1,
+                        column.getZ() + 1));
+        helper.assertTrue(found.size() == 1, found.size() + " frames below " + column + ", expected 1");
+        return found.get(0);
+    }
+
     /** Cancella la cartella temporanea di un test con tutto quello che contiene; nulla se e' null. */
     private static void deleteTree(Path folder) {
         if (folder == null) {
@@ -3020,6 +3361,22 @@ public final class ExoframeGameTests {
         helper.assertTrue(drop.position().distanceTo(player.position()) < 1e-6
                 && drop.getDeltaMovement().equals(Vec3.ZERO), "dropped " + item + " not lying at the feet: "
                 + drop.position() + " moving " + drop.getDeltaMovement() + ", feet " + player.position());
+        return drop;
+    }
+
+    /**
+     * L'unico oggetto del tipo dato a terra vicino a {@code feet}: uno stack da uno, fermo (non lanciato), in
+     * {@code feet}. Chi chiama lo toglie dal mondo.
+     */
+    private static ItemEntity assertDroppedAt(GameTestHelper helper, Vec3 feet, Item item) {
+        List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                new AABB(feet, feet).inflate(2.0), entity -> entity.getItem().is(item));
+        helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
+                dropped.size() + " dropped " + item + ", expected one stack of 1");
+        ItemEntity drop = dropped.get(0);
+        helper.assertTrue(drop.position().distanceTo(feet) < 1e-6 && drop.getDeltaMovement().equals(Vec3.ZERO),
+                "dropped " + item + " not lying at " + feet + ": " + drop.position() + " moving "
+                        + drop.getDeltaMovement());
         return drop;
     }
 

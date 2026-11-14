@@ -9,6 +9,7 @@ import com.toxineren.exoframes.entity.ExoframeEntity;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
@@ -29,7 +30,8 @@ public final class FramePlacement {
      * Piazza un telaio con lo stato dato (che da qui appartiene al registro) con i piedi in {@code feet} e
      * l'orientamento {@code yaw} in gradi; non cerca il suolo. Rifiuta, senza creare nulla, se il riquadro della tuta
      * in piedi li' urta blocchi ({@code level.noCollision}) o il riquadro di un altro telaio (due telai nello stesso
-     * punto non si distinguerebbero con un clic), e se il dato salvato e' in sola lettura. Giocatori e creature nel
+     * punto non si distinguerebbero con un clic), se il punto sta fuori dal bordo del mondo ({@link #insideBorder}: li'
+     * il gioco non lascia cliccare il telaio) e se il dato salvato e' in sola lettura. Giocatori e creature nel
      * riquadro non contano.
      *
      * @return l'entita' del telaio piazzato, o vuoto se rifiutato
@@ -39,7 +41,8 @@ public final class FramePlacement {
         Objects.requireNonNull(state, "state must not be null");
         Objects.requireNonNull(feet, "feet must not be null");
         AABB box = SuitSize.standingBox(feet);
-        if (!level.noCollision(box) || !level.getEntitiesOfClass(ExoframeEntity.class, box).isEmpty()) {
+        if (!insideBorder(level, feet) || !level.noCollision(box)
+                || !level.getEntitiesOfClass(ExoframeEntity.class, box).isEmpty()) {
             return Optional.empty();
         }
         UUID frameId = Compat.frameState().place(level, state, feet, yaw);
@@ -52,11 +55,21 @@ public final class FramePlacement {
     }
 
     /**
+     * Vero se un telaio con i piedi in {@code feet} sta dentro il bordo del mondo del livello: il blocco dei piedi,
+     * quello che il gioco guarda prima di lasciar cliccare un'entita' ({@code ServerGamePacketListenerImpl
+     * .handleInteract} confronta il bordo con {@code blockPosition()}, su 1.20.1 e 1.21.1).
+     */
+    public static boolean insideBorder(ServerLevel level, Vec3 feet) {
+        return level.getWorldBorder().isWithinBounds(BlockPos.containing(feet));
+    }
+
+    /**
      * Il primo appoggio sotto {@code from}: la posizione dei piedi a cui arriva il riquadro della tuta in piedi
      * lasciato cadere dritto da {@code from} finche' non posa su una forma di collisione di un blocco (lastre,
      * tappeti e staccionate con la loro forma vera; i fluidi non sono suolo, quindi si arriva sul fondo di un lago);
      * {@code from} stesso se ci posa gia'. Mai piu' in alto di {@code from}, mai di lato. Le forme che il riquadro
-     * urta gia' in {@code from} non fanno da suolo (come nel movimento vanilla): li' {@link #place} poi rifiuta.
+     * urta gia' in {@code from} non fanno da suolo (come nel movimento vanilla): il riquadro le attraversa e si
+     * appoggia al suolo sotto di loro.
      *
      * @return vuoto se il riquadro arriva al fondo del mondo senza appoggiarsi (anche in colonne senza chunk caricati)
      */

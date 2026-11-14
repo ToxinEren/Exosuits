@@ -15,6 +15,7 @@ import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.energy.EnergyCell;
+import com.toxineren.exoframes.core.frame.ClickZones;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
 import com.toxineren.exoframes.entity.ExoframeEntity;
@@ -38,11 +39,10 @@ import net.minecraft.world.phys.Vec3;
  * arriva al giocatore dipende dal loro esito; tutto quello che lo stato potrebbe rifiutare si controlla prima, cosi'
  * nessuna eccezione lascia il record cambiato a meta'.
  * <p>
- * Lati e zone sono quelli del telaio: con yaw 0 guarda a sud (+Z) e ha la destra verso -X, come un giocatore vanilla
- * (il renderer gira il modello come {@code LivingEntityRenderer}, e il pezzo del braccio destro sta sull'osso del
- * braccio destro). L'altezza del clic si misura dai piedi: gambe sotto {@value #LEGS_TOP}, busto e braccia fino a
- * {@value #HEAD_BOTTOM}, testa da li' in su; nella fascia di mezzo un braccio se il clic e' a piu' di
- * {@value #ARM_OFFSET} dal centro verso il suo lato, altrimenti il busto.
+ * Lati e zone sono quelli del telaio ({@link ClickZones}): con yaw 0 guarda a sud (+Z) e ha la destra verso -X, come
+ * un giocatore vanilla (il renderer gira il modello come {@code LivingEntityRenderer}, e il pezzo del braccio destro
+ * sta sull'osso del braccio destro); gambe sotto {@value ClickZones#LEGS_TOP} dai piedi, busto e braccia fino a
+ * {@value ClickZones#HEAD_BOTTOM}, testa da li' in su.
  */
 public final class FrameInteractions {
     /** Messaggio sulla barra delle azioni a chi non puo' toccare il telaio. */
@@ -50,16 +50,9 @@ public final class FrameInteractions {
     /** Messaggio sulla barra delle azioni quando lo slot del pezzo o della cella e' gia' occupato. */
     public static final String SLOT_TAKEN = "message." + RedstoneExoframes.MOD_ID + ".slot_taken";
 
-    /** Sotto questa altezza dai piedi il clic e' sulle gambe. */
-    static final double LEGS_TOP = 1.1;
-    /** Da questa altezza dai piedi il clic e' sulla testa. */
-    static final double HEAD_BOTTOM = 2.2;
-    /** Distanza laterale dal centro oltre la quale, nella fascia di mezzo, il clic e' su un braccio. */
-    static final double ARM_OFFSET = 0.25;
-
     /** Che cosa chiede la mano principale. */
     private enum Action {
-        /** Nulla: un altro oggetto, la mano secondaria o uno spettatore. */
+        /** Nulla: un altro oggetto, la mano secondaria, uno spettatore o un giocatore morto. */
         NONE,
         MOUNT_PIECE,
         INSERT_CELL,
@@ -76,8 +69,9 @@ public final class FrameInteractions {
      * Il clic destro di un giocatore sul telaio, sul server; {@code hit} e' relativo ai piedi dell'entita'. Regole, in
      * ordine: senza permesso ({@link FramePermissions#canUse}) solo il messaggio {@link #LOCKED}; un pezzo in mano si
      * monta; una cella in mano si inserisce; mano vuota in piedi: si entra ({@link FrameEntry#enter}); mano vuota
-     * accovacciati: si smonta. La mano secondaria, uno spettatore, un altro oggetto in mano o un telaio senza record
-     * passano senza effetto.
+     * accovacciati: si smonta. La mano secondaria, uno spettatore, un giocatore morto (un pacchetto arrivato dopo la
+     * morte: cio' che si smonta finirebbe in un inventario che il gioco butta), un altro oggetto in mano o un telaio
+     * senza record passano senza effetto.
      */
     public static InteractionResult onInteract(ServerPlayer player, ExoframeEntity frame, Vec3 hit,
             InteractionHand hand) {
@@ -99,9 +93,9 @@ public final class FrameInteractions {
             tell(player, LOCKED);
             return InteractionResult.CONSUME;
         }
-        double right = rightOf(frame, hit);
+        double right = ClickZones.rightOf(frame.getYRot(), hit.x, hit.z);
         return switch (action) {
-            case MOUNT_PIECE -> mountPiece(player, frame, record, right > 0);
+            case MOUNT_PIECE -> mountPiece(player, frame, record, ClickZones.onRightSide(right));
             case INSERT_CELL -> insertCell(player, frame, record);
             case ENTER -> enter(player, frame, record);
             case UNMOUNT -> unmount(player, frame, record, hit.y, right);
@@ -119,7 +113,7 @@ public final class FrameInteractions {
     }
 
     private static Action action(Player player, InteractionHand hand) {
-        if (hand != InteractionHand.MAIN_HAND || player.isSpectator()) {
+        if (hand != InteractionHand.MAIN_HAND || player.isSpectator() || !player.isAlive()) {
             return Action.NONE;
         }
         ItemStack held = player.getMainHandItem();
@@ -133,15 +127,6 @@ public final class FrameInteractions {
             return player.isShiftKeyDown() ? Action.UNMOUNT : Action.ENTER;
         }
         return Action.NONE;
-    }
-
-    /**
-     * Quanto il clic sta a destra del centro, sull'asse destro del telaio: con yaw 0 la destra e' -X, e in generale
-     * (-cos yaw, 0, -sin yaw), come per un giocatore che guarda verso (-sin yaw, 0, cos yaw).
-     */
-    private static double rightOf(ExoframeEntity frame, Vec3 hit) {
-        double yaw = Math.toRadians(frame.getYRot());
-        return -hit.x * Math.cos(yaw) - hit.z * Math.sin(yaw);
     }
 
     /**
@@ -240,7 +225,7 @@ public final class FrameInteractions {
             return stowed.isEmpty() ? InteractionResult.CONSUME : InteractionResult.SUCCESS;
         }
         FrameState state = record.state();
-        for (PieceSlot slot : bandNearestFirst(height, right)) {
+        for (PieceSlot slot : ClickZones.bandNearestFirst(height, right)) {
             if (state.pieces().containsKey(slot)) {
                 return unmountPiece(player, frame, record, slot);
             }
@@ -259,30 +244,11 @@ public final class FrameInteractions {
                 return InteractionResult.CONSUME;
             }
             frame.discard();
+            FrameLog.event(record.frameId(), "picked up", player, player.serverLevel(), record.position());
             Handouts.give(player, new ItemStack(ModItems.EXOFRAME.get()));
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.CONSUME;
-    }
-
-    /**
-     * Le posizioni della fascia d'altezza del clic, la parte cliccata per prima e poi le altre dalla piu' vicina.
-     */
-    private static List<PieceSlot> bandNearestFirst(double height, double right) {
-        boolean rightSide = right > 0;
-        if (height >= HEAD_BOTTOM) {
-            return List.of(PieceSlot.HELMET);
-        }
-        if (height < LEGS_TOP) {
-            return rightSide ? List.of(PieceSlot.RIGHT_LEG, PieceSlot.LEFT_LEG)
-                    : List.of(PieceSlot.LEFT_LEG, PieceSlot.RIGHT_LEG);
-        }
-        PieceSlot near = rightSide ? PieceSlot.RIGHT_ARM : PieceSlot.LEFT_ARM;
-        PieceSlot far = rightSide ? PieceSlot.LEFT_ARM : PieceSlot.RIGHT_ARM;
-        if (Math.abs(right) > ARM_OFFSET) {
-            return List.of(near, PieceSlot.TORSO, far);
-        }
-        return List.of(PieceSlot.TORSO, near, far);
     }
 
     /**
