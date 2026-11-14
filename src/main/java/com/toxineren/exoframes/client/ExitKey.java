@@ -17,8 +17,9 @@ import org.lwjgl.glfw.GLFW;
  * {@code frame.exitHoldSeconds} secondi, senza schermate aperte e con la tuta del giocatore locale disegnata
  * ({@link SuitLayer#wearsSuit}), manda al server una volta {@link FrameExitPacket}; intanto la barra delle azioni mostra
  * l'avanzamento. Lasciare il tasto azzera il conteggio e permette un nuovo invio; una schermata aperta o la tuta che
- * non si disegna piu' azzerano il conteggio, non l'invio; uscire dal mondo azzera tutto. Il server decide da solo, sul
- * suo registro, se il giocatore e' davvero in un telaio. Solo client.
+ * non si disegna piu' azzerano il conteggio, non l'invio; uscire dal mondo azzera tutto. Tutta la decisione sta in
+ * {@link ExitHold}: qui si leggono il tasto e le condizioni e si fa quello che dice. Il server decide da solo, sul suo
+ * registro, se il giocatore e' davvero in un telaio. Solo client.
  */
 public final class ExitKey {
     /** Il nome del tasto nelle impostazioni dei controlli. */
@@ -30,12 +31,8 @@ public final class ExitKey {
 
     private static final KeyMapping KEY = new KeyMapping(NAME, GLFW.GLFW_KEY_V, CATEGORY);
 
-    /** Tick consecutivi con il tasto premuto e le condizioni soddisfatte. Solo sul thread del client. */
-    private static int heldTicks;
-    /** Vero se in questa pressione il pacchetto e' gia' partito. Solo sul thread del client. */
-    private static boolean sent;
-    /** Vero se la barra delle azioni mostra un avanzamento da togliere quando il conteggio si azzera. */
-    private static boolean showingProgress;
+    /** La decisione del tasto: conteggio, invio, avanzamento mostrato. Solo sul thread del client. */
+    private static final ExitHold HOLD = new ExitHold();
 
     private ExitKey() {
     }
@@ -44,11 +41,7 @@ public final class ExitKey {
     static void register() {
         KeyMappingRegistry.register(KEY);
         ClientTickEvent.CLIENT_POST.register(ExitKey::tick);
-        ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> {
-            heldTicks = 0;
-            sent = false;
-            showingProgress = false;
-        });
+        ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> HOLD.reset());
     }
 
     private static void tick(Minecraft minecraft) {
@@ -56,38 +49,20 @@ public final class ExitKey {
         if (player == null) {
             return;
         }
-        if (!KEY.isDown()) {
-            sent = false;
-            stopCounting(player);
-            return;
-        }
-        if (minecraft.screen != null || !SuitLayer.wearsSuit(player)) {
-            stopCounting(player);
-            return;
-        }
-        heldTicks = heldTicks == Integer.MAX_VALUE ? heldTicks : heldTicks + 1;
+        boolean keyDown = KEY.isDown();
+        boolean canCount = keyDown && minecraft.screen == null && SuitLayer.wearsSuit(player);
         int needed = ExitHold.ticksNeeded(RedstoneExoframes.config().frame.exitHoldSeconds);
-        if (ExitHold.shouldSend(heldTicks, needed, sent)) {
-            sent = true;
-            clearProgress(player);
-            Compat.net().sendToServer(FrameExitPacket.ID, new FrameExitPacket());
-        } else if (!sent) {
-            long percent = Math.min(100L, heldTicks * 100L / needed);
-            player.displayClientMessage(Component.translatable(HOLD_MESSAGE, percent), true);
-            showingProgress = true;
-        }
-    }
-
-    /** Azzera il conteggio (non l'invio) e toglie l'avanzamento dalla barra delle azioni, se c'era. */
-    private static void stopCounting(LocalPlayer player) {
-        heldTicks = 0;
-        clearProgress(player);
-    }
-
-    private static void clearProgress(LocalPlayer player) {
-        if (showingProgress) {
-            player.displayClientMessage(Component.empty(), true);
-            showingProgress = false;
+        switch (HOLD.tick(keyDown, canCount, needed)) {
+            case SHOW_PROGRESS -> player.displayClientMessage(Component.translatable(HOLD_MESSAGE, HOLD.percent()),
+                    true);
+            case CLEAR_PROGRESS -> player.displayClientMessage(Component.empty(), true);
+            case SEND -> Compat.net().sendToServer(FrameExitPacket.ID, new FrameExitPacket());
+            case CLEAR_AND_SEND -> {
+                player.displayClientMessage(Component.empty(), true);
+                Compat.net().sendToServer(FrameExitPacket.ID, new FrameExitPacket());
+            }
+            case NONE -> {
+            }
         }
     }
 }

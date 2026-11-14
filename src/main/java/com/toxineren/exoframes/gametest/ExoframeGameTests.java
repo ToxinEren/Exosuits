@@ -39,6 +39,7 @@ import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
 import dev.architectury.event.events.common.PlayerEvent;
+import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -115,7 +116,21 @@ import software.bernie.geckolib.animatable.GeoItem;
  *
  * <p>Per aggiungere un test: un metodo {@code private static void temaCaso(GameTestHelper helper)} che chiude con
  * {@code helper.succeed()}, e una riga {@code add(tests, "temaCaso", ExoframeGameTests::temaCaso);} in
- * {@link #generate()}. tools/run_gametests.sh conta queste righe per sapere quanti test aspettarsi.
+ * {@link #generate()}. tools/run_gametests.sh conta queste righe per sapere quanti test aspettarsi; la lista e' la
+ * stessa sulle quattro varianti (il corpo di un test puo' dipendere dalla versione, la lista no).
+ *
+ * <p>Tutti i test girano sullo stesso server, con lo stesso dato salvato e lo stesso livello, e cominciano nello
+ * stesso tick. Percio' un test:
+ * <ul>
+ * <li>controlla solo i suoi giocatori finti e i suoi {@code frameId}, mai conteggi globali (quanti telai, quanti
+ * giocatori, quante voci orfane in tutto);</li>
+ * <li>sposta i suoi giocatori finti dentro la sua struttura prima di cercare qualcosa intorno a loro;</li>
+ * <li>prima di {@code succeed()} toglie quello che ha creato: i record piazzati e indossati, le entita', gli oggetti a
+ * terra, le voci orfane ({@code GameTests.forgetOrphaned});</li>
+ * <li>rimette com'erano le regole del gioco e il bordo del mondo che cambia, anche se fallisce ({@code finally});</li>
+ * <li>non dipende dal contatore dei tick del giocatore finto (che il server non fa avanzare): se serve, lo imposta;</li>
+ * <li>non lascia avvisi nel log oltre a quelli che prova di proposito.</li>
+ * </ul>
  *
  * <p>I test nascono da un {@link GameTestGenerator} e non dall'annotazione {@code @GameTest}, perche' i loader
  * risolvono in modo diverso il nome della struttura dell'annotazione; il costruttore a 7 argomenti di
@@ -235,6 +250,7 @@ public final class ExoframeGameTests {
                 ExoframeGameTests::guardLeavesAnotherPlayersPlaceholdersAlone);
         add(tests, "guardScansTheRestOncePerSecondWithoutAFrame",
                 ExoframeGameTests::guardScansTheRestOncePerSecondWithoutAFrame);
+        add(tests, "realignRunsOnTheLevelTick", ExoframeGameTests::realignRunsOnTheLevelTick);
         return tests;
     }
 
@@ -1148,6 +1164,35 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
+    /**
+     * Il riallineamento passa dal tick del livello ({@code TickEvent.SERVER_LEVEL_POST}, l'evento a cui e'
+     * registrato), non da una chiamata diretta: l'evento sollevato qui {@code 2 * INTERVAL_TICKS} volte di fila (due
+     * verifiche periodiche, qualunque fosse il contatore del livello) ricrea l'entita' tolta, nel punto del record.
+     * Prima, sollevato una volta sola, non la ricrea.
+     */
+    private static void realignRunsOnTheLevelTick(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(4, 1, 4), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(4.5, 2.0, 4.5));
+        ExoframeEntity frame = FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), feet, 45f)
+                .orElse(null);
+        helper.assertTrue(frame != null, "place refused");
+        UUID frameId = frame.frameId();
+        frame.discard();
+
+        TickEvent.SERVER_LEVEL_POST.invoker().tick(level);
+        helper.assertTrue(level.getEntity(frameId) == null, "entity recreated after one level tick");
+        for (int i = 1; i < 2 * FrameRealign.INTERVAL_TICKS; i++) {
+            TickEvent.SERVER_LEVEL_POST.invoker().tick(level);
+        }
+        Entity back = level.getEntity(frameId);
+        helper.assertTrue(back instanceof ExoframeEntity && back.position().equals(feet) && back.getYRot() == 45f,
+                "entity not recreated by the periodic check: " + back);
+        removeFrame(server, (ExoframeEntity) back);
+        helper.succeed();
+    }
+
     /** Un'entita' spostata (come da un {@code /tp}) torna al punto e all'orientamento del record a una verifica. */
     private static void movedEntityIsBroughtBack(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
@@ -1169,7 +1214,11 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
-    /** Un record piazzato a 10.000 blocchi, in un chunk senza entita' caricate: le verifiche non creano nulla. */
+    /**
+     * Un record piazzato a 10.000 blocchi, in un chunk senza entita' caricate: le verifiche non creano nulla, nemmeno
+     * un'entita' nascosta (il livello la terrebbe in una sezione non visibile, che {@code getEntity} non vede): una
+     * sonda con la stessa identita' si aggiunge al livello solo se l'identita' non c'e' ancora, e poi si toglie.
+     */
     private static void realignLeavesUnloadedChunksAlone(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
@@ -1183,6 +1232,13 @@ public final class ExoframeGameTests {
         FrameRealign.checkNow(level);
         helper.assertTrue(level.getEntity(frameId) == null, "entity created in a chunk without loaded entities");
         helper.assertTrue(!level.areEntitiesLoaded(chunk), "the checks loaded the far chunk");
+        ExoframeEntity probe = new ExoframeEntity(ModEntities.EXOFRAME.get(), level);
+        probe.setUUID(frameId);
+        probe.moveTo(far.x, far.y, far.z, 0f, 0f);
+        boolean added = level.addFreshEntity(probe);
+        probe.discard();
+        helper.assertTrue(added, "the level already knows the frame id: a hidden entity was created");
+        helper.assertTrue(!level.areEntitiesLoaded(chunk), "the probe loaded the far chunk");
 
         helper.assertTrue(Compat.frameState().removePlaced(server, frameId), "removePlaced refused");
         helper.succeed();
@@ -2188,8 +2244,9 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * La posizione sicura si ricorda per chi indossa il telaio ed e' a terra, non in aria; morendo sotto il limite
-     * inferiore del mondo il telaio va li', con la sua entita', e non nel punto di morte.
+     * La posizione sicura si ricorda per chi indossa il telaio ed e' a terra (qui un blocco accanto a quello dove e'
+     * entrato), non in aria; morendo sotto il limite inferiore del mondo il telaio va li', con la sua entita', e non
+     * nel punto di morte.
      */
     private static void deathInTheVoidUsesTheLastSafeSpot(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -2197,11 +2254,11 @@ public final class ExoframeGameTests {
         MinecraftServer server = level.getServer();
         FrameStateAccess frames = Compat.frameState();
         UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(5.5, 2.0, 2.5));
-        Vec3 safe = player.position();
-        rememberSafeSpot(helper, player, level, safe);
+        Vec3 safe = rememberSafeSpot(helper, player, new Vec3(4.5, 2.0, 2.5));
         Vec3 below = new Vec3(safe.x, level.getMinBuildHeight() - 70.0, safe.z);
         player.setOnGround(false);
         player.moveTo(below.x, below.y, below.z, 0f, 0f);
+        player.tickCount = 2 * SafeSpots.INTERVAL_TICKS;
         SafeSpots.tick(player);
         helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(level.dimension(), safe))),
                 "safe spot changed while in the air: " + SafeSpots.last(player));
@@ -2270,7 +2327,8 @@ public final class ExoframeGameTests {
 
     /**
      * Uscire volontariamente dove sotto non c'e' suolo (sotto il limite inferiore del mondo): il telaio va all'ultima
-     * posizione sicura, con la sua entita'; il giocatore resta dov'e'.
+     * posizione sicura (un blocco accanto a quello dove il giocatore e' entrato), con la sua entita'; il giocatore
+     * resta dov'e' e un messaggio gli dice dove e' il telaio.
      */
     private static void exitWithoutGroundUsesTheLastSafeSpot(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -2278,8 +2336,7 @@ public final class ExoframeGameTests {
         MinecraftServer server = level.getServer();
         FrameStateAccess frames = Compat.frameState();
         UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(6.5, 2.0, 5.5));
-        Vec3 safe = player.position();
-        rememberSafeSpot(helper, player, level, safe);
+        Vec3 safe = rememberSafeSpot(helper, player, new Vec3(5.5, 2.0, 5.5));
         Vec3 below = new Vec3(safe.x, level.getMinBuildHeight() - 10.0, safe.z);
         player.setOnGround(false);
         player.moveTo(below.x, below.y, below.z, 0f, 0f);
@@ -2304,7 +2361,7 @@ public final class ExoframeGameTests {
     /**
      * Un segnaposto tolto dal suo slot (sul cursore, come dopo un clic nello slot) torna nello slot al tick, e la
      * copia sul cursore sparisce; senza il segnaposto del torso il giocatore ha la grandezza vanilla, e il tick che lo
-     * rimette gli ridà subito quella della tuta, senza aspettare il tick della grandezza.
+     * rimette gli rida' subito quella della tuta, senza aspettare il tick della grandezza.
      */
     private static void slotGuardRestoresARemovedPlaceholder(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -2403,8 +2460,9 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Un record indossato e nessun segnaposto, come dopo un rientro nel gioco: un tick rimette i quattro segnaposto
-     * con il riassunto dello stato sul torso; il tick dopo non riscrive nulla.
+     * Un record indossato e nessun segnaposto, come dopo un rientro nel gioco: un tick del giocatore, che passa
+     * dall'evento del gioco a cui l'autoriparazione e' registrata ({@code TickEvent.PLAYER_POST}), rimette i quattro
+     * segnaposto con il riassunto dello stato sul torso; il tick dopo non riscrive nulla.
      */
     private static void rejoinRestoresPlaceholders(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -2416,7 +2474,7 @@ public final class ExoframeGameTests {
         });
         SuitSummary expected = SuitSummary.of(frames.get(player).orElseThrow());
 
-        SlotGuard.tick(player);
+        TickEvent.PLAYER_POST.invoker().tick(player);
 
         assertPlaceholdersWorn(helper, player);
         Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
@@ -2563,10 +2621,9 @@ public final class ExoframeGameTests {
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
         UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(6.5, 2.0, 2.5));
-        Vec3 safe = player.position();
-        rememberSafeSpot(helper, player, level, safe);
-        helper.setBlock(new BlockPos(6, 1, 2), Blocks.AIR);
-        helper.setBlock(new BlockPos(6, 0, 2), Blocks.STONE);
+        Vec3 safe = rememberSafeSpot(helper, player, new Vec3(5.5, 2.0, 2.5));
+        helper.setBlock(new BlockPos(5, 1, 2), Blocks.AIR);
+        helper.setBlock(new BlockPos(5, 0, 2), Blocks.STONE);
         player.setOnGround(false);
         player.moveTo(safe.x, level.getMinBuildHeight() - 10.0, safe.z, 0f, 0f);
 
@@ -3292,14 +3349,24 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Il giocatore, a terra in {@code spot} (dove sta), fa un tick di {@link SafeSpots}: la posizione si ricorda. Il
-     * giocatore finto non fa tick da se': il suo contatore dei tick e' ancora su un multiplo dell'intervallo.
+     * Il giocatore, dentro il telaio, cammina fino al punto relativo alla struttura (un blocco di pietra posato sotto,
+     * diverso da quello dove e' entrato, che e' gia' la sua posizione sicura) e ci sta a terra; poi fa un tick del
+     * giocatore passando dall'evento del gioco ({@code TickEvent.PLAYER_POST}, quello a cui {@link SafeSpots} e'
+     * registrato), con il contatore dei tick impostato su un multiplo dell'intervallo: la posizione si ricorda. Da' il
+     * punto assoluto.
      */
-    private static void rememberSafeSpot(GameTestHelper helper, ServerPlayer player, ServerLevel level, Vec3 spot) {
+    private static Vec3 rememberSafeSpot(GameTestHelper helper, ServerPlayer player, Vec3 relativeFeet) {
+        helper.setBlock(BlockPos.containing(relativeFeet).below(), Blocks.STONE);
+        Vec3 spot = helper.absoluteVec(relativeFeet);
+        helper.assertTrue(!SafeSpots.last(player).map(SafeSpots.Spot::position).equals(Optional.of(spot)),
+                "the new spot is already the safe spot");
+        player.moveTo(spot.x, spot.y, spot.z, player.getYRot(), player.getXRot());
         player.setOnGround(true);
-        SafeSpots.tick(player);
-        helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(level.dimension(), spot))),
-                "safe spot not remembered: " + SafeSpots.last(player) + ", expected " + spot);
+        player.tickCount = SafeSpots.INTERVAL_TICKS;
+        TickEvent.PLAYER_POST.invoker().tick(player);
+        helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(helper.getLevel().dimension(),
+                spot))), "safe spot not remembered: " + SafeSpots.last(player) + ", expected " + spot);
+        return spot;
     }
 
     /** Gli oggetti a terra entro 2,5 blocchi da {@code center}, come li lascia nel suo tick una morte in quel punto. */
