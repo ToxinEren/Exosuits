@@ -187,6 +187,11 @@ public final class GameTestsImpl implements GameTests {
     }
 
     @Override
+    public Path registryFolder(MinecraftServer server) {
+        return FrameStateSavedData.dataFolder(server);
+    }
+
+    @Override
     public CompoundTag registryContents(MinecraftServer server) {
         return FrameStateSavedData.get(server).write(new CompoundTag());
     }

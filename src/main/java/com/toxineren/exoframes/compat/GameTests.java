@@ -80,6 +80,12 @@ public interface GameTests {
      */
     Path saveRegistry(MinecraftServer server);
 
+    /**
+     * La cartella dei dati salvati dell'overworld in cui il server tiene il file del registro, come la usa il registro
+     * a ogni richiesta (non ricalcolata: lo stesso oggetto a ogni chiamata per lo stesso server). Solo per i test.
+     */
+    Path registryFolder(MinecraftServer server);
+
     /** Il registro del server come lo scriverebbe adesso il salvataggio (il tag sotto {@code data}). Solo per i test. */
     CompoundTag registryContents(MinecraftServer server);
 

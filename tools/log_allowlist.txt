@@ -35,7 +35,7 @@ gametest | 1 | Frame {UUID} \(owner {UUID}\) left the registry with 1 stowed arm
 # non lo legge (due volte) ...
 gametest | 2 | Error loading saved data: redstone_exoframes_frames | registryFileIsReadBack
 # ... il mod usa la copia precedente ...
-gametest | 1 | Frame registry file {TESTREG} could not be read: using the previous copy {TESTREG}_old; the unreadable file is kept as {TESTREG}{STAMP} | registryFileIsReadBack
+gametest | 1 | Frame registry file {TESTREG} could not be read: using the previous copy {TESTREG}_old; the unreadable file is kept as {TESTREG}{STAMP}\. The frame registry is as it was at the save before the last one: what was done to frames since then \(armor stowed or returned, pieces mounted, frames placed\) is not in it, while the players' files are up to date | registryFileIsReadBack
 # ... oppure, con tutte e due rovinate, resta in sola lettura.
 gametest | 1 | Frame registry file {TESTREG} could not be read, nor its previous copy {TESTREG}_old: frames are read-only for this session and nothing is written\. Restore {TESTREG} from a backup and restart the server \(a copy of the unreadable file is kept as {TESTREG}{STAMP}\) | registryFileIsReadBack
 

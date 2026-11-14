@@ -7,14 +7,17 @@ import java.io.OutputStream;
 import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.stream.Stream;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtIo;
 //? if >=1.21 {
@@ -26,16 +29,22 @@ import net.minecraft.nbt.NbtAccounter;
  * meta' al posto di quello buono, e che cosa si fa quando il gioco non ha potuto leggerlo. Solo file e tag: nessuna
  * classe del gioco oltre a NBT, cosi' i test JUnit la provano su cartelle temporanee.
  * <p>
- * Scrittura ({@link #write}): il tag va in un file temporaneo accanto, che si forza sul disco; poi il file in uso, se
+ * Scrittura ({@link #write}): il tag va in un file temporaneo accanto ({@code <nome>-<numero>.tmp}, creato con i
+ * permessi predefiniti dei file nuovi, come gli altri file del mondo), che si forza sul disco; poi il file in uso, se
  * c'e', si copia accanto come copia precedente ({@code <nome>_old}, come fa il gioco per i file dei giocatori), e il
  * temporaneo prende il suo posto con uno spostamento atomico. In ogni momento il file in uso e' intero, il vecchio o il
- * nuovo; se la scrittura fallisce il file in uso e la copia precedente restano come erano.
+ * nuovo. Una scrittura che fallisce prima della copia lascia il file in uso e la copia precedente come erano; una che
+ * fallisce mentre rinnova la copia precedente lascia il file in uso intero, ma la copia precedente puo' mancare o
+ * essere a meta'. Il temporaneo si cancella anche quando la scrittura fallisce; solo un arresto del processo durante la
+ * scrittura puo' lasciarlo accanto, e nessuno lo toglie (il gioco non lo legge: si puo' cancellare a mano).
  * <p>
  * Lettura dopo un fallimento del gioco ({@link #recover}): il gioco legge il file da se' e, se non ci riesce, lo dice
- * solo nel log e da' alla mod un dato vuoto. Allora si guarda la copia precedente: se si legge, il file rovinato si
- * mette da parte con un nome che dice che cos'e' e si usa quella; se non si legge nemmeno quella, il file rovinato si
- * copia da parte e resta dov'e', e chi chiama tiene il registro in sola lettura, cosi' nulla lo sovrascrive. Un file
- * messo da parte non si sovrascrive e non si cancella mai.
+ * solo nel log e da' alla mod un dato vuoto. Allora (dopo che chi chiama ha provato a leggere lo stesso file da se')
+ * si guarda la copia precedente: se si legge, il file rovinato si mette da parte con un nome che dice che cos'e' e si
+ * usa quella; se non si legge nemmeno quella, il file rovinato si copia da parte e resta dov'e', e chi chiama tiene il
+ * registro in sola lettura, cosi' nulla lo sovrascrive. Un file messo da parte non si sovrascrive e non si cancella
+ * mai; una sessione che ritrova lo stesso file rovinato (stesso contenuto di una copia gia' messa da parte) non ne fa
+ * un'altra copia.
  */
 final class RegistryFile {
     /** Suffisso della copia precedente, accanto al file in uso. */
@@ -44,6 +53,10 @@ final class RegistryFile {
     static final String UNREADABLE_SUFFIX = ".unreadable-";
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.ROOT);
+    /** Per i nomi dei file temporanei. */
+    private static final SecureRandom RANDOM = new SecureRandom();
+    /** Quanti nomi provare per il file temporaneo prima di arrendersi. */
+    private static final int TEMPORARY_ATTEMPTS = 100;
 
     private RegistryFile() {
     }
@@ -89,7 +102,7 @@ final class RegistryFile {
         Path target = file.toAbsolutePath();
         Path folder = target.getParent();
         Files.createDirectories(folder);
-        Path temporary = Files.createTempFile(folder, target.getFileName() + "-", ".tmp");
+        Path temporary = createTemporary(folder, target.getFileName().toString());
         try {
             try (FileChannel channel = FileChannel.open(temporary, StandardOpenOption.WRITE,
                     StandardOpenOption.TRUNCATE_EXISTING)) {
@@ -119,6 +132,26 @@ final class RegistryFile {
             }
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    /**
+     * Crea accanto un file temporaneo vuoto con un nome nuovo, {@code <nome>-<numero>.tmp}, con
+     * {@code Files.createFile} senza attributi, quindi con i permessi predefiniti dei file nuovi del processo (su POSIX
+     * 0666 meno la umask), e non con {@code Files.createTempFile}, che su POSIX crea il file leggibile solo dal
+     * proprietario (0600): lo spostamento atomico tiene i permessi del temporaneo, che diventano quelli del file del
+     * registro.
+     */
+    private static Path createTemporary(Path folder, String name) throws IOException {
+        for (int attempt = 1; ; attempt++) {
+            Path candidate = folder.resolve(name + "-" + Long.toUnsignedString(RANDOM.nextLong()) + ".tmp");
+            try {
+                return Files.createFile(candidate);
+            } catch (FileAlreadyExistsException e) {
+                if (attempt >= TEMPORARY_ATTEMPTS) {
+                    throw e;
+                }
+            }
         }
     }
 
@@ -166,9 +199,16 @@ final class RegistryFile {
 
     /**
      * Mette da parte il file, spostandolo o copiandolo, sotto {@code <nome>.unreadable-<data>-<ora>} (con un numero in
-     * coda se il nome e' preso): mai sopra un altro file. Null se non si e' potuto.
+     * coda se il nome e' preso): mai sopra un altro file. Per una copia, se accanto c'e' gia' un file messo da parte
+     * con lo stesso contenuto, non ne fa un altro e da' quello. Null se non si e' potuto.
      */
     private static Path keepAside(Path file, boolean move) {
+        if (!move) {
+            Path same = keptCopyOf(file);
+            if (same != null) {
+                return same;
+            }
+        }
         String base = file.getFileName() + UNREADABLE_SUFFIX + LocalDateTime.now().format(STAMP);
         Path target = file.resolveSibling(base);
         for (int n = 2; Files.exists(target); n++) {
@@ -183,6 +223,25 @@ final class RegistryFile {
             return target;
         } catch (IOException | RuntimeException e) {
             return null;
+        }
+    }
+
+    /** Un file gia' messo da parte accanto ({@code <nome>.unreadable-...}) con lo stesso contenuto del file, o null. */
+    private static Path keptCopyOf(Path file) {
+        String prefix = file.getFileName() + UNREADABLE_SUFFIX;
+        try (Stream<Path> siblings = Files.list(file.toAbsolutePath().getParent())) {
+            return siblings.filter(path -> path.getFileName().toString().startsWith(prefix))
+                    .filter(path -> sameContent(file, path)).findFirst().orElse(null);
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static boolean sameContent(Path a, Path b) {
+        try {
+            return Files.mismatch(a, b) == -1L;
+        } catch (IOException | RuntimeException e) {
+            return false;
         }
     }
 }

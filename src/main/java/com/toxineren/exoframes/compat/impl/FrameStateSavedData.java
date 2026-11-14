@@ -1,11 +1,13 @@
 package com.toxineren.exoframes.compat.impl;
 
+import com.google.common.collect.MapMaker;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -114,6 +116,21 @@ final class FrameStateSavedData extends SavedData {
     private static final String FRAMES = "frames";
     /** Versione dello schema che questo codice sa leggere e scrive. */
     static final int CURRENT_SCHEMA = 2;
+    /**
+     * Il marcatore di schema che {@link #write} scrive per un dato in sola lettura perche' nulla si e' potuto leggere:
+     * non e' un numero, quindi chi legge quel tag lo tiene in sola lettura e non lo prende mai per un registro vuoto.
+     */
+    static final String UNREADABLE_SCHEMA = "unreadable";
+    /**
+     * La cartella dei dati di ogni server ({@link #dataFolder}), con chiavi deboli: la voce di un server se ne va con
+     * lui, e il percorso non tiene in vita nulla del server.
+     */
+    private static final Map<MinecraftServer, Path> DATA_FOLDERS = new MapMaker().weakKeys().makeMap();
+
+    /** Che cosa costa usare la copia precedente, in coda all'ERROR che lo dice. */
+    private static final String PREVIOUS_COPY_COST = "The frame registry is as it was at the save before the last "
+            + "one: what was done to frames since then (armor stowed or returned, pieces mounted, frames placed) is "
+            + "not in it, while the players' files are up to date";
 
     /** Telai indossati, per giocatore. */
     private final Map<UUID, FrameRecord> worn = new LinkedHashMap<>();
@@ -161,9 +178,14 @@ final class FrameStateSavedData extends SavedData {
         return get(server.overworld().getDataStorage(), dataFolder(server));
     }
 
-    /** La cartella dei dati salvati dell'overworld, dove sta il file {@link #NAME}{@code .dat}. */
+    /**
+     * La cartella dei dati salvati dell'overworld, dove sta il file {@link #NAME}{@code .dat}. Si calcola una volta per
+     * server e si ricorda ({@link #DATA_FOLDERS}): {@link #get(MinecraftServer)} la chiede per ogni giocatore a ogni
+     * tick.
+     */
     static Path dataFolder(MinecraftServer server) {
-        return server.getWorldPath(LevelResource.ROOT).resolve("data").normalize();
+        return DATA_FOLDERS.computeIfAbsent(server,
+                key -> key.getWorldPath(LevelResource.ROOT).resolve("data").normalize());
     }
 
     /**
@@ -200,11 +222,22 @@ final class FrameStateSavedData extends SavedData {
     }
 
     /**
-     * Il dato da usare quando il gioco non ha letto {@code file} e ha dato {@code empty} (vedi {@link #get}): {@code
-     * empty} per un mondo nuovo; il dato della copia precedente, da salvare, se si legge; altrimenti {@code empty} in
-     * sola lettura. Ogni caso diverso dal mondo nuovo scrive un ERROR che dice che cosa e' successo e che cosa fare.
+     * Il dato da usare quando il gioco non ha letto {@code file} e ha dato {@code empty} (vedi {@link #get}). Prima la
+     * mod legge da se' lo stesso file ({@link #readItself}): il gioco puo' non averlo letto per una ragione che non sta
+     * nel file (un altro processo che lo teneva aperto, un errore nel percorso di lettura di un loader); se si legge,
+     * si usa com'e', con un WARN, e nulla si sposta. Solo se non si legge nemmeno cosi': {@code empty} per un mondo
+     * nuovo; il dato della copia precedente, da salvare, se si legge; altrimenti {@code empty} in sola lettura. Ogni
+     * caso diverso dal mondo nuovo scrive un ERROR che dice che cosa e' successo e che cosa fare; quello della copia
+     * precedente dice anche che cosa costa: il registro torna al salvataggio prima dell'ultimo, mentre i file dei
+     * giocatori sono aggiornati.
      */
     static FrameStateSavedData afterUnreadFile(Path file, FrameStateSavedData empty) {
+        FrameStateSavedData current = readItself(file);
+        if (current != null) {
+            RedstoneExoframes.LOGGER.warn("The game could not read the frame registry file {}, but the mod read it "
+                    + "itself: using it as it is", file);
+            return current;
+        }
         RegistryFile.Recovery recovery = RegistryFile.recover(file);
         switch (recovery.kind()) {
             case PREVIOUS -> {
@@ -222,11 +255,11 @@ final class FrameStateSavedData extends SavedData {
                 previous.markStructural();
                 if (recovery.keptAs() != null) {
                     RedstoneExoframes.LOGGER.error("Frame registry file {} could not be read: using the previous copy "
-                            + "{}; the unreadable file is kept as {}", file, RegistryFile.oldCopy(file),
-                            recovery.keptAs());
+                            + "{}; the unreadable file is kept as {}. {}", file, RegistryFile.oldCopy(file),
+                            recovery.keptAs(), PREVIOUS_COPY_COST);
                 } else {
-                    RedstoneExoframes.LOGGER.error("Frame registry file {} is missing: using the previous copy {}",
-                            file, RegistryFile.oldCopy(file));
+                    RedstoneExoframes.LOGGER.error("Frame registry file {} is missing: using the previous copy {}. {}",
+                            file, RegistryFile.oldCopy(file), PREVIOUS_COPY_COST);
                 }
                 return previous;
             }
@@ -241,6 +274,22 @@ final class FrameStateSavedData extends SavedData {
             default -> {
                 return empty;
             }
+        }
+    }
+
+    /**
+     * Il dato del file letto dalla mod da se', come lo scrive il gioco (il tag radice con {@code data}); null se il
+     * file manca, non si legge, non ha {@code data} o il suo contenuto fa lanciare la lettura.
+     */
+    private static FrameStateSavedData readItself(Path file) {
+        if (!Files.exists(file)) {
+            return null;
+        }
+        try {
+            CompoundTag root = RegistryFile.read(file);
+            return root.contains("data", Tag.TAG_COMPOUND) ? load(root.getCompound("data")) : null;
+        } catch (IOException | RuntimeException e) {
+            return null;
         }
     }
 
@@ -864,9 +913,17 @@ final class FrameStateSavedData extends SavedData {
      * Scrive il marcatore di schema e le sezioni: in ognuna i record vivi e le voci grezze non lette, identiche (una
      * voce grezza la cui chiave nomina lo stesso UUID di un record vivo va sotto una chiave libera, vedi la classe); la
      * sezione {@code frames} dello schema 1 solo se ha ancora voci non lette, e le orfane se ce ne sono. In sola
-     * lettura riscrive il tag letto per intero.
+     * lettura per uno schema piu' recente o non numerico riscrive il tag letto per intero. In sola lettura perche' ne'
+     * il file ne' la copia precedente si sono letti non c'e' un tag da riscrivere: non lancia e scrive solo il
+     * marcatore {@link #UNREADABLE_SCHEMA}, senza sezioni, cosi' chi rilegge quel tag ha di nuovo un dato in sola
+     * lettura e mai un registro vuoto. Il gioco comunque non arriva qui: un dato in sola lettura non risulta mai da
+     * salvare ({@link #isDirty()}), e il salvataggio su file lo salta.
      */
     CompoundTag write(CompoundTag tag) {
+        if (unreadableFile != null) {
+            tag.putString(NbtKeys.SCHEMA, UNREADABLE_SCHEMA);
+            return tag;
+        }
         if (readOnly()) {
             for (String key : readOnlyRoot.getAllKeys()) {
                 tag.put(key, readOnlyRoot.get(key).copy());

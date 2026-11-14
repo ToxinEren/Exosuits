@@ -252,6 +252,7 @@ public final class ExoframeGameTests {
         add(tests, "exitDoesNotStepThroughIronBars", ExoframeGameTests::exitDoesNotStepThroughIronBars);
         add(tests, "exitDoesNotStepThroughAFenceOrAGate", ExoframeGameTests::exitDoesNotStepThroughAFenceOrAGate);
         add(tests, "exitDoesNotStepIntoAnotherFrame", ExoframeGameTests::exitDoesNotStepIntoAnotherFrame);
+        add(tests, "registryFolderIsRememberedPerServer", ExoframeGameTests::registryFolderIsRememberedPerServer);
         add(tests, "worldBorderKeepsFramesInside", ExoframeGameTests::worldBorderKeepsFramesInside);
         add(tests, "exoframeItemRefusesADeepDrop", ExoframeGameTests::exoframeItemRefusesADeepDrop);
         add(tests, "deadPlayerCannotMountOrUnmount", ExoframeGameTests::deadPlayerCannotMountOrUnmount);
@@ -3244,6 +3245,20 @@ public final class ExoframeGameTests {
         removeFrame(server, east);
         removeFrame(server, west);
         removeFrame(server, own);
+        helper.succeed();
+    }
+
+    /**
+     * La cartella del file del registro di un server si ricorda: chiesta due volte e' lo stesso oggetto, quello della
+     * cartella {@code data} del mondo.
+     */
+    private static void registryFolderIsRememberedPerServer(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        GameTests tests = Compat.gameTests();
+        Path folder = tests.registryFolder(server);
+        helper.assertTrue(folder.equals(server.getWorldPath(LevelResource.ROOT).resolve("data").normalize()),
+                "registry folder is " + folder);
+        helper.assertTrue(tests.registryFolder(server) == folder, "the registry folder is built again at every call");
         helper.succeed();
     }
 

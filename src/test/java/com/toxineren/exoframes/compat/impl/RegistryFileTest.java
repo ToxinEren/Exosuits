@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
@@ -18,7 +19,10 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 import net.minecraft.nbt.CompoundTag;
@@ -193,6 +197,103 @@ class RegistryFileTest {
         List<Path> kept = unreadableCopies();
         assertEquals(1, kept.size(), "no copy of the unreadable file kept aside: " + kept);
         assertArrayEquals(damaged, Files.readAllBytes(kept.get(0)));
+    }
+
+    /**
+     * Il gioco dice di non aver letto un file che pero' si legge (per esempio un altro processo lo teneva aperto): si
+     * usa il file com'e', non la copia precedente, e nulla si sposta o si copia.
+     */
+    @Test
+    void goodFileReportedUnreadableIsUsedAsItIs() throws IOException {
+        FrameStateSavedData data = registry();
+        writeFile(file(), data);
+        assertTrue(data.removePlaced(FRAME));
+        writeFile(file(), data);
+        byte[] current = Files.readAllBytes(file());
+        byte[] previous = Files.readAllBytes(RegistryFile.oldCopy(file()));
+
+        FrameStateSavedData empty = empty();
+        FrameStateSavedData used = FrameStateSavedData.afterUnreadFile(file(), empty);
+
+        assertNotSame(empty, used);
+        assertFalse(used.readOnly());
+        assertEquals(contents(data), contents(used), "the registry is not the one in the file");
+        assertNull(used.placed(FRAME), "the previous copy was used instead of the file");
+        assertFalse(used.isDirty(), "the registry read from its own file is to be saved");
+        assertArrayEquals(current, Files.readAllBytes(file()), "the file was moved or changed");
+        assertArrayEquals(previous, Files.readAllBytes(RegistryFile.oldCopy(file())));
+        assertTrue(unreadableCopies().isEmpty(), "a readable file was kept aside");
+    }
+
+    /**
+     * In sola lettura perche' nulla si legge, {@code write} non lancia e non da' mai un registro vuoto: il suo tag,
+     * letto, e' di nuovo un registro in sola lettura, e il file da ripristinare resta identico.
+     */
+    @Test
+    void unreadableRegistryWritesNothingThatReadsAsEmpty() throws IOException {
+        FrameStateSavedData data = registry();
+        writeFile(file(), data);
+        writeFile(file(), data);
+        truncate(file(), 40);
+        truncate(RegistryFile.oldCopy(file()), 30);
+        byte[] damaged = Files.readAllBytes(file());
+        FrameStateSavedData used = FrameStateSavedData.afterUnreadFile(file(), empty());
+        assertTrue(used.readOnly());
+
+        CompoundTag written = contents(used);
+        CompoundTag root = used.fileRoot(DATA_VERSION);
+
+        FrameStateSavedData reread = FrameStateSavedData.load(written, FrameStateCodec::read);
+        assertTrue(reread.readOnly(), "what a read-only registry writes reads back as a writable registry");
+        assertNull(reread.getOrCreateWorn(PLAYER, () -> new FrameState(ExoframesConfig.defaults())));
+        assertTrue(FrameStateSavedData.load(root.getCompound("data"), FrameStateCodec::read).readOnly());
+        assertArrayEquals(damaged, Files.readAllBytes(file()), "the unreadable file was changed");
+    }
+
+    /**
+     * Il file del registro e la sua copia precedente hanno i permessi di un file creato nella stessa cartella senza
+     * attributi (quelli predefiniti del processo), non solo quelli del proprietario. Solo dove il file system ha i
+     * permessi POSIX.
+     */
+    @Test
+    void registryFilesHaveTheDefaultPermissions() throws IOException {
+        Path reference = Files.createFile(folder.resolve("reference.dat"));
+        PosixFileAttributeView view = Files.getFileAttributeView(reference, PosixFileAttributeView.class);
+        assumeTrue(view != null, "no POSIX permissions on this file system");
+        Set<PosixFilePermission> expected = Files.getPosixFilePermissions(reference);
+
+        FrameStateSavedData data = registry();
+        writeFile(file(), data);
+        writeFile(file(), data);
+
+        assertEquals(expected, Files.getPosixFilePermissions(file()), "registry file permissions");
+        assertEquals(expected, Files.getPosixFilePermissions(RegistryFile.oldCopy(file())),
+                "previous copy permissions");
+    }
+
+    /**
+     * Ogni sessione che ritrova lo stesso file rovinato (stesso contenuto) e resta in sola lettura non ne mette da
+     * parte un'altra copia: c'e' gia'. Un file rovinato diverso ha la sua copia.
+     */
+    @Test
+    void sameDamagedFileIsKeptAsideOnce() throws IOException {
+        FrameStateSavedData data = registry();
+        writeFile(file(), data);
+        writeFile(file(), data);
+        truncate(file(), 40);
+        truncate(RegistryFile.oldCopy(file()), 30);
+
+        FrameStateSavedData.afterUnreadFile(file(), empty());
+        List<Path> first = unreadableCopies();
+        FrameStateSavedData.afterUnreadFile(file(), empty());
+        FrameStateSavedData.afterUnreadFile(file(), empty());
+
+        assertEquals(1, first.size());
+        assertEquals(first, unreadableCopies(), "the same damaged file was kept aside again");
+
+        truncate(file(), 35);
+        FrameStateSavedData.afterUnreadFile(file(), empty());
+        assertEquals(2, unreadableCopies().size(), "a different damaged file was not kept aside");
     }
 
     /** Il file manca ma la copia precedente c'e' (un arresto fra la copia e lo spostamento): si usa quella. */
