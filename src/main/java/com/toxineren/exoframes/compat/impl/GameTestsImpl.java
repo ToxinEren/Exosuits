@@ -5,6 +5,8 @@ import com.toxineren.exoframes.compat.NbtKeys;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -14,6 +16,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.gameevent.BlockPositionSource;
+import net.minecraft.world.level.gameevent.GameEvent;
+import net.minecraft.world.level.gameevent.GameEventListener;
+import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
+import net.minecraft.world.level.gameevent.PositionSource;
+import net.minecraft.world.phys.Vec3;
+//? if >=1.21 {
+import net.minecraft.core.Holder;
+//?}
 //? if <1.21 {
 /*import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
@@ -131,6 +142,69 @@ public final class GameTestsImpl implements GameTests {
         return entity.canUsePortal(false) || entity.canChangeDimensions(entity.level(), destination);
         //?} else {
         /*return entity.canChangeDimensions() || TheEndGatewayBlockEntity.canEntityTeleport(entity);
+        *///?}
+    }
+
+    /**
+     * Un ascoltatore di eventi di gioco registrato nella sezione del blocco {@code center}, consegna immediata (quella
+     * predefinita): {@code ServerLevel.gameEvent} lo chiama nello stesso momento in cui l'evento nasce.
+     */
+    @Override
+    public EquipEventCounter countEquipEvents(ServerLevel level, BlockPos center) {
+        GameEventListenerRegistry registry = level.getChunkAt(center)
+                .getListenerRegistry(SectionPos.blockToSectionCoord(center.getY()));
+        EquipListener listener = new EquipListener(new BlockPositionSource(center));
+        registry.register(listener);
+        return new EquipEventCounter() {
+            @Override
+            public int count() {
+                return listener.count;
+            }
+
+            @Override
+            public void close() {
+                registry.unregister(listener);
+            }
+        };
+    }
+
+    /** Conta gli eventi {@code EQUIP} entro {@value #RADIUS} blocchi dalla sua posizione. */
+    private static final class EquipListener implements GameEventListener {
+        private static final int RADIUS = 16;
+        private final PositionSource source;
+        private int count;
+
+        EquipListener(PositionSource source) {
+            this.source = source;
+        }
+
+        @Override
+        public PositionSource getListenerSource() {
+            return source;
+        }
+
+        @Override
+        public int getListenerRadius() {
+            return RADIUS;
+        }
+
+        //? if >=1.21 {
+        @Override
+        public boolean handleGameEvent(ServerLevel level, Holder<GameEvent> event, GameEvent.Context context,
+                Vec3 position) {
+            if (event.is(GameEvent.EQUIP.key())) {
+                count++;
+            }
+            return false;
+        }
+        //?} else {
+        /*@Override
+        public boolean handleGameEvent(ServerLevel level, GameEvent event, GameEvent.Context context, Vec3 position) {
+            if (event == GameEvent.EQUIP) {
+                count++;
+            }
+            return false;
+        }
         *///?}
     }
 }

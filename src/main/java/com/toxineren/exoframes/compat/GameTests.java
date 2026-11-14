@@ -2,6 +2,7 @@ package com.toxineren.exoframes.compat;
 
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
@@ -63,4 +64,20 @@ public interface GameTests {
      * nulla e non carica l'altra dimensione. Esiste solo per i test.
      */
     boolean portalsAccept(Entity entity, ServerLevel destination);
+
+    /**
+     * Comincia a contare gli eventi di gioco {@code EQUIP} che arrivano entro 16 blocchi da {@code center}, finche' il
+     * contatore non si chiude. {@code LivingEntity.onEquipItem} emette quell'evento nello stesso ramo in cui suona
+     * l'equipaggiamento: zero eventi dopo un cambio degli slot armatura vuol dire nessun suono. Esiste solo per i test.
+     */
+    EquipEventCounter countEquipEvents(ServerLevel level, BlockPos center);
+
+    /** Il contatore di {@link #countEquipEvents}; {@link #close} smette di ascoltare. */
+    interface EquipEventCounter extends AutoCloseable {
+        /** Gli eventi {@code EQUIP} arrivati dall'apertura. */
+        int count();
+
+        @Override
+        void close();
+    }
 }

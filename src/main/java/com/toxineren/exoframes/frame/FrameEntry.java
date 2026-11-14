@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,6 +31,8 @@ public final class FrameEntry {
     public static final String NO_CELL = "message." + RedstoneExoframes.MOD_ID + ".no_cell";
     /** Messaggio sulla barra delle azioni a chi e' gia' dentro un telaio. */
     public static final String ALREADY_INSIDE = "message." + RedstoneExoframes.MOD_ID + ".already_inside";
+    /** Messaggio sulla barra delle azioni a chi non e' il proprietario di un telaio che contiene ancora armatura. */
+    public static final String HOLDS_ARMOR = "message." + RedstoneExoframes.MOD_ID + ".holds_armor";
 
     private FrameEntry() {
     }
@@ -40,15 +41,18 @@ public final class FrameEntry {
      * Mette il giocatore dentro il telaio, sul server. Rifiuti, in quest'ordine, ciascuno con il suo messaggio e
      * senza toccare nulla: senza permesso ({@link FrameInteractions#LOCKED}); senza una cella con carica
      * ({@link #NO_CELL}); il giocatore indossa gia' un telaio ({@link #ALREADY_INSIDE}); il riquadro della tuta in
-     * piedi nel punto del telaio non e' libero ({@link ExoframeItem#NO_ROOM}). Se il record non e' piu' piazzato, o
-     * il giocatore e' morto o spettatore, non succede nulla e non si dice nulla.
+     * piedi nel punto del telaio non e' libero ({@link ExoframeItem#NO_ROOM}); il telaio contiene ancora armatura
+     * stivata che si legge (lasciata da una morte) e il giocatore non ne e' il proprietario, o il telaio non ne ha uno
+     * ({@link #HOLDS_ARMOR}): quell'armatura esce solo con un atto voluto, il clic accovacciato di chi puo' toccare il
+     * telaio, e non resta mai a terra a sparire. Se il record non e' piu' piazzato o sta in un'altra dimensione, o il
+     * giocatore e' morto o spettatore, non succede nulla e non si dice nulla.
      * <p>
-     * Poi, nello stesso tick: l'armatura stivata che si legge (telaio lasciato da una morte) va al giocatore se e' il
-     * proprietario, altrimenti a terra nel punto del telaio, ferma; {@link FrameStateAccess#enter}, e se rifiuta ci si
-     * ferma (cio' che e' gia' stato consegnato resta consegnato); l'armatura indossata che non e' un segnaposto si
-     * stiva nel record con il suo slot e solo dopo lascia gli slot; {@link #dress} con il riassunto dello stato; il
-     * giocatore scende da cio' che cavalca e va nel punto del telaio con il suo yaw (il pitch resta il suo); l'entita'
-     * si elimina; le dimensioni del giocatore si ricalcolano subito.
+     * Poi, nello stesso tick: l'armatura stivata che si legge va al proprietario che entra ({@link Handouts#give});
+     * {@link FrameStateAccess#enter}, e se rifiuta ci si ferma (cio' che e' gia' stato consegnato resta consegnato);
+     * l'armatura indossata che non e' un segnaposto si stiva nel record con il suo slot e solo dopo lascia gli slot;
+     * {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del telaio
+     * con il suo yaw (il pitch resta il suo); l'entita' si elimina; le dimensioni del giocatore si ricalcolano subito.
+     * Gli slot armatura cambiano in silenzio ({@code setArmorSlot}).
      *
      * @return true se il giocatore e' entrato
      */
@@ -65,6 +69,9 @@ public final class FrameEntry {
             return false;
         }
         PlacedFrame record = placed.get();
+        if (!record.dimension().equals(level.dimension())) {
+            return false;
+        }
         if (!FramePermissions.canUse(player, record.state())) {
             FrameInteractions.tell(player, FrameInteractions.LOCKED);
             return false;
@@ -83,9 +90,15 @@ public final class FrameEntry {
             FrameInteractions.tell(player, ExoframeItem.NO_ROOM);
             return false;
         }
+        if (record.hasStowed() && !player.getUUID().equals(record.state().owner())) {
+            FrameInteractions.tell(player, HOLDS_ARMOR);
+            return false;
+        }
 
         if (record.hasStowed()) {
-            handOutStowed(player, level, record);
+            for (StowedStack entry : frames.takeStowedOfPlaced(server, record.frameId())) {
+                Handouts.give(player, entry.stack());
+            }
         }
         if (!frames.enter(player, record.frameId())) {
             return false;
@@ -102,8 +115,8 @@ public final class FrameEntry {
     /**
      * La parte comune della vestizione: i quattro segnaposto negli slot armatura e {@code summary} sullo stack del
      * torso. Non cancella mai un oggetto vero: cio' che trova ancora in uno slot armatura e non e' un segnaposto va al
-     * giocatore con {@link Handouts#give}; i segnaposto gia' indossati si sostituiscono. Non ricalcola le dimensioni:
-     * lo fa chi chiama, alla fine.
+     * giocatore con {@link Handouts#give}; i segnaposto gia' indossati si sostituiscono. Gli slot cambiano in
+     * silenzio ({@code setArmorSlot}). Non ricalcola le dimensioni: lo fa chi chiama, alla fine.
      */
     public static void dress(ServerPlayer player, SuitSummary summary) {
         Objects.requireNonNull(player, "player must not be null");
@@ -118,28 +131,10 @@ public final class FrameEntry {
             if (slot == EquipmentSlot.CHEST) {
                 Compat.itemData().setSuitSummary(placeholder, summary);
             }
-            player.setItemSlot(slot, placeholder);
+            setArmorSlot(player, slot, placeholder);
         }
         for (ItemStack stack : displaced) {
             Handouts.give(player, stack);
-        }
-    }
-
-    /**
-     * L'armatura stivata che si legge di un telaio piazzato: al giocatore se e' il proprietario, altrimenti a terra
-     * nel punto del telaio, ferma (non lanciata). Le voci che non si leggono restano nel record.
-     */
-    private static void handOutStowed(ServerPlayer player, ServerLevel level, PlacedFrame record) {
-        List<StowedStack> stowed = Compat.frameState().takeStowedOfPlaced(level.getServer(), record.frameId());
-        UUID owner = record.state().owner();
-        boolean isOwner = player.getUUID().equals(owner);
-        Vec3 spot = record.position();
-        for (StowedStack entry : stowed) {
-            if (isOwner) {
-                Handouts.give(player, entry.stack());
-            } else {
-                Handouts.dropStill(level, spot, entry.stack());
-            }
         }
     }
 
@@ -160,7 +155,20 @@ public final class FrameEntry {
         }
         frames.stow(player, worn);
         for (StowedStack entry : worn) {
-            player.setItemSlot(entry.slot(), ItemStack.EMPTY);
+            setArmorSlot(player, entry.slot(), ItemStack.EMPTY);
         }
+    }
+
+    /**
+     * Scrive uno slot armatura in silenzio: direttamente nella lista {@code armor} dell'inventario, non con
+     * {@code setItemSlot}, che chiama {@code LivingEntity.onEquipItem} (suono dell'equipaggiamento ed evento di gioco
+     * {@code EQUIP}, che sveglia i sensori sculk) su 1.20.1 e 1.21.1. Il resto segue da solo come per ogni cambio
+     * dell'inventario: al tick dopo {@code LivingEntity.detectEquipmentUpdates} confronta gli slot con l'ultimo
+     * valore visto, aggiorna i modificatori degli attributi e manda l'equipaggiamento a chi vede il giocatore, e il
+     * menu dell'inventario manda lo slot al giocatore stesso.
+     */
+    private static void setArmorSlot(ServerPlayer player, EquipmentSlot slot, ItemStack stack) {
+        player.getInventory().armor.set(slot.getIndex(), stack);
+        player.getInventory().setChanged();
     }
 }

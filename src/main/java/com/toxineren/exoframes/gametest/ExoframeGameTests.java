@@ -163,7 +163,7 @@ public final class ExoframeGameTests {
         add(tests, "enterRefusedUnderLowCeiling", ExoframeGameTests::enterRefusedUnderLowCeiling);
         add(tests, "secondEnterOnSameFrameFails", ExoframeGameTests::secondEnterOnSameFrameFails);
         add(tests, "ownerGetsBackArmorLeftInTheFrame", ExoframeGameTests::ownerGetsBackArmorLeftInTheFrame);
-        add(tests, "strangerEnteringDropsTheOwnersArmor", ExoframeGameTests::strangerEnteringDropsTheOwnersArmor);
+        add(tests, "strangerCannotEnterAFrameHoldingArmor", ExoframeGameTests::strangerCannotEnterAFrameHoldingArmor);
         return tests;
     }
 
@@ -1589,7 +1589,9 @@ public final class ExoframeGameTests {
      * Ingresso (design §5.5) con un clic a mano vuota, in piedi: l'elmo di ferro indossato finisce nel record con il
      * suo slot, i quattro segnaposto sono negli slot e il torso porta il riassunto dello stato; il record e'
      * indossato e non piu' piazzato, l'entita' e' sparita, il giocatore sta nel punto e con lo yaw del telaio (il
-     * pitch resta il suo) e ha subito la grandezza della tuta (0,8 x 2,97). Sul client il clic consuma.
+     * pitch resta il suo) e ha subito la grandezza della tuta (0,8 x 2,97). Sul client il clic consuma. Gli slot
+     * armatura cambiano in silenzio: nessun evento EQUIP (e quindi nessun suono), mentre un elmo indossato con
+     * {@code setItemSlot}, per controllo, ne emette uno.
      */
     private static void enterStowsArmorAndWearsTheFrame(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -1597,19 +1599,26 @@ public final class ExoframeGameTests {
         MinecraftServer server = level.getServer();
         FrameStateAccess frames = Compat.frameState();
         Vec3 standing = helper.absoluteVec(new Vec3(1.5, 1.0, 1.5));
+        player.doTick(); // dopo il primo tick onEquipItem non tace piu' per firstTick
         player.moveTo(standing.x, standing.y, standing.z, 0f, 20f);
         ItemStack helmet = new ItemStack(Items.IRON_HELMET);
         helmet.setDamageValue(5);
-        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
         FrameState state = charged(ownedBy(player));
         state.mount(scrapPiece(PieceSlot.TORSO));
         ExoframeEntity frame = placeFrame(helper, state, new Vec3(4.5, 1.0, 4.5), 30f);
         UUID frameId = frame.frameId();
         Vec3 spot = frame.position();
 
-        helper.assertTrue(FrameInteractions.clientResult(player, InteractionHand.MAIN_HAND).consumesAction(),
-                "client does not consume the empty hand click");
-        helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "enter click not consumed");
+        try (GameTests.EquipEventCounter equips = Compat.gameTests().countEquipEvents(level,
+                BlockPos.containing(spot))) {
+            player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+            helper.assertTrue(equips.count() == 1, "control: wearing a helmet emitted " + equips.count()
+                    + " equip events, expected 1");
+            helper.assertTrue(FrameInteractions.clientResult(player, InteractionHand.MAIN_HAND).consumesAction(),
+                    "client does not consume the empty hand click");
+            helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "enter click not consumed");
+            helper.assertTrue(equips.count() == 1, "entering emitted " + (equips.count() - 1) + " equip events");
+        }
 
         helper.assertTrue(frames.placed(server, frameId).isEmpty(), "frame still placed after enter");
         helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)), "frame not worn after enter");
@@ -1707,7 +1716,7 @@ public final class ExoframeGameTests {
     private static void ownerGetsBackArmorLeftInTheFrame(GameTestHelper helper) {
         ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
         FrameStateAccess frames = Compat.frameState();
-        ExoframeEntity frame = frameWithStowedBoots(helper, owner, charged(ownedBy(owner)));
+        ExoframeEntity frame = frameWithStowedBoots(helper, owner, charged(ownedBy(owner)), new Vec3(4.5, 1.0, 4.5));
         ItemStack helmet = new ItemStack(Items.IRON_HELMET);
         helmet.setDamageValue(5);
         owner.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
@@ -1724,43 +1733,56 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Un altro giocatore che entra in un telaio sbloccato con l'armatura del proprietario dentro non la prende: cade
-     * a terra nel punto del telaio, ferma, e nel record resta solo la sua.
+     * Chi non e' il proprietario non entra in un telaio che contiene ancora un'armatura leggibile: su un telaio
+     * sbloccato l'ingresso si rifiuta, gli stivali del proprietario restano nel record, nulla e' a terra e nulla e'
+     * arrivato a lui. Dopo averli tirati fuori con un clic accovacciato (che li da' a lui, come smontare) entra. Un
+     * telaio senza proprietario con un'armatura dentro rifiuta chiunque.
      */
-    private static void strangerEnteringDropsTheOwnersArmor(GameTestHelper helper) {
+    private static void strangerCannotEnterAFrameHoldingArmor(GameTestHelper helper) {
         ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
         ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
         FrameStateAccess frames = Compat.frameState();
         FrameState state = charged(ownedBy(owner));
         state.setUnlocked(true);
-        ExoframeEntity frame = frameWithStowedBoots(helper, owner, state);
-        Vec3 spot = frame.position();
+        ExoframeEntity frame = frameWithStowedBoots(helper, owner, state, new Vec3(2.5, 1.0, 2.5));
+        ExoframeEntity ownerless = frameWithStowedBoots(helper, owner,
+                charged(new FrameState(RedstoneExoframes.config())), new Vec3(5.5, 1.0, 5.5));
 
-        helper.assertTrue(FrameEntry.enter(stranger, frame), "stranger could not enter an unlocked frame");
-
+        helper.assertTrue(!FrameEntry.enter(stranger, frame), "stranger entered a frame holding the owner's armor");
+        helper.assertTrue(frames.placed(server, frame.frameId()).orElseThrow().hasStowed() && !frame.isRemoved()
+                && frames.wornFrameId(stranger).isEmpty(), "refused entry changed the frame or the stranger");
         helper.assertTrue(countInMainInventory(stranger, Items.IRON_BOOTS) == 0
                 && countInMainInventory(owner, Items.IRON_BOOTS) == 0, "boots given to a player");
-        List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
-                SuitSize.standingBox(spot).inflate(2.0), e -> e.getItem().is(Items.IRON_BOOTS));
-        helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
-                dropped.size() + " dropped boots, expected one stack of 1");
-        ItemEntity boots = dropped.get(0);
-        helper.assertTrue(boots.position().distanceTo(spot) < 1e-6 && boots.getDeltaMovement().equals(Vec3.ZERO),
-                "boots not lying at the frame: " + boots.position() + " moving " + boots.getDeltaMovement());
-        boots.discard();
-        helper.assertTrue(frames.takeStowed(stranger).isEmpty(), "owner's boots still in the record");
+        helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                SuitSize.standingBox(frame.position()).inflate(4.0), e -> e.getItem().is(Items.IRON_BOOTS)).isEmpty(),
+                "boots put on the ground");
+        helper.assertTrue(!FrameEntry.enter(stranger, ownerless), "stranger entered an ownerless frame with armor");
+        helper.assertTrue(!FrameEntry.enter(owner, ownerless), "player entered an ownerless frame with armor");
+        helper.assertTrue(frames.placed(server, ownerless.frameId()).orElseThrow().hasStowed(),
+                "refused entry took the armor of the ownerless frame");
+
+        stranger.setShiftKeyDown(true);
+        helper.assertTrue(click(frame, stranger, 0.0, 1.6, 0.0).consumesAction(), "take out click not consumed");
+        stranger.setShiftKeyDown(false);
+        helper.assertTrue(countInMainInventory(stranger, Items.IRON_BOOTS) == 1, "boots not taken out");
+        helper.assertTrue(FrameEntry.enter(stranger, frame), "stranger could not enter the emptied frame");
+        helper.assertTrue(frames.takeStowed(stranger).isEmpty(), "unexpected armor in the record");
         leaveTestFrame(stranger);
+        frames.takeStowedOfPlaced(server, ownerless.frameId());
+        removeFrame(server, ownerless);
         helper.succeed();
     }
 
     /**
      * Un telaio piazzato con lo stato dato e un paio di stivali di ferro stivati, come dopo una morte: il giocatore
-     * entra dal registro, stiva gli stivali ed esce; poi l'entita' nel punto.
+     * entra dal registro, stiva gli stivali ed esce; poi l'entita' nel punto relativo alla struttura.
      */
-    private static ExoframeEntity frameWithStowedBoots(GameTestHelper helper, ServerPlayer player, FrameState state) {
+    private static ExoframeEntity frameWithStowedBoots(GameTestHelper helper, ServerPlayer player, FrameState state,
+            Vec3 relativeFeet) {
         ServerLevel level = helper.getLevel();
         FrameStateAccess frames = Compat.frameState();
-        Vec3 feet = helper.absoluteVec(new Vec3(4.5, 1.0, 4.5));
+        Vec3 feet = helper.absoluteVec(relativeFeet);
         UUID frameId = frames.place(level, state, feet, 0f);
         helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
         frames.stow(player, List.of(new StowedStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS))));

@@ -22,5 +22,6 @@
   "message.redstone_exoframes.locked": "Questo telaio è bloccato dal suo proprietario",
   "message.redstone_exoframes.slot_taken": "Quello slot è già occupato",
   "message.redstone_exoframes.no_cell": "Al telaio serve una cella carica",
-  "message.redstone_exoframes.already_inside": "Sei già dentro un telaio"
+  "message.redstone_exoframes.already_inside": "Sei già dentro un telaio",
+  "message.redstone_exoframes.holds_armor": "Questo telaio contiene ancora un'armatura: prima tirala fuori (accovacciato e clic destro)"
 }

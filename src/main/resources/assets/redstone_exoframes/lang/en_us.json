@@ -22,5 +22,6 @@
   "message.redstone_exoframes.locked": "This exoframe is locked by its owner",
   "message.redstone_exoframes.slot_taken": "That slot is already taken",
   "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell",
-  "message.redstone_exoframes.already_inside": "You are already inside an exoframe"
+  "message.redstone_exoframes.already_inside": "You are already inside an exoframe",
+  "message.redstone_exoframes.holds_armor": "This exoframe still holds armor: take it out first (sneak and right-click)"
 }
