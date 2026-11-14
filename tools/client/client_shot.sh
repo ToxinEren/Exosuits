@@ -10,7 +10,8 @@
 # back.png (da dietro), front.png (davanti), quarter.png (da dietro a tre quarti) con l'interfaccia nascosta, piu'
 # i log: gradle-server.log e gradle-client.log (uscita di Gradle e del gioco), server.log e client.log (latest.log
 # delle due cartelle di esecuzione), rcon.log (comandi e risposte), xvfb.log (uscita di Xvfb), log-check.txt
-# (avvisi ed errori del mod o dei mixin nei due log, vuoto se non ce ne sono). Prima di cominciare cancella dalla
+# (avvisi ed errori del mod o dei mixin nei due log fuori da tools/log_allowlist.txt, vuoto se non ce ne sono: se non
+# e' vuoto l'esecuzione esce con 1). Prima di cominciare cancella dalla
 # cartella solo questi file, per nome (e gli scatti dei passi @scatto). Alla fine chiude server, client e Xvfb, anche
 # dopo un errore o Ctrl-C.
 #
@@ -42,9 +43,11 @@
 #   EXO_SHOT_USER     nome del giocatore offline, default Exo
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
 #
-# Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, passo non
-# riuscito, scatto); 2 uso o ambiente sbagliati (variante, passo sconosciuto o scritto male, tasto sconosciuto,
-# programmi mancanti, EULA, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+# Uscite: 0 scatti salvati e log puliti; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato,
+# passo non riuscito, scatto, avvisi del mod fuori elenco in log-check.txt); 2 uso o ambiente sbagliati (variante,
+# passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, porta occupata, Xvfb che non parte,
+# OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa
+# non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -461,21 +464,15 @@ for _ in $(seq 12); do xdotool mousemove_relative -- 60 0; sleep 0.15; done
 sleep 2
 shot quarter
 
-# Log del client e del server: righe WARN/ERROR che nominano il mod o i mixin, eccezioni e tracce che passano dal
-# codice del mod, errori di applicazione dei mixin. Sono da guardare, non fermano lo script. Escluse due righe note e
-# innocue dello sviluppo: GeckoLib non trova il proprio refmap ("If this is a development environment you can ignore
-# this message") e, su NeoForge, JarJar che trova mixinextras gia' passato come libreria.
-{
-    grep -HE '/(WARN|ERROR)\]' "$out/gradle-client.log" "$out/gradle-server.log" \
-        | grep -iE 'redstone_exoframes|redstone exoframes|exoframes|mixin'
-    grep -HE 'com\.toxineren|InvalidInjectionException|MixinApplyError|Mixin apply .*failed' \
-        "$out/gradle-client.log" "$out/gradle-server.log"
-} | grep -v -e 'If this is a development environment you can ignore this message' \
-    -e 'Attempted to select a dependency jar for JarJar which was passed in as source' | sort -u >"$out/log-check.txt"
+# Log del client e del server: le righe WARN/ERROR che nominano il mod o la sua entita' (anche quelle di vanilla, come
+# "UUID of added entity already exists: ExoframeEntity[...]"), gli errori di applicazione dei mixin e le tracce che
+# passano dal codice del mod, fuori dall'elenco degli avvisi voluti (tools/log_allowlist.txt, ambito client), vanno
+# in log-check.txt; se non e' vuoto l'esecuzione fallisce (uscita 1), dopo aver salvato scatti e log.
+python3 -I "$root/tools/check_log.py" client "$out/gradle-client.log" "$out/gradle-server.log" \
+    >"$out/log-check.txt" 2>&1
 if [ -s "$out/log-check.txt" ]; then
-    log "ATTENZIONE: $(wc -l <"$out/log-check.txt") righe del mod o dei mixin da guardare nei log: $out/log-check.txt"
-else
-    log "log: nessun avviso o errore del mod o dei mixin"
+    fail "$(wc -l <"$out/log-check.txt") righe del mod fuori dall'elenco degli avvisi voluti: $out/log-check.txt"
 fi
+log "log: nessun avviso o errore del mod fuori dall'elenco degli avvisi voluti"
 log "fatto in $(($(date +%s) - t0)) s, chiusura"
 exit 0

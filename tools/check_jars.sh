@@ -8,6 +8,13 @@ fail=0
 err() { echo "FAIL: $1: $2" >&2; fail=1; }
 
 command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 non trovato: serve per leggere i metadati e per il controllo di privacy" >&2; exit 1; }
+# tomllib (per leggere neoforge.mods.toml) c'e' da Python 3.11: con uno piu' vecchio il controllo (e2) del jar NeoForge
+# fallirebbe con un messaggio che non dice la causa.
+if ! python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then
+    pyver=$(python3 -c 'import platform; print(platform.python_version())')
+    echo "FAIL: python3 $pyver troppo vecchio: serve Python 3.11 o piu' recente (tomllib)" >&2
+    exit 1
+fi
 
 shopt -s nullglob
 dir=${1:-build/libs/all}
@@ -108,11 +115,12 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
     # (e2) mixin: la configurazione e' alla radice, e' quella della versione (compatibilityLevel), richiesta, con
     #      defaultRequire 1, senza refmap; la sezione mixins (comune ai due lati) elenca esattamente la classe della
     #      grandezza reale della versione del jar (PlayerSize120Mixin o PlayerSize121Mixin), e la classe dell'altra
-    #      versione non e' nel jar (la esclude build.gradle.kts); la sezione server e' vuota, la sezione client non lo
-    #      e'; ogni classe elencata e' nel jar con i nomi nello spazio del loader (intermediary su Fabric, SRG su
-    #      Forge, Mojang su NeoForge), riconosciuti dai nomi Mojang dei bersagli; il mixin della grandezza e quello del
-    #      culling portano esattamente i nomi attesi dei loro bersagli per loader e versione; i metadati del loader la
-    #      dichiarano (fabric.mod.json "mixins", MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
+    #      versione non e' nel jar (la esclude build.gradle.kts); la sezione server e' vuota, la sezione client elenca
+    #      esattamente le tre classi ammesse (CLIENT qui sotto, in qualunque ordine); ogni classe elencata e' nel jar
+    #      con i nomi nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge), riconosciuti
+    #      dai nomi Mojang dei bersagli; il mixin della grandezza e quello del culling portano esattamente i nomi
+    #      attesi dei loro bersagli per loader e versione; i metadati del loader la dichiarano (fabric.mod.json
+    #      "mixins", MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
     mixins=redstone_exoframes.mixins.json
     case "$mc" in
         1.20.1) level=JAVA_17; size_mixin=PlayerSize120Mixin; other_size_mixin=PlayerSize121Mixin ;;
@@ -131,6 +139,8 @@ import json, re, sys, zipfile
 jar, cfg_name, level, names, size_mixin, other_size_mixin, loader, mc = sys.argv[1:]
 # Nomi esatti dei bersagli della grandezza reale e del culling nel jar, per loader e versione (dopo remapJar).
 CULLING = "client.LivingEntityCullingMixin"
+# Le sole classi ammesse nella sezione client (lato client soltanto: un server dedicato non le carica).
+CLIENT = sorted(["client.ItemInHandLayerMixin", CULLING, "client.PlayerRendererMixin"])
 TARGETS = {
     ("neoforge", "1.21.1"): {"PlayerSize121Mixin": [b"getDefaultDimensions("],
                              CULLING: [b"getBoundingBoxForCulling("]},
@@ -162,8 +172,8 @@ with zipfile.ZipFile(jar) as z:
     if "refmap" in cfg:
         print(f"{cfg_name}: dichiara il refmap {cfg['refmap']}, che nessun loader richiede (vedi (e))")
     client = cfg.get("client") or []
-    if not client:
-        print(f"{cfg_name}: sezione client vuota")
+    if sorted(client) != CLIENT:
+        print(f"{cfg_name}: sezione client {sorted(client)} invece di {CLIENT}")
     package = cfg.get("package", "")
     other = (package + "." + other_size_mixin).replace(".", "/") + ".class"
     if other in files:

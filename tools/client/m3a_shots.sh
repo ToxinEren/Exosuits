@@ -69,11 +69,12 @@ for i in "${!names[@]}"; do
         # Uso o ambiente sbagliati (EULA, programmi, variante, porta): uguale per tutti gli scatti, inutile insistere.
         echo "FAIL $variant $name: client_shot.sh e' uscito con 2 (vedi il messaggio sopra)" >&2
         exit 2
+    elif [ "$code" -ne 0 ] && [ -s "$out/$name/log-check.txt" ]; then
+        summary+=("FAIL $name (${secs} s): avvisi del mod fuori elenco in $out/$name/log-check.txt")
+        fail=1
     elif [ "$code" -ne 0 ]; then
         summary+=("FAIL $name (${secs} s, uscita $code)")
         fail=1
-    elif [ -s "$out/$name/log-check.txt" ]; then
-        summary+=("OK   $name (${secs} s), ma con righe da guardare in $out/$name/log-check.txt")
     else
         summary+=("OK   $name (${secs} s)")
     fi

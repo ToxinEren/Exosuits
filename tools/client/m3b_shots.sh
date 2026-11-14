@@ -130,10 +130,10 @@ steps=(
 echo "=== $variant m3b"
 bash "$here/client_shot.sh" "$variant" "$out" "${steps[@]}"
 code=$?
-if [ "$code" -eq 0 ] && [ -s "$out/log-check.txt" ]; then
-    echo "OK $variant, ma con righe da guardare in $out/log-check.txt"
-elif [ "$code" -eq 0 ]; then
+if [ "$code" -eq 0 ]; then
     echo "OK $variant: scatti in $out"
+elif [ -s "$out/log-check.txt" ]; then
+    echo "FAIL $variant: avvisi del mod fuori elenco in $out/log-check.txt" >&2
 else
     echo "FAIL $variant: client_shot.sh e' uscito con $code" >&2
 fi

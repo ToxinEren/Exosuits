@@ -1,0 +1,46 @@
+# Avvisi ed errori voluti nei log, letti da tools/check_log.py (lo chiamano tools/run_gametests.sh per il log dei test
+# in gioco e tools/client/client_shot.sh per i log di server e client). Ogni riga WARN/ERROR/FATAL che nomina il mod
+# (o la sua entita') e non e' qui fa fallire l'esecuzione; anche una riga di qui che compare piu' volte del massimo.
+#
+# Una riga per avviso voluto, quattro campi separati da " | ":
+#   ambito | massimo | messaggio | chi la produce
+# - ambito: gametest (un'esecuzione di run_gametests.sh, una variante) o client (un log di client_shot.sh: il server
+#   e il client si contano ciascuno per conto suo);
+# - massimo: quante volte al massimo puo' comparire in un log (i test girano tutti in un'esecuzione, una volta);
+# - messaggio: espressione regolare di Python che deve corrispondere al messaggio INTERO (quello che segue il nome
+#   del logger), con gli id e i percorsi scritti per esteso: niente ".*" in testa o in coda, niente che possa
+#   coprire un avviso diverso da quello voluto;
+# - chi la produce: il test di gametest/ExoframeGameTests.java, o l'avvio che la scrive.
+# Le righe "= NOME espressione" definiscono un pezzo che le righe seguenti usano come {NOME}.
+#
+# Chi aggiunge un test che provoca un avviso di proposito aggiunge qui la sua riga (o alza il massimo di quella che
+# c'e'), nello stesso commit; chi lo toglie toglie la riga. Le righe di traccia che seguono una riga ammessa (per
+# esempio quella dell'errore di lettura di vanilla) sono ammesse con lei.
+
+= UUID [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+= TESTREG \S*exoframes-registry-test[0-9]+[/\\]redstone_exoframes_frames\.dat
+= STAMP \.unreadable-[0-9]{8}-[0-9]{6}(-[0-9]+)?
+
+# --- test in gioco -------------------------------------------------------------------------------------------------
+# Un id di grado sconosciuto nel riassunto di un torso.
+gametest | 1 | Ignoring unknown tier id in mod NBT data: mythic | debugWearHandlesTorsoWithoutValidSummary
+# Una voce di armatura stivata con un oggetto che non esiste (una per test; il motivo cambia con la versione, e il mod
+# lo tronca a 64 caratteri).
+gametest | 2 | Unreadable stowed armor entry in frame {UUID} \(item redstone_exoframes:no_such_item, data version [0-9]+\), kept in the frame registry unchanged: (unknown item or invalid stack|Unknown registry key in ResourceKey\[minecraft:root / minecraft:i) | stowedStackFromOlderVersionIsRead, registryFileIsReadBack
+# La stessa voce resta nei dati quando il telaio esce dal registro: senza proprietario (un telaio tolto) ...
+gametest | 2 | Frame {UUID} \(owner none\) left the registry with 1 stowed armor entries still inside: kept in the saved data under 'orphaned' | stowedStackFromOlderVersionIsRead, registryFileIsReadBack
+# ... e con il proprietario (il telaio del test, tolto alla fine).
+gametest | 1 | Frame {UUID} \(owner {UUID}\) left the registry with 1 stowed armor entries still inside: kept in the saved data under 'orphaned' | registryFileIsReadBack
+# Il file del registro rovinato apposta, in una copia in una cartella temporanea (mai il file del mondo): vanilla
+# non lo legge (due volte) ...
+gametest | 2 | Error loading saved data: redstone_exoframes_frames | registryFileIsReadBack
+# ... il mod usa la copia precedente ...
+gametest | 1 | Frame registry file {TESTREG} could not be read: using the previous copy {TESTREG}_old; the unreadable file is kept as {TESTREG}{STAMP} | registryFileIsReadBack
+# ... oppure, con tutte e due rovinate, resta in sola lettura.
+gametest | 1 | Frame registry file {TESTREG} could not be read, nor its previous copy {TESTREG}_old: frames are read-only for this session and nothing is written\. Restore {TESTREG} from a backup and restart the server \(a copy of the unreadable file is kept as {TESTREG}{STAMP}\) | registryFileIsReadBack
+
+# --- avvio (test in gioco e client) ---------------------------------------------------------------------------------
+# Solo Fabric: il tipo di entita' del telaio non ha un data fixer di vanilla (deciso: vedi docs/compat.md); una volta
+# per avvio, sul server e sul client.
+gametest | 1 | No data fixer registered for exoframe | avvio del server su Fabric (registrazione dell'entita')
+client | 1 | No data fixer registered for exoframe | avvio del server e del client su Fabric (registrazione dell'entita')
