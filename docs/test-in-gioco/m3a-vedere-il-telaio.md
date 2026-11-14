@@ -2,6 +2,8 @@
 
 Per Jarvis, sul PC Windows di Luigi, con i quattro jar di questa parte. Non serve aver seguito il lavoro: qui sotto c'è tutto ciò che occorre sapere.
 
+> **Con i jar di dopo l'unione della parte 3b** (quelli del branch `m3b-entrare-uscire` o di `main` dopo l'unione) cambiano tre cose rispetto a quanto scritto sotto. (1) Il telaio da piazzare, armare e indossare esiste: le prove di entrare e uscire sono nella checklist `m3b-entrare-e-uscire.md`; qui il comando di debug resta il modo per vedere la tuta. (2) Sulle due varianti Fabric, all'avvio di client e server, il gioco scrive la riga `ERROR` `No data fixer registered for exoframe`: è nota e innocua, e non va contata fra le righe `ERROR` che nominano `exoframe` (voce del log nella sezione 2 e voce "Server dedicato"). (3) La tuta ha la sua grandezza reale: la targhetta del nome sta sopra la testa della tuta, e `/exoframe debug wear via` risponde "Eliminato il telaio che indossavi, con i suoi pezzi e la sua cella; l'armatura stivata ti è tornata".
+
 ## Cosa c'è da vedere
 
 Da questa parte un giocatore può "indossare" la tuta, ma solo per prova: non esiste ancora un telaio da costruire o in cui entrare (arriva con la parte 3b). Un comando di debug mette negli slot dell'armatura dei segnaposto invisibili, e il client disegna al loro posto la tuta:
