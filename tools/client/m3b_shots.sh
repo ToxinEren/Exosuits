@@ -19,16 +19,18 @@
 #                            essere ancora quello di prima della risposta del server)
 #   08-dentro-da-dietro      dentro la tuta, da dietro; 09-dentro-davanti: davanti
 #   10-uscita-tasto-tenuto   V tenuto, a 0,6 s: l'avanzamento sulla barra delle azioni
-#   11-uscito                dopo l'uscita, ancora davanti: il giocatore con la sua armatura dentro il telaio rimasto
+#   11-uscito                dopo l'uscita, ancora davanti: il giocatore con la sua armatura, un passo davanti al
+#                            telaio rimasto (uscendo fa un passo fuori dal telaio, nella direzione in cui guarda)
 #   12-telaio-dopo-uscita    da dietro, quattro blocchi indietro: il giocatore e il telaio rimasto
 #   13-rientrato-spostato    rientrato a mano vuota e portato con un tp in 3,5 -60 2,5
 #   14-telaio-dopo-morte     dopo /kill e la rinascita: il telaio rimasto dove il giocatore e' morto
-#   15-armatura-ritrovata    rientrato nel telaio lasciato dalla morte e riuscito con V: l'inventario aperto mostra
-#                            elmo e corazza di ferro, restituiti dal telaio
+#   15-armatura-ritrovata    rientrato nel telaio lasciato dalla morte (l'armatura resta nel telaio) e riuscito con V:
+#                            l'inventario aperto mostra elmo e corazza di ferro di nuovo nei loro slot
 #
 # Fra un passo e l'altro i comandi del server controllano lo stato (execute if/unless: un controllo che non torna ferma
 # l'esecuzione): dove sta l'entita' telaio e quante ce ne sono, i segnaposto negli slot armatura solo mentre il
-# giocatore e' dentro, l'armatura di ferro restituita all'uscita, niente a terra dopo la morte; "data get entity"
+# giocatore e' dentro, l'armatura di ferro restituita all'uscita nei suoi slot (e non al rientro dopo la morte), il
+# passo fuori dal telaio a ogni uscita, niente a terra dopo la morte; "data get entity"
 # sull'entita' telaio scrive in rcon.log il suo stato. Dove e' finito un pezzo (l'elmo sulla testa, il braccio sul
 # lato destro del telaio) nessun comando lo controlla, perche' il registro non si legge con i comandi: lo dicono solo
 # gli scatti 02 e 03, da guardare; la cella la prova l'ingresso riuscito. Alla fine la telecamera torna in prima
@@ -58,6 +60,7 @@ frame='@e[type=redstone_exoframes:exoframe]'
 hand="item replace entity $u weapon.mainhand with"
 view="tp $u 0.5 -60 -1.5 0 10" # quattro blocchi davanti al telaio, rivolto verso di lui
 frame_at() { echo "execute if entity @e[type=redstone_exoframes:exoframe,x=$1,y=-60,z=$2,distance=..0.01]"; }
+player_at() { echo "execute if entity @a[name=$u,x=$1,y=-60,z=$2,distance=..0.01]"; }
 slot_has() { echo "execute if data entity $u Inventory[{Slot:$1b,id:\"$2\"}]"; }
 has() { echo "execute if data entity $u Inventory[{id:\"$1\"}]"; }
 lacks() { echo "execute unless data entity $u Inventory[{id:\"$1\"}]"; }
@@ -94,7 +97,7 @@ steps=(
     "@tieni F5 0.2" "@attendi 2" "@scatto 09-dentro-davanti"
     # 6. uscire tenendo V
     "@tieni v 2 10-uscita-tasto-tenuto 0.6" "@attendi 1" "@scatto 11-uscito"
-    "$(frame_at 0.5 2.5)" "${one_frame[@]}" "${undressed[@]}"
+    "$(frame_at 0.5 2.5)" "${one_frame[@]}" "${undressed[@]}" "$(player_at 0.5 1.5)"
     "$(slot_has 103 minecraft:iron_helmet)" "$(slot_has 102 minecraft:iron_chestplate)"
     "data get entity @e[type=redstone_exoframes:exoframe,limit=1]"
     "$view" "@tieni F5 0.2" "@tieni F5 0.2" "@attendi 2" "@scatto 12-telaio-dopo-uscita"
@@ -107,12 +110,14 @@ steps=(
     "execute unless data entity $u Inventory[0]"
     "data get entity @e[type=redstone_exoframes:exoframe,limit=1]"
     "tp $u 3.5 -60 -1.5 0 10" "@attendi 3" "@scatto 14-telaio-dopo-morte"
-    # 8. il proprietario rientra: l'armatura rimasta nel telaio gli torna; esce con V
+    # 8. il proprietario rientra: l'armatura rimasta nel telaio resta li'; esce con V e la ritrova nei suoi slot
     "tp $u 3.5 -60 1.2 0 0" "@attendi 1" "@click destro" "@attendi 1"
-    "${dressed[@]}" "$(has minecraft:iron_helmet)" "$(has minecraft:iron_chestplate)"
+    "${dressed[@]}" "$(lacks minecraft:iron_helmet)" "$(lacks minecraft:iron_chestplate)"
+    "execute unless entity $frame" "execute unless entity @e[type=item]"
     "@tieni v 2" "@attendi 1"
-    "$(frame_at 3.5 2.5)" "${one_frame[@]}" "${undressed[@]}"
-    "$(has minecraft:iron_helmet)" "$(has minecraft:iron_chestplate)"
+    "$(frame_at 3.5 2.5)" "${one_frame[@]}" "${undressed[@]}" "$(player_at 3.5 1.5)"
+    "$(slot_has 103 minecraft:iron_helmet)" "$(slot_has 102 minecraft:iron_chestplate)"
+    "execute unless entity @e[type=item]"
     "data get entity @e[type=redstone_exoframes:exoframe,limit=1]"
     "tp $u 3.5 -60 -1.5 0 10" "@attendi 2" "@tieni e 0.2" "@attendi 1" "@scatto 15-armatura-ritrovata"
     "@tieni Escape 0.2"
