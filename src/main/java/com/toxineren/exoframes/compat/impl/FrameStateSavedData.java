@@ -56,7 +56,8 @@ import net.minecraft.core.HolderLookup;
  * ({@link #saveWithPlayersIfNeeded}); i salvataggi del gioco scrivono i giocatori e poi i livelli. Resta un arresto
  * brusco nei millisecondi di un salvataggio. Mentre il salvataggio e' spento con {@code /save-off} non e' cosi': il
  * gioco scrive ancora i file dei giocatori al salvataggio automatico e all'uscita di un giocatore, questo file solo
- * all'uscita di un giocatore che segue un'operazione strutturale. L'armatura stivata qui e' una lista di tag opachi.
+ * con {@code /save-all}, alla chiusura del server o all'uscita di un giocatore che segue un'operazione strutturale.
+ * L'armatura stivata qui e' una lista di tag opachi.
  * <p>
  * Si usa un SavedData, e non gli attachment o le capability dei loader, perche' e' un'unica implementazione per i
  * quattro target e lo stato non dipende dall'entita' del giocatore (morte, respawn e cambio di dimensione non lo

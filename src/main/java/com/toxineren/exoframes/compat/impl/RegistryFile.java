@@ -30,7 +30,7 @@ import net.minecraft.nbt.NbtAccounter;
  * classe del gioco oltre a NBT, cosi' i test JUnit la provano su cartelle temporanee.
  * <p>
  * Scrittura ({@link #write}): il tag va in un file temporaneo accanto ({@code <nome>-<numero>.tmp}, creato con i
- * permessi predefiniti dei file nuovi, come gli altri file del mondo), che si forza sul disco; poi il file in uso, se
+ * permessi predefiniti dei file nuovi, 0644 con la umask usuale), che si forza sul disco; poi il file in uso, se
  * c'e', si copia accanto come copia precedente ({@code <nome>_old}, come fa il gioco per i file dei giocatori), e il
  * temporaneo prende il suo posto con uno spostamento atomico. In ogni momento il file in uso e' intero, il vecchio o il
  * nuovo. Una scrittura che fallisce prima della copia lascia il file in uso e la copia precedente come erano; una che

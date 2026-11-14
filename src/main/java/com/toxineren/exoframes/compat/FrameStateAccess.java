@@ -40,8 +40,8 @@ import net.minecraft.world.phys.Vec3;
  * salvati, si salvano tutti i giocatori e il registro insieme, e i salvataggi del gioco scrivono gli uni e l'altro.
  * Resta solo un arresto brusco nei millisecondi di un salvataggio. Mentre il salvataggio e' spento con
  * {@code /save-off} non e' cosi': il gioco scrive ancora i file dei giocatori al salvataggio automatico e all'uscita
- * di un giocatore, il registro solo all'uscita di un giocatore che segue un cambio strutturale. Ogni record porta
- * l'armatura stivata ({@link StowedStack}), che non va mai ai client.
+ * di un giocatore, il registro solo con {@code /save-all}, alla chiusura del server o all'uscita di un giocatore che
+ * segue un cambio strutturale. Ogni record porta l'armatura stivata ({@link StowedStack}), che non va mai ai client.
  * Le operazioni di registro sono solo sul server, sul thread di gioco; ogni scrittura segna il dato come da salvare.
  * Se il dato salvato e' in sola lettura (salvato da una versione piu' recente della mod, o illeggibile con la sua
  * copia precedente) le scritture non fanno nulla e danno falso, vuoto o null (un solo ERROR nel log), e le letture
