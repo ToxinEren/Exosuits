@@ -292,12 +292,9 @@ public final class FrameInteractions {
      */
     private static InteractionResult unmountPiece(ServerPlayer player, ExoframeEntity frame, PlacedFrame record,
             PieceSlot slot) {
-        FrameState state = record.state();
-        Piece piece = state.pieces().get(slot);
-        List<ModuleType> modules = List.copyOf(state.modules().getOrDefault(slot, List.of()));
         ItemStack stack;
         try {
-            stack = PieceItem.fromPiece(piece, modules, state.appearance(slot));
+            stack = pieceStack(record.state(), slot);
         } catch (IllegalArgumentException e) {
             RedstoneExoframes.LOGGER.warn("Cannot unmount {} from frame {}: {}", slot, record.frameId(),
                     e.getMessage());
@@ -309,6 +306,21 @@ public final class FrameInteractions {
         Handouts.give(player, stack);
         refreshSummary(player.getServer(), frame);
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * L'oggetto del pezzo montato nello slot, con la sua durabilita' e i moduli e l'aspetto dello slot; lo stato non
+     * cambia (chi smonta toglie poi il pezzo dal registro, e solo dopo consegna l'oggetto).
+     *
+     * @throws IllegalArgumentException se lo slot e' vuoto o per il livello del pezzo non c'e' un oggetto
+     */
+    public static ItemStack pieceStack(FrameState state, PieceSlot slot) {
+        Piece piece = state.pieces().get(slot);
+        if (piece == null) {
+            throw new IllegalArgumentException("no piece mounted in " + slot);
+        }
+        List<ModuleType> modules = List.copyOf(state.modules().getOrDefault(slot, List.of()));
+        return PieceItem.fromPiece(piece, modules, state.appearance(slot));
     }
 
     /** Il riassunto dell'entita' dallo stato del suo record, dopo un cambio. */

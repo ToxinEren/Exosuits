@@ -195,6 +195,12 @@ public final class ExoframeGameTests {
         add(tests, "safeSpotFollowsTheFloorDown", ExoframeGameTests::safeSpotFollowsTheFloorDown);
         add(tests, "deathClearsPlaceholdersFromTheCraftingGrid",
                 ExoframeGameTests::deathClearsPlaceholdersFromTheCraftingGrid);
+        add(tests, "ownerUnlocksAndStrangerCanUse", ExoframeGameTests::ownerUnlocksAndStrangerCanUse);
+        add(tests, "strangerCannotUnlock", ExoframeGameTests::strangerCannotUnlock);
+        add(tests, "lockAndUnlockTheWornFrame", ExoframeGameTests::lockAndUnlockTheWornFrame);
+        add(tests, "wallHidesTheFrameFromTheCommand", ExoframeGameTests::wallHidesTheFrameFromTheCommand);
+        add(tests, "removeDropsTheContents", ExoframeGameTests::removeDropsTheContents);
+        add(tests, "debugNeedsOperator", ExoframeGameTests::debugNeedsOperator);
         return tests;
     }
 
@@ -2519,6 +2525,194 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
+    /**
+     * Il proprietario, senza permessi da operatore, guarda il suo telaio piazzato: {@code /exoframe unlock} lo
+     * sblocca e un estraneo in sopravvivenza ci monta un elmo; {@code /exoframe lock} lo blocca (due volte: anche gia'
+     * bloccato riesce) e l'estraneo non lo smonta piu'.
+     */
+    private static void ownerUnlocksAndStrangerCanUse(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        stranger.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity frame = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 2.5), 0f);
+        FrameState state = recordState(helper, frame);
+        standFacingNorth(helper, owner, new Vec3(2.5, 1.0, 5.5));
+
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 1, "owner could not unlock");
+        helper.assertTrue(state.unlocked(), "frame not unlocked");
+        stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+        click(frame, stranger, 0.0, 2.5, 0.0);
+        helper.assertTrue(state.pieces().containsKey(PieceSlot.HELMET),
+                "stranger could not mount on the unlocked frame");
+
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "lock") == 1, "owner could not lock");
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "lock") == 1, "locking a locked frame failed");
+        helper.assertTrue(!state.unlocked(), "frame not locked");
+        stranger.setShiftKeyDown(true);
+        click(frame, stranger, 0.0, 2.5, 0.0);
+        helper.assertTrue(state.pieces().containsKey(PieceSlot.HELMET) && stranger.getInventory().isEmpty(),
+                "stranger unmounted from the locked frame");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Chi non e' il proprietario, senza permessi da operatore, non sblocca il telaio altrui e nessuno senza quei
+     * permessi sblocca un telaio senza proprietario; un operatore sblocca l'uno e l'altro.
+     */
+    private static void strangerCannotUnlock(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity owned = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 2.5), 0f);
+        ExoframeEntity ownerless = placeFrame(helper, new FrameState(RedstoneExoframes.config()),
+                new Vec3(5.5, 1.0, 2.5), 0f);
+
+        standFacingNorth(helper, stranger, new Vec3(2.5, 1.0, 5.5));
+        helper.assertTrue(exoframeCommand(helper, stranger, 0, "unlock") == 0, "stranger unlocked the frame");
+        helper.assertTrue(!recordState(helper, owned).unlocked(), "frame unlocked by a stranger");
+        standFacingNorth(helper, owner, new Vec3(5.5, 1.0, 5.5));
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 0, "player unlocked an ownerless frame");
+        helper.assertTrue(!recordState(helper, ownerless).unlocked(), "ownerless frame unlocked");
+
+        helper.assertTrue(exoframeCommand(helper, owner, 2, "unlock") == 1, "operator could not unlock");
+        helper.assertTrue(recordState(helper, ownerless).unlocked(), "ownerless frame not unlocked by an operator");
+        helper.assertTrue(exoframeCommand(helper, stranger, 2, "unlock") == 1, "operator could not unlock");
+        helper.assertTrue(recordState(helper, owned).unlocked(), "frame not unlocked by an operator");
+        removeFrame(server, owned);
+        removeFrame(server, ownerless);
+        helper.succeed();
+    }
+
+    /**
+     * Dentro il suo telaio il proprietario lo sblocca e lo blocca senza guardare nulla; il telaio piazzato che ha
+     * davanti non cambia. {@code /exoframe remove} non tocca mai il telaio indossato.
+     */
+    private static void lockAndUnlockTheWornFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameStateAccess frames = Compat.frameState();
+        ExoframeEntity other = placeFrame(helper, ownedBy(player), new Vec3(2.5, 1.0, 2.5), 0f);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(2.5, 1.0, 5.5));
+        player.moveTo(player.getX(), player.getY(), player.getZ(), 180f, 0f);
+
+        helper.assertTrue(exoframeCommand(helper, player, 0, "unlock") == 1, "could not unlock the worn frame");
+        helper.assertTrue(frames.get(player).orElseThrow().unlocked(), "worn frame not unlocked");
+        helper.assertTrue(!recordState(helper, other).unlocked(), "the placed frame in sight was unlocked");
+        helper.assertTrue(exoframeCommand(helper, player, 0, "lock") == 1, "could not lock the worn frame");
+        helper.assertTrue(!frames.get(player).orElseThrow().unlocked(), "worn frame not locked");
+
+        helper.assertTrue(exoframeCommand(helper, player, 2, "remove") == 1, "remove did not take the frame in sight");
+        helper.assertTrue(frames.wornFrameId(player).equals(Optional.of(frameId)), "remove touched the worn frame");
+        helper.assertTrue(frames.placed(server, other.frameId()).isEmpty() && other.isRemoved(),
+                "remove did not remove the frame in sight");
+        leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un muro fra il giocatore e il telaio lo nasconde al comando: ne' {@code unlock} ne' {@code remove} lo trovano;
+     * tolto il muro, {@code unlock} lo trova.
+     */
+    private static void wallHidesTheFrameFromTheCommand(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity frame = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 2.5), 0f);
+        standFacingNorth(helper, owner, new Vec3(2.5, 1.0, 5.5));
+        for (int y = 1; y <= 3; y++) {
+            helper.setBlock(new BlockPos(2, y, 4), Blocks.STONE);
+        }
+
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 0, "unlocked a frame behind a wall");
+        helper.assertTrue(exoframeCommand(helper, owner, 2, "remove") == 0, "removed a frame behind a wall");
+        helper.assertTrue(!recordState(helper, frame).unlocked() && !frame.isRemoved(), "frame behind a wall changed");
+
+        for (int y = 1; y <= 3; y++) {
+            helper.setBlock(new BlockPos(2, y, 4), Blocks.AIR);
+        }
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 1, "could not unlock without the wall");
+        helper.assertTrue(recordState(helper, frame).unlocked(), "frame not unlocked without the wall");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * {@code /exoframe remove} sul telaio altrui che l'operatore guarda: record ed entita' spariscono e ai piedi del
+     * telaio restano, fermi, il braccio consumato con modulo e colori, l'elmo, la cella con la sua carica e gli
+     * stivali stivati; nulla fra l'armatura dei telai tolti.
+     */
+    private static void removeDropsTheContents(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer operator = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        FrameState state = ownedBy(owner);
+        Piece arm = scrapPiece(PieceSlot.LEFT_ARM);
+        arm.damage(23);
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of(new Decal("minecraft:creeper", "red")));
+        state.mount(arm);
+        state.restoreModules(PieceSlot.LEFT_ARM, List.of(ModuleType.NIGHT_VISION));
+        state.setAppearance(PieceSlot.LEFT_ARM, painted);
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        state.insertCell(new EnergyCell(capacity, capacity / 3));
+        List<ItemStack> expected = List.of(
+                PieceItem.fromPiece(arm, List.of(ModuleType.NIGHT_VISION), painted),
+                PieceItem.fromPiece(scrapPiece(PieceSlot.HELMET), List.of(), Appearance.DEFAULT),
+                CellItem.fromCell(new EnergyCell(capacity, capacity / 3)),
+                new ItemStack(Items.IRON_BOOTS));
+        ExoframeEntity frame = frameWithStowedBoots(helper, owner, state, new Vec3(2.5, 1.0, 2.5));
+        UUID frameId = frame.frameId();
+        Vec3 feet = frame.position();
+        standFacingNorth(helper, operator, new Vec3(2.5, 1.0, 5.5));
+
+        helper.assertTrue(exoframeCommand(helper, operator, 2, "remove") == 1, "remove failed");
+
+        helper.assertTrue(Compat.frameState().placed(server, frameId).isEmpty() && frame.isRemoved(),
+                "record or entity left after remove");
+        helper.assertTrue(Compat.gameTests().orphanedStowed(server, frameId).isEmpty(),
+                "remove left orphaned entries: " + Compat.gameTests().orphanedStowed(server, frameId));
+        List<ItemEntity> drops = level.getEntitiesOfClass(ItemEntity.class, new AABB(feet, feet).inflate(1.0));
+        helper.assertTrue(drops.size() == expected.size(), "dropped " + drops.size() + " stacks, expected "
+                + expected.size() + ": " + drops.stream().map(ItemEntity::getItem).toList());
+        for (ItemStack want : expected) {
+            ItemEntity drop = drops.stream().filter(d -> ItemStack.matches(want, d.getItem())).findFirst()
+                    .orElse(null);
+            helper.assertTrue(drop != null, "nothing on the ground matches " + want + ": "
+                    + drops.stream().map(ItemEntity::getItem).toList());
+            helper.assertTrue(drop.position().distanceTo(feet) < 1e-6 && drop.getDeltaMovement().equals(Vec3.ZERO),
+                    want + " not lying still at the frame's feet: " + drop.position() + ", feet " + feet);
+        }
+        drops.forEach(Entity::discard);
+        helper.succeed();
+    }
+
+    /**
+     * Senza livello di permesso 2 {@code debug} e {@code remove} non esistono per la sorgente (errore di sintassi),
+     * mentre {@code unlock} si' (senza un telaio non fa nulla); con il livello 2 {@code debug} si esegue.
+     */
+    private static void debugNeedsOperator(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+        CommandSourceStack player0 = player.createCommandSourceStack().withPermission(0).withSuppressedOutput();
+        for (String command : List.of("exoframe debug wear via", "exoframe remove")) {
+            boolean unknown;
+            try {
+                dispatcher.execute(command, player0);
+                unknown = false;
+            } catch (CommandSyntaxException e) {
+                unknown = true;
+            }
+            helper.assertTrue(unknown, command + " ran without permission level 2");
+        }
+        standFacingNorth(helper, player, new Vec3(2.5, 1.0, 5.5));
+        helper.assertTrue(exoframeCommand(helper, player, 0, "unlock") == 0, "unlock without a frame succeeded");
+        runCommand(dispatcher, player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "exoframe debug wear via");
+        helper.succeed();
+    }
+
     /** Il segnaposto dello slot, come lo darebbe {@code /give}: senza riassunto. */
     private static ItemStack placeholderFor(EquipmentSlot slot) {
         return new ItemStack(switch (slot) {
@@ -2806,6 +3000,26 @@ public final class ExoframeGameTests {
             String command) {
         try {
             dispatcher.execute(command, source);
+        } catch (CommandSyntaxException e) {
+            throw new IllegalStateException("command failed: " + command + ": " + e.getMessage(), e);
+        }
+    }
+
+    /** Il giocatore in piedi nel punto relativo alla struttura, rivolto a nord (z decrescenti), in orizzontale. */
+    private static void standFacingNorth(GameTestHelper helper, ServerPlayer player, Vec3 relativeFeet) {
+        Vec3 feet = helper.absoluteVec(relativeFeet);
+        player.moveTo(feet.x, feet.y, feet.z, 180f, 0f);
+    }
+
+    /**
+     * Esegue {@code /exoframe <sub>} come il giocatore con il livello di permesso dato e ne restituisce il risultato;
+     * un errore di sintassi fa fallire il test.
+     */
+    private static int exoframeCommand(GameTestHelper helper, ServerPlayer player, int permission, String sub) {
+        String command = "exoframe " + sub;
+        try {
+            return helper.getLevel().getServer().getCommands().getDispatcher().execute(command,
+                    player.createCommandSourceStack().withPermission(permission).withSuppressedOutput());
         } catch (CommandSyntaxException e) {
             throw new IllegalStateException("command failed: " + command + ": " + e.getMessage(), e);
         }
