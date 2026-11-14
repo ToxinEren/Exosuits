@@ -14,21 +14,24 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * L'ingresso in un telaio piazzato e l'uscita (design §5.5). Entrando il record passa da piazzato a indossato,
  * l'armatura del giocatore si stiva nel record, i quattro segnaposto vanno negli slot armatura e l'entita' sparisce;
  * uscendo i segnaposto se ne vanno, l'armatura torna al giocatore, il record torna piazzato ai suoi piedi e l'entita'
- * rinasce; ogni volta tutto nello stesso tick. Il registro e' la verita' (§4.5): ogni effetto sul giocatore e sul mondo
- * segue l'esito di {@link FrameStateAccess#enter} e {@link FrameStateAccess#exit}, e nulla (telaio, armatura,
- * segnaposto) si perde o si duplica. Qui sta anche il pacchetto C2S dell'uscita ({@link #registerNet()}).
+ * rinasce; ogni volta tutto nello stesso tick. Alla morte ({@link #onDeath}) il telaio resta nel mondo con l'armatura
+ * stivata dentro. Il registro e' la verita' (§4.5): ogni effetto sul giocatore e sul mondo segue l'esito di
+ * {@link FrameStateAccess#enter} e {@link FrameStateAccess#exit}, e nulla (telaio, armatura, segnaposto) si perde o
+ * si duplica. Qui sta anche il pacchetto C2S dell'uscita ({@link #registerNet()}).
  */
 public final class FrameEntry {
     /** Messaggio sulla barra delle azioni quando il telaio non ha una cella con carica. */
@@ -117,19 +120,19 @@ public final class FrameEntry {
     }
 
     /**
-     * Toglie il giocatore dal telaio che indossa, sul server (design, par. 5.5), tutto nello stesso tick. Se non ne
-     * indossa uno non tocca nulla e da' falso. Altrimenti, in quest'ordine:
+     * Toglie il giocatore dal telaio che indossa, sul server (design, par. 5.5), tutto nello stesso tick: e' l'uscita
+     * voluta (il tasto). Se non ne indossa uno, o non e' vivo (un pacchetto del tasto arrivato dopo la morte: la
+     * morte la gestisce solo {@link #onDeath}), non tocca nulla e da' falso. Altrimenti, in quest'ordine:
      * <ol>
-     * <li>il punto e' il suolo sotto la posizione del giocatore ({@link FramePlacement#groundBelow}), o la sua
-     * posizione se sotto non c'e' suolo;</li>
      * <li>tutti i segnaposto lasciano il giocatore, in silenzio: slot armatura, inventario principale, mano secondaria
      * ({@link DebugWear#remove}) e lo stack tenuto sul cursore; uno stack vero in uno slot armatura resta dov'e';</li>
      * <li>l'armatura stivata esce dal record ({@link FrameStateAccess#takeStowed}) e ogni stack torna nel suo slot se e'
      * vuoto, in silenzio, altrimenti va al giocatore con {@link Handouts#give}: cio' che esce dal record gli e' gia'
      * restituito prima che succeda altro;</li>
-     * <li>{@link FrameStateAccess#exit} nel livello del giocatore, nel punto, con il suo yaw riportato a [-180, 180)
-     * come per l'oggetto telaio;</li>
-     * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}) e le dimensioni del giocatore ricalcolate
+     * <li>il record diventa piazzato nel punto di riposo del telaio (vedi {@link #restingSpot}), con il yaw del
+     * giocatore riportato a [-180, 180) come per l'oggetto telaio ({@link FrameStateAccess#exit});</li>
+     * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}), se il chunk del punto ha le entita'
+     * caricate (altrimenti la crea il riallineamento quando si carica), e le dimensioni del giocatore ricalcolate
      * subito.</li>
      * </ol>
      * Il giocatore resta dov'e'. Se {@link FrameStateAccess#exit} rifiuta (non dovrebbe: il giocatore indossa un
@@ -140,17 +143,10 @@ public final class FrameEntry {
     public static boolean exit(ServerPlayer player) {
         Objects.requireNonNull(player, "player must not be null");
         FrameStateAccess frames = Compat.frameState();
-        if (frames.wornFrameId(player).isEmpty()) {
+        if (!player.isAlive() || frames.wornFrameId(player).isEmpty()) {
             return false;
         }
-        ServerLevel level = player.serverLevel();
-        Vec3 here = player.position();
-        Vec3 spot = FramePlacement.groundBelow(level, here).orElse(here);
-
-        DebugWear.remove(player);
-        if (DebugWear.isPlaceholder(player.containerMenu.getCarried())) {
-            player.containerMenu.setCarried(ItemStack.EMPTY);
-        }
+        removePlaceholders(player);
         for (StowedStack entry : frames.takeStowed(player)) {
             EquipmentSlot slot = entry.slot();
             if (DebugWear.ARMOR_SLOTS.contains(slot) && player.getItemBySlot(slot).isEmpty()) {
@@ -159,16 +155,28 @@ public final class FrameEntry {
                 Handouts.give(player, entry.stack());
             }
         }
+        return leaveFrame(player, frames);
+    }
 
-        Optional<UUID> frameId = frames.exit(player, level, spot, Mth.wrapDegrees(player.getYRot()));
-        if (frameId.isEmpty()) {
-            return false;
+    /**
+     * La morte di chi indossa un telaio (design, par. 5.5), su {@code EntityEvent.LIVING_DEATH}: l'evento arriva in
+     * testa a {@code ServerPlayer.die}, prima che il gioco faccia cadere o tenga l'inventario. Se il giocatore indossa
+     * un telaio: i segnaposto lo lasciano come in {@link #exit} (cosi' non cadono a terra e, con
+     * {@code keepInventory}, non passano al giocatore rinato); l'armatura stivata resta nel record; il record diventa
+     * piazzato nel punto di riposo del telaio ({@link #restingSpot}) e l'entita' nasce li' se il chunk ha le entita'
+     * caricate. Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
+     */
+    public static void onDeath(ServerPlayer player) {
+        try {
+            FrameStateAccess frames = Compat.frameState();
+            if (frames.wornFrameId(player).isEmpty()) {
+                return;
+            }
+            removePlaceholders(player);
+            leaveFrame(player, frames);
+        } catch (RuntimeException e) {
+            RedstoneExoframes.LOGGER.error("Could not leave the frame of player {} at death", player.getUUID(), e);
         }
-        PlacedFrame record = frames.placed(level.getServer(), frameId.get()).orElseThrow(
-                () -> new IllegalStateException("placed frame " + frameId.get() + " not found after exit"));
-        FramePlacement.spawnView(level, record);
-        player.refreshDimensions();
-        return true;
     }
 
     /**
@@ -226,6 +234,70 @@ public final class FrameEntry {
         for (StowedStack entry : worn) {
             setArmorSlot(player, entry.slot(), ItemStack.EMPTY);
         }
+    }
+
+    /** Tutti i segnaposto lasciano il giocatore, in silenzio: l'inventario ({@link DebugWear#remove}) e il cursore. */
+    private static void removePlaceholders(ServerPlayer player) {
+        DebugWear.remove(player);
+        if (DebugWear.isPlaceholder(player.containerMenu.getCarried())) {
+            player.containerMenu.setCarried(ItemStack.EMPTY);
+        }
+    }
+
+    /**
+     * La parte comune dell'uscita e della morte: il record indossato diventa piazzato nel punto di riposo, con il yaw
+     * del giocatore; l'entita' nasce se il chunk del punto ha le entita' caricate; le dimensioni si ricalcolano.
+     *
+     * @return false se il registro ha rifiutato l'uscita
+     */
+    private static boolean leaveFrame(ServerPlayer player, FrameStateAccess frames) {
+        RestingSpot spot = restingSpot(player);
+        Optional<UUID> frameId = frames.exit(player, spot.level(), spot.position(), Mth.wrapDegrees(player.getYRot()));
+        if (frameId.isEmpty()) {
+            return false;
+        }
+        PlacedFrame record = frames.placed(player.server, frameId.get()).orElseThrow(
+                () -> new IllegalStateException("placed frame " + frameId.get() + " not found after exit"));
+        ServerLevel level = spot.level();
+        ChunkPos chunk = new ChunkPos(BlockPos.containing(spot.position()));
+        // come nel riallineamento: entita' caricate e chunk pieno, senza caricare ne' generare nulla; altrove basta il
+        // record, e l'entita' la crea il riallineamento quando il chunk si carica
+        if (level.areEntitiesLoaded(chunk.toLong()) && level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
+            FramePlacement.spawnView(level, record);
+        }
+        player.refreshDimensions();
+        return true;
+    }
+
+    /**
+     * Dove va il telaio che il giocatore lascia (design, par. 5.4), uguale per l'uscita e per la morte: il suolo sotto
+     * la posizione del giocatore ({@link FramePlacement#groundBelow}); se sotto non c'e' suolo (o il punto e' sotto il
+     * limite inferiore del mondo), l'ultima posizione sicura ({@link SafeSpots#last}), in qualunque dimensione sia; in
+     * mancanza anche di quella, il punto di rinascita del mondo (quello condiviso dell'overworld), appoggiato al suolo
+     * sotto se c'e'. Non carica chunk ne' dimensioni: {@code getLevel} da' solo livelli gia' caricati e
+     * {@code groundBelow} non carica chunk.
+     */
+    private static RestingSpot restingSpot(ServerPlayer player) {
+        ServerLevel here = player.serverLevel();
+        Optional<Vec3> ground = FramePlacement.groundBelow(here, player.position());
+        if (ground.isPresent()) {
+            return new RestingSpot(here, ground.get());
+        }
+        MinecraftServer server = here.getServer();
+        Optional<SafeSpots.Spot> safe = SafeSpots.last(player);
+        if (safe.isPresent()) {
+            ServerLevel level = server.getLevel(safe.get().dimension());
+            if (level != null) {
+                return new RestingSpot(level, safe.get().position());
+            }
+        }
+        ServerLevel overworld = server.overworld();
+        Vec3 spawn = Vec3.atBottomCenterOf(overworld.getSharedSpawnPos());
+        return new RestingSpot(overworld, FramePlacement.groundBelow(overworld, spawn).orElse(spawn));
+    }
+
+    /** Il livello e il punto dei piedi in cui il telaio lasciato si piazza. */
+    private record RestingSpot(ServerLevel level, Vec3 position) {
     }
 
     /**

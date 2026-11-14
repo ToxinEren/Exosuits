@@ -34,6 +34,7 @@ import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.Handouts;
+import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -73,6 +74,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
@@ -169,6 +171,12 @@ public final class ExoframeGameTests {
         add(tests, "exitInMidAirPutsTheFrameOnTheGround", ExoframeGameTests::exitInMidAirPutsTheFrameOnTheGround);
         add(tests, "exitWithoutAFrameDoesNothing", ExoframeGameTests::exitWithoutAFrameDoesNothing);
         add(tests, "enterExitAndEnterAgainKeepTheFrame", ExoframeGameTests::enterExitAndEnterAgainKeepTheFrame);
+        add(tests, "deathLeavesTheFrameWithEverythingInside",
+                ExoframeGameTests::deathLeavesTheFrameWithEverythingInside);
+        add(tests, "deathInTheVoidUsesTheLastSafeSpot", ExoframeGameTests::deathInTheVoidUsesTheLastSafeSpot);
+        add(tests, "deathWithKeepInventoryStillLeavesTheFrame",
+                ExoframeGameTests::deathWithKeepInventoryStillLeavesTheFrame);
+        add(tests, "exitWithoutGroundUsesTheLastSafeSpot", ExoframeGameTests::exitWithoutGroundUsesTheLastSafeSpot);
         return tests;
     }
 
@@ -1977,6 +1985,204 @@ public final class ExoframeGameTests {
         helper.assertTrue(stowed.size() == 2, "expected helmet and boots stowed again, got " + stowed);
         leaveTestFrame(player);
         helper.succeed();
+    }
+
+    /**
+     * La morte nel telaio (design, par. 5.5), passando dalla morte del gioco ({@code kill}): il record e' piazzato ai
+     * piedi del giocatore con lo stesso stato (pezzi, cella con la sua carica) e con l'elmo stivato dentro, intero;
+     * l'entita' c'e', nel punto; nessun segnaposto resta al giocatore (slot, inventario, cursore) ne' e' a terra,
+     * mentre la terra dell'inventario cade come sempre (le cadute vengono dopo l'evento). Prima, un giocatore senza
+     * vita che chiede di uscire (il pacchetto del tasto arrivato dopo la morte) non cambia nulla: la morte la gestisce
+     * solo l'evento.
+     */
+    private static void deathLeavesTheFrameWithEverythingInside(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        FrameState state = charged(ownedBy(player));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        EnergyCell cell = state.cell();
+        UUID frameId = wearFrameAt(helper, player, state, new Vec3(3.5, 2.0, 3.5));
+        player.getInventory().items.set(4, new ItemStack(Items.DIRT, 3));
+        player.getInventory().items.set(5, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_HELMET.get()));
+        Vec3 feet = player.position();
+
+        float health = player.getHealth();
+        player.setHealth(0f);
+        helper.assertTrue(!FrameEntry.exit(player), "a player without health left the frame");
+        helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)) && countPlaceholders(player) == 5
+                && player.getItemBySlot(EquipmentSlot.HEAD).is(ModItems.EXOFRAME_HELMET.get())
+                && frames.placed(server, frameId).isEmpty(), "exit of a player without health changed something");
+        player.setHealth(health);
+
+        player.kill();
+
+        helper.assertTrue(player.isDeadOrDying(), "player did not die");
+        helper.assertTrue(frames.wornFrameId(player).isEmpty() && frames.get(player).isEmpty(),
+                "frame still worn after the death");
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.state() == state && record.position().equals(feet)
+                && record.dimension().equals(level.dimension()) && record.hasStowed()
+                && state.pieces().keySet().equals(EnumSet.of(PieceSlot.TORSO, PieceSlot.HELMET))
+                && state.cell() == cell && cell.stored() == cell.capacity() / 2,
+                "frame not left where the player died, with everything inside: " + record + ", feet " + feet);
+        Entity view = level.getEntity(frameId);
+        helper.assertTrue(view instanceof ExoframeEntity && !view.isRemoved() && view.position().equals(feet),
+                "frame entity missing or not at the feet: " + view);
+        helper.assertTrue(countPlaceholders(player) == 0 && !DebugWear.isPlaceholder(player.containerMenu.getCarried()),
+                "placeholders left on the dead player");
+        List<ItemEntity> drops = deathDrops(level, feet);
+        helper.assertTrue(drops.stream().noneMatch(drop -> DebugWear.isPlaceholder(drop.getItem())),
+                "a placeholder was dropped: " + drops);
+        helper.assertTrue(drops.stream().anyMatch(drop -> drop.getItem().is(Items.DIRT)),
+                "the inventory did not drop (dirt not on the ground): " + drops);
+        assertOneStowedHelmet(helper, frames.takeStowedOfPlaced(server, frameId), helmet, "frame left by the death");
+        drops.forEach(Entity::discard);
+        removeFrame(server, (ExoframeEntity) view);
+        helper.succeed();
+    }
+
+    /**
+     * La posizione sicura si ricorda per chi indossa il telaio ed e' a terra, non in aria; morendo sotto il limite
+     * inferiore del mondo il telaio va li', con la sua entita', e non nel punto di morte.
+     */
+    private static void deathInTheVoidUsesTheLastSafeSpot(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(5.5, 2.0, 2.5));
+        Vec3 safe = player.position();
+        rememberSafeSpot(helper, player, level, safe);
+        Vec3 below = new Vec3(safe.x, level.getMinBuildHeight() - 70.0, safe.z);
+        player.setOnGround(false);
+        player.moveTo(below.x, below.y, below.z, 0f, 0f);
+        SafeSpots.tick(player);
+        helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(level.dimension(), safe))),
+                "safe spot changed while in the air: " + SafeSpots.last(player));
+
+        player.kill();
+
+        helper.assertTrue(player.isDeadOrDying(), "player did not die");
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.position().equals(safe)
+                && record.dimension().equals(level.dimension()), "frame not at the last safe spot: " + record
+                + ", safe " + safe);
+        Entity view = level.getEntity(frameId);
+        helper.assertTrue(view instanceof ExoframeEntity && view.position().equals(safe),
+                "frame entity not at the last safe spot: " + view);
+        helper.assertTrue(countPlaceholders(player) == 0, "placeholders left on the dead player");
+        deathDrops(level, below).forEach(Entity::discard);
+        removeFrame(server, (ExoframeEntity) view);
+        helper.succeed();
+    }
+
+    /**
+     * Con {@code keepInventory} la morte lascia il telaio come sempre: nessun segnaposto resta nell'inventario che
+     * passa al giocatore rinato (lo copia {@code restoreFrom}), il resto dell'inventario resta e nulla cade. La regola
+     * torna com'era.
+     */
+    private static void deathWithKeepInventoryStillLeavesTheFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        GameRules.BooleanValue keepInventory = level.getGameRules().getRule(GameRules.RULE_KEEPINVENTORY);
+        boolean before = keepInventory.get();
+        keepInventory.set(true, server);
+        try {
+            player.setItemSlot(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS));
+            UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(2.5, 2.0, 6.5));
+            player.getInventory().items.set(4, new ItemStack(Items.DIRT, 3));
+            player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_BOOTS.get()));
+            Vec3 feet = player.position();
+
+            player.kill();
+
+            helper.assertTrue(player.isDeadOrDying(), "player did not die");
+            helper.assertTrue(countPlaceholders(player) == 0, "placeholders kept in the inventory");
+            helper.assertTrue(countInMainInventory(player, Items.DIRT) == 3, "the kept inventory changed");
+            PlacedFrame record = frames.placed(server, frameId).orElse(null);
+            helper.assertTrue(record != null && record.position().equals(feet) && record.hasStowed(),
+                    "frame not left at the feet with the boots inside: " + record);
+            Entity view = level.getEntity(frameId);
+            helper.assertTrue(view instanceof ExoframeEntity && view.position().equals(feet),
+                    "frame entity missing: " + view);
+            List<ItemEntity> drops = deathDrops(level, feet);
+            helper.assertTrue(drops.isEmpty(), "items dropped with keepInventory: " + drops);
+            List<StowedStack> stowed = frames.takeStowedOfPlaced(server, frameId);
+            helper.assertTrue(stowed.size() == 1 && stowed.get(0).stack().is(Items.IRON_BOOTS),
+                    "expected the boots in the frame, got " + stowed);
+            removeFrame(server, (ExoframeEntity) view);
+        } finally {
+            keepInventory.set(before, server);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Uscire volontariamente dove sotto non c'e' suolo (sotto il limite inferiore del mondo): il telaio va all'ultima
+     * posizione sicura, con la sua entita'; il giocatore resta dov'e'.
+     */
+    private static void exitWithoutGroundUsesTheLastSafeSpot(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(6.5, 2.0, 5.5));
+        Vec3 safe = player.position();
+        rememberSafeSpot(helper, player, level, safe);
+        Vec3 below = new Vec3(safe.x, level.getMinBuildHeight() - 10.0, safe.z);
+        player.setOnGround(false);
+        player.moveTo(below.x, below.y, below.z, 0f, 0f);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.position().equals(safe)
+                && record.dimension().equals(level.dimension()), "frame not at the last safe spot: " + record
+                + ", safe " + safe);
+        Entity view = level.getEntity(frameId);
+        helper.assertTrue(view instanceof ExoframeEntity && view.position().equals(safe),
+                "frame entity not at the last safe spot: " + view);
+        helper.assertTrue(player.position().equals(below) && countPlaceholders(player) == 0,
+                "player moved or kept placeholders: " + player.position());
+        removeFrame(server, (ExoframeEntity) view);
+        helper.succeed();
+    }
+
+    /**
+     * Mette il giocatore dentro un telaio con lo stato dato, in piedi su un blocco di pietra posato sotto il punto
+     * relativo alla struttura, con un clic come un giocatore vero ({@link FrameEntry#enter}); da' l'identita' del
+     * telaio.
+     */
+    private static UUID wearFrameAt(GameTestHelper helper, ServerPlayer player, FrameState state, Vec3 relativeFeet) {
+        helper.setBlock(BlockPos.containing(relativeFeet).below(), Blocks.STONE);
+        ExoframeEntity frame = placeFrame(helper, state, relativeFeet, 0f);
+        helper.assertTrue(FrameEntry.enter(player, frame), "enter refused");
+        return frame.frameId();
+    }
+
+    /**
+     * Il giocatore, a terra in {@code spot} (dove sta), fa un tick di {@link SafeSpots}: la posizione si ricorda. Il
+     * giocatore finto non fa tick da se': il suo contatore dei tick e' ancora su un multiplo dell'intervallo.
+     */
+    private static void rememberSafeSpot(GameTestHelper helper, ServerPlayer player, ServerLevel level, Vec3 spot) {
+        player.setOnGround(true);
+        SafeSpots.tick(player);
+        helper.assertTrue(SafeSpots.last(player).equals(Optional.of(new SafeSpots.Spot(level.dimension(), spot))),
+                "safe spot not remembered: " + SafeSpots.last(player) + ", expected " + spot);
+    }
+
+    /** Gli oggetti a terra entro 2,5 blocchi da {@code center}, come li lascia nel suo tick una morte in quel punto. */
+    private static List<ItemEntity> deathDrops(ServerLevel level, Vec3 center) {
+        return level.getEntitiesOfClass(ItemEntity.class, new AABB(center, center).inflate(2.5));
     }
 
     /**
