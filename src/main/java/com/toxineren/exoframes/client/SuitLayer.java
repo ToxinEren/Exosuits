@@ -2,9 +2,7 @@ package com.toxineren.exoframes.client;
 
 import com.google.common.collect.MapMaker;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
-import com.toxineren.exoframes.compat.client.ClientCompat;
 import com.toxineren.exoframes.compat.client.SuitView;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.frame.SuitSize;
@@ -21,17 +19,13 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Layer del renderer del giocatore che disegna la tuta: se il giocatore la indossa ({@link SuitSize#wearsSuit}: il
  * segnaposto {@link ModItems#EXOFRAME_TORSO} nello slot del petto) e il segnaposto ha un riassunto visivo leggibile,
- * costruisce la {@link SuitView} (colori non verniciati da {@link TierPalette}) e chiama il
- * {@link com.toxineren.exoframes.compat.client.SuitRenderer} con la tuta scalata di {@link SuitScale#S} attorno ai
- * piedi. In ogni altro caso non disegna nulla, e non lancia mai: un errore nel disegno si scrive nel log una volta
- * per caricamento dei renderer (vedi il campo failureLogged) e il fotogramma prosegue senza la tuta.
+ * costruisce la {@link SuitView} ({@link SuitDraw#view}) e la disegna con {@link SuitDraw#draw}, annullando il
+ * sollevamento del pilota. In ogni altro caso non disegna nulla, e non lancia mai: un errore si scrive nel log una
+ * volta per caricamento dei renderer (vedi {@link SuitDraw}) e il fotogramma prosegue senza la tuta.
  * <p>
  * Il riassunto si decodifica una volta per stack, non a ogni fotogramma (vedi {@link #view(Player)}).
  */
 public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> {
-    /** Altezza dei piedi nello spazio del modello (y verso il basso), dopo la traslazione di LivingEntityRenderer. */
-    private static final float FEET_Y = 1.501f;
-
     /**
      * Vista decodificata per istanza di stack. Chiavi deboli e confrontate per identita' ({@code MapMaker.weakKeys}):
      * uno stack che il gioco non usa piu' (per esempio sostituito da un aggiornamento dell'equipaggiamento dal
@@ -39,50 +33,21 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
      */
     private static final Map<ItemStack, Decoded> CACHE = new MapMaker().weakKeys().makeMap();
 
-    /**
-     * True dopo il primo errore scritto nel log. Torna false a ogni costruzione del layer, cioe' a ogni ricostruzione
-     * dei renderer delle entita' (avvio e ricarica delle risorse): un primo errore passeggero, per esempio la cache
-     * dei modelli di GeckoLib durante una ricarica, non nasconde per tutta la sessione un errore che resta.
-     */
-    private static volatile boolean failureLogged;
-
     public SuitLayer(RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>> parent) {
         super(parent);
-        failureLogged = false;
+        SuitDraw.resetFailureLog();
     }
 
     @Override
     public void render(PoseStack pose, MultiBufferSource buffers, int packedLight, AbstractClientPlayer player,
             float limbSwing, float limbSwingAmount, float partialTick, float ageInTicks, float netHeadYaw,
             float headPitch) {
-        try {
-            SuitView view = view(player);
-            if (view == null) {
-                return;
-            }
-            // Stack privato che parte dalla posa corrente: GeckoLib fa push e pop propri solo sul percorso normale, e
-            // se lancia a meta' disegno le sue pose restano su questo stack, che si butta, invece che su quello del
-            // chiamante (LevelRenderer.checkPoseStack fa chiudere il client se a fine fotogramma non e' vuoto).
-            // Su 1.21.1 la copia ha trustedNormals = true come ogni posa nuova (il campo non e' pubblico): le scale del
-            // renderer del giocatore sono uniformi in valore assoluto e non lo spengono, e se lo fossero l'unico
-            // effetto sarebbero normali non rinormalizzate, cioe' una luce appena diversa.
-            PoseStack local = new PoseStack();
-            local.last().pose().set(pose.last().pose());
-            local.last().normal().set(pose.last().normal());
-            // Il disegno del giocatore e' sollevato nello spazio del modello dal mixin del renderer (PilotPose, in coda a
-            // PlayerRenderer.scale): si annulla nello stesso spazio (y cresce verso il basso), cosi' i piedi della tuta
-            // restano sul corpo a terra in ogni posa.
-            local.translate(0f, SuitScale.PILOT_RAISE_PX / 16f, 0f);
-            // Tuta S volte piu' grande attorno ai piedi.
-            local.translate(0f, FEET_Y, 0f);
-            local.scale(SuitScale.S, SuitScale.S, SuitScale.S);
-            local.translate(0f, -FEET_Y, 0f);
-            ClientCompat.suitRenderer().render(player, getParentModel(), local, buffers, packedLight, partialTick,
-                    view);
-        } catch (RuntimeException | LinkageError e) {
-            // Un'eccezione da un layer farebbe chiudere il client, e cosi' un GeckoLib di versione diversa da quella
-            // attesa (LinkageError): si salta la tuta e si avvisa una volta per caricamento dei renderer.
-            logFailureOnce(e);
+        SuitView view = suitView(player);
+        if (view != null) {
+            // Il disegno del giocatore e' sollevato nello spazio del modello dal mixin del renderer (PilotPose, in coda
+            // a PlayerRenderer.scale): la tuta non lo segue, cosi' i suoi piedi restano sul corpo a terra in ogni posa.
+            SuitDraw.draw(player, getParentModel(), pose, buffers, packedLight, partialTick, view,
+                    SuitScale.PILOT_RAISE_PX);
         }
     }
 
@@ -105,16 +70,8 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
         try {
             return view(player);
         } catch (RuntimeException | LinkageError e) {
-            logFailureOnce(e);
+            SuitDraw.logFailureOnce(e);
             return null;
-        }
-    }
-
-    private static void logFailureOnce(Throwable e) {
-        if (!failureLogged) {
-            failureLogged = true;
-            RedstoneExoframes.LOGGER.error("Suit layer failed with {}; the suit is not drawn (logged once until the "
-                    + "entity renderers are reloaded)", e.getClass().getName(), e);
         }
     }
 
@@ -142,9 +99,7 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
     }
 
     private static Decoded decode(ItemStack stack) {
-        SuitView view = Compat.itemData().suitSummary(stack)
-                .map(summary -> SuitView.of(summary, TierPalette::primary, TierPalette::secondary))
-                .orElse(null);
+        SuitView view = Compat.itemData().suitSummary(stack).map(SuitDraw::view).orElse(null);
         return new Decoded(stack.copy(), view);
     }
 

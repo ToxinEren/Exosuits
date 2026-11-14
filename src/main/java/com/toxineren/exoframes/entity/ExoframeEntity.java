@@ -44,6 +44,9 @@ public final class ExoframeEntity extends CompatEntity {
     /** Vero dopo il confronto con il registro del primo tick sul server; non si salva. */
     private boolean checkedRegistry;
 
+    /** L'ultimo tag del riassunto letto da {@link #summary()} con il riassunto che ne e' uscito; null prima. */
+    private ParsedSummary parsed;
+
     public ExoframeEntity(EntityType<? extends ExoframeEntity> type, Level level) {
         super(type, level);
     }
@@ -53,9 +56,20 @@ public final class ExoframeEntity extends CompatEntity {
         return getUUID();
     }
 
-    /** Il riassunto visivo sincronizzato; il telaio nudo se il tag non ne ha uno. */
+    /**
+     * Il riassunto visivo sincronizzato; il telaio nudo se il tag non ne ha uno. Il tag si legge una volta per valore
+     * sincronizzato: finche' il dato non cambia (sul client, un pacchetto con un tag nuovo; sul server,
+     * {@link #setSummary} con un riassunto diverso) il risultato e' la stessa istanza, e il renderer del telaio la
+     * confronta per identita' per sapere se rifare la sua vista.
+     */
     public SuitSummary summary() {
-        return Compat.frameState().readSummaryTag(getEntityData().get(SUMMARY)).orElse(SuitSummary.BARE);
+        CompoundTag tag = getEntityData().get(SUMMARY);
+        ParsedSummary last = parsed;
+        if (last == null || last.tag() != tag) {
+            last = new ParsedSummary(tag, Compat.frameState().readSummaryTag(tag).orElse(SuitSummary.BARE));
+            parsed = last;
+        }
+        return last.summary();
     }
 
     /** Imposta il riassunto visivo, che il gioco manda ai client che vedono l'entita'. */
@@ -160,5 +174,12 @@ public final class ExoframeEntity extends CompatEntity {
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         // nulla di proprio: il contenuto sta nel registro, l'identita' e' l'UUID vanilla
+    }
+
+    /**
+     * Un tag del riassunto e il riassunto letto da quel tag. Il tag si confronta per identita': i dati sincronizzati
+     * lo sostituiscono a ogni cambio e nessuno lo modifica sul posto ({@link #setSummary} ne scrive uno nuovo).
+     */
+    private record ParsedSummary(CompoundTag tag, SuitSummary summary) {
     }
 }
