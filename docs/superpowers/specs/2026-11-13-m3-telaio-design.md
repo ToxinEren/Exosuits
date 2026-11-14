@@ -347,4 +347,4 @@ Cose che le revisioni della parte 3b (quelle dei singoli task e le due revisioni
 - **PvP** (domanda 8): chi muore dentro la tuta lascia il suo telaio bloccato con dentro l'armatura: chi lo ha ucciso non può prendere pezzi, cella o armatura, né rompere il telaio.
 - **`keepInventory`** (domanda 9): anche con la regola attiva l'armatura resta nel telaio alla morte.
 - **Acqua e lava** (domanda 10): i fluidi non sono suolo, quindi un telaio lasciato sopra l'acqua o la lava si posa sul fondo.
-- **Il colore secondario del pezzo delle gambe** (da §10): oggi le gambe hanno solo il colore primario.
+- **Il colore secondario del pezzo delle gambe** (da §10; la domanda è nella checklist della 3a, non in quella della 3b): oggi le gambe hanno solo il colore primario.
