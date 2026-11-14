@@ -61,6 +61,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
@@ -122,8 +123,9 @@ import software.bernie.geckolib.animatable.GeoItem;
  * {@link #generate()}. tools/run_gametests.sh conta queste righe per sapere quanti test aspettarsi; la lista e' la
  * stessa sulle quattro varianti (il corpo di un test puo' dipendere dalla versione, la lista no).
  *
- * <p>Tutti i test girano sullo stesso server, con lo stesso dato salvato e lo stesso livello, e cominciano nello
- * stesso tick. Percio' un test:
+ * <p>Tutti i test girano sullo stesso server, con lo stesso dato salvato e lo stesso livello, e cominciano insieme,
+ * ciascuno appena i chunk della sua struttura hanno le entita' caricate (di solito nello stesso tick; vedi
+ * {@link #startWhenEntitiesLoaded}). Percio' un test:
  * <ul>
  * <li>controlla solo i suoi giocatori finti e i suoi {@code frameId}, mai conteggi globali (quanti telai, quanti
  * giocatori, quante voci orfane in tutto);</li>
@@ -143,7 +145,11 @@ import software.bernie.geckolib.animatable.GeoItem;
 public final class ExoframeGameTests {
     /** Struttura vuota 8x8x8 della mod: data/redstone_exoframes/structures/empty.nbt (1.20.1) e structure/ (1.21). */
     private static final String EMPTY_STRUCTURE = RedstoneExoframes.MOD_ID + ":empty";
+    /** Lato della struttura vuota, in blocchi. */
+    private static final int STRUCTURE_SIZE = 8;
     private static final int MAX_TICKS = 100;
+    /** Quanti tick al massimo un test aspetta le entita' dei chunk della sua struttura prima di partire. */
+    private static final int ENTITY_LOAD_TICKS = 20;
     /** Versione dei dati di Minecraft 1.20.1. */
     private static final int DATA_VERSION_1_20_1 = 3465;
     private static final List<EquipmentSlot> ARMOR_SLOTS =
@@ -3954,11 +3960,79 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Aggiunge un test obbligatorio nella struttura vuota. Il nome {@code temaCaso} diventa
-     * {@code redstone_exoframes:tema_caso}: Forge lo legge come ResourceLocation, che non ammette maiuscole.
+     * Aggiunge un test obbligatorio nella struttura vuota, il cui corpo parte con {@link #startWhenEntitiesLoaded}. Il
+     * nome {@code temaCaso} diventa {@code redstone_exoframes:tema_caso}: Forge lo legge come ResourceLocation, che non
+     * ammette maiuscole.
      */
     private static void add(List<TestFunction> tests, String name, Consumer<GameTestHelper> test) {
         String id = RedstoneExoframes.MOD_ID + ":" + name.replaceAll("([A-Z])", "_$1").toLowerCase(Locale.ROOT);
-        tests.add(new TestFunction(RedstoneExoframes.MOD_ID, id, EMPTY_STRUCTURE, MAX_TICKS, 0L, true, test));
+        tests.add(new TestFunction(RedstoneExoframes.MOD_ID, id, EMPTY_STRUCTURE, MAX_TICKS, 0L, true,
+                helper -> startWhenEntitiesLoaded(helper, test)));
+    }
+
+    /**
+     * Fa partire il corpo del test solo quando i chunk coperti dalla sua struttura hanno le entita' caricate
+     * ({@code ServerLevel.areEntitiesLoaded}). Il gioco le carica in modo asincrono quando il chunk si carica, e su
+     * 1.20.1 un test comincia nel tick dopo quello in cui la sua struttura e' piazzata, senza aspettarle (1.21.1
+     * aspetta almeno che i chunk della struttura facciano muovere le entita', che non vuol dire ancora averle
+     * caricate): su una macchina lenta un test puo' cominciare prima che ci siano, e il riallineamento, che salta per
+     * scelta quei chunk, non agirebbe al primo tick del test. Se le entita' ci sono gia', il corpo parte subito, come
+     * sempre; altrimenti una sequenza del test riguarda a ogni tick e fa partire il corpo nel tick in cui ci sono, al
+     * piu' dopo {@value #ENTITY_LOAD_TICKS} tick (presi dai {@value #MAX_TICKS} del test); se non arrivano il test
+     * fallisce e dice quali chunk mancano.
+     */
+    private static void startWhenEntitiesLoaded(GameTestHelper helper, Consumer<GameTestHelper> test) {
+        if (chunksWithoutEntities(helper).isEmpty()) {
+            test.accept(helper);
+            return;
+        }
+        int[] waited = {0};
+        helper.startSequence()
+                .thenWaitUntil(() -> {
+                    if (!chunksWithoutEntities(helper).isEmpty() && ++waited[0] < ENTITY_LOAD_TICKS) {
+                        throw new GameTestAssertException("waiting for the entities of the test's chunks");
+                    }
+                })
+                .thenExecute(() -> {
+                    List<ChunkPos> missing = chunksWithoutEntities(helper);
+                    if (!missing.isEmpty()) {
+                        helper.fail("entities of chunks " + missing + " not loaded after " + ENTITY_LOAD_TICKS
+                                + " ticks: the test did not start");
+                    }
+                    runInSequence(helper, test);
+                });
+    }
+
+    /**
+     * Il corpo del test dentro una sequenza: la sequenza fa fallire il test solo per un {@link GameTestAssertException}
+     * e lascerebbe uscire dal tick del server ogni altra eccezione, che invece l'avvio normale del test raccoglie;
+     * percio' qui diventa un fallimento del test, con l'eccezione come causa.
+     */
+    private static void runInSequence(GameTestHelper helper, Consumer<GameTestHelper> test) {
+        try {
+            test.accept(helper);
+        } catch (GameTestAssertException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            GameTestAssertException failure = new GameTestAssertException(e.toString());
+            failure.initCause(e);
+            throw failure;
+        }
+    }
+
+    /** I chunk coperti dalla struttura del test le cui entita' non sono ancora caricate. */
+    private static List<ChunkPos> chunksWithoutEntities(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos a = helper.absolutePos(BlockPos.ZERO);
+        BlockPos b = helper.absolutePos(new BlockPos(STRUCTURE_SIZE - 1, STRUCTURE_SIZE - 1, STRUCTURE_SIZE - 1));
+        List<ChunkPos> missing = new ArrayList<>();
+        for (int x = Math.min(a.getX(), b.getX()) >> 4; x <= Math.max(a.getX(), b.getX()) >> 4; x++) {
+            for (int z = Math.min(a.getZ(), b.getZ()) >> 4; z <= Math.max(a.getZ(), b.getZ()) >> 4; z++) {
+                if (!level.areEntitiesLoaded(ChunkPos.asLong(x, z))) {
+                    missing.add(new ChunkPos(x, z));
+                }
+            }
+        }
+        return missing;
     }
 }
