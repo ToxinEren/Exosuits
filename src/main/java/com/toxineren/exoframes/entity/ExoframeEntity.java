@@ -4,6 +4,7 @@ import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.CompatEntity;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,9 +14,13 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MoverType;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -114,6 +119,20 @@ public final class ExoframeEntity extends CompatEntity {
         }
         setSummary(SuitSummary.of(frame.state()));
         return true;
+    }
+
+    /**
+     * Il clic destro di un giocatore, con il punto colpito relativo ai piedi dell'entita' (cosi' lo calcola e lo manda
+     * il client sulle due versioni del gioco). Sul server lo gestisce {@link FrameInteractions#onInteract}; sul client
+     * si da' solo il risultato, senza toccare nulla: se consuma, il gioco non passa all'altra mano ne' all'uso
+     * dell'oggetto.
+     */
+    @Override
+    public InteractionResult interactAt(Player player, Vec3 hit, InteractionHand hand) {
+        if (!level().isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            return FrameInteractions.onInteract(serverPlayer, this, hit, hand);
+        }
+        return FrameInteractions.clientResult(player, hand);
     }
 
     @Override

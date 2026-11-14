@@ -31,6 +31,7 @@ import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.FrameRealign;
+import com.toxineren.exoframes.frame.Handouts;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -146,6 +147,14 @@ public final class ExoframeGameTests {
         add(tests, "exoframeItemRefusedUnderLowCeiling", ExoframeGameTests::exoframeItemRefusedUnderLowCeiling);
         add(tests, "debugPlaceBareAndScrap", ExoframeGameTests::debugPlaceBareAndScrap);
         add(tests, "frameEntityIgnoresPortals", ExoframeGameTests::frameEntityIgnoresPortals);
+        add(tests, "mountPieceAndCellByHand", ExoframeGameTests::mountPieceAndCellByHand);
+        add(tests, "secondArmGoesToTheFreeSide", ExoframeGameTests::secondArmGoesToTheFreeSide);
+        add(tests, "unmountByHeightThenCellThenPickUp", ExoframeGameTests::unmountByHeightThenCellThenPickUp);
+        add(tests, "unmountWithFullInventoryDropsThePiece", ExoframeGameTests::unmountWithFullInventoryDropsThePiece);
+        add(tests, "strangerCannotTouchALockedFrame", ExoframeGameTests::strangerCannotTouchALockedFrame);
+        add(tests, "unlockedFrameIsOpenToAll", ExoframeGameTests::unlockedFrameIsOpenToAll);
+        add(tests, "unmountedPieceKeepsDurabilityAndColours",
+                ExoframeGameTests::unmountedPieceKeepsDurabilityAndColours);
         return tests;
     }
 
@@ -777,30 +786,33 @@ public final class ExoframeGameTests {
         helper.assertTrue(frameId != null, "place returned no frame id");
         ExoframeEntity frame = spawnFrame(level, frameId, spot.add(1.0, 0.0, 0.0), -90f);
         helper.assertTrue(frame.frameId().equals(frameId), "frameId differs from the UUID: " + frame.frameId());
+        helper.assertTrue(frame.position().distanceTo(spot) > 0.5 && frame.getYRot() == -90f,
+                "entity spawned at the record's spot already: " + frame.position() + " yaw " + frame.getYRot());
 
-        helper.runAfterDelay(2, () -> {
-            helper.assertTrue(!frame.isRemoved(), "entity with a placed record removed itself");
-            helper.assertTrue(level.getEntity(frameId) == frame, "entity not found in the level by its frame id");
-            helper.assertTrue(frame.frameId().equals(frameId), "frame id changed: " + frame.frameId());
-            helper.assertTrue(frame.position().distanceTo(spot) < 1e-6 && frame.getYRot() == 45f,
-                    "entity not moved to the record's spot: " + frame.position() + " yaw " + frame.getYRot()
-                            + ", expected " + spot + " yaw 45");
-            helper.assertTrue(frame.summary().equals(SuitSummary.of(state)),
-                    "summary is not the record's: " + frame.summary());
+        // Il primo tick lo da' il test stesso, subito: le verifiche del riallineamento di altri test, nello stesso tick
+        // del server, porterebbero l'entita' al suo punto anche con un primo tick rotto.
+        frame.tick();
+        helper.assertTrue(!frame.isRemoved(), "entity with a placed record removed itself");
+        helper.assertTrue(level.getEntity(frameId) == frame, "entity not found in the level by its frame id");
+        helper.assertTrue(frame.frameId().equals(frameId), "frame id changed: " + frame.frameId());
+        helper.assertTrue(frame.position().distanceTo(spot) < 1e-6 && frame.getYRot() == 45f,
+                "entity not moved to the record's spot: " + frame.position() + " yaw " + frame.getYRot()
+                        + ", expected " + spot + " yaw 45");
+        helper.assertTrue(frame.summary().equals(SuitSummary.of(state)),
+                "summary is not the record's: " + frame.summary());
 
-            Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of());
-            SuitSummary summary = new SuitSummary(Map.of(
-                    PieceSlot.TORSO, new PieceLook(Tier.ARMORED, PieceCondition.DAMAGED, painted),
-                    PieceSlot.LEFT_LEG, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT)));
-            frame.setSummary(summary);
-            helper.assertTrue(frame.summary().equals(summary), "summary changed when read back: " + frame.summary());
-            frame.setSummary(SuitSummary.BARE);
-            helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "bare summary not read back");
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of());
+        SuitSummary summary = new SuitSummary(Map.of(
+                PieceSlot.TORSO, new PieceLook(Tier.ARMORED, PieceCondition.DAMAGED, painted),
+                PieceSlot.LEFT_LEG, new PieceLook(Tier.SCRAP, PieceCondition.BROKEN, Appearance.DEFAULT)));
+        frame.setSummary(summary);
+        helper.assertTrue(frame.summary().equals(summary), "summary changed when read back: " + frame.summary());
+        frame.setSummary(SuitSummary.BARE);
+        helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "bare summary not read back");
 
-            helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
-            frame.discard();
-            helper.succeed();
-        });
+        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+        frame.discard();
+        helper.succeed();
     }
 
     /**
@@ -1199,6 +1211,311 @@ public final class ExoframeGameTests {
     }
 
     /**
+     * Montare a mano (design §5.4) su un telaio con yaw 0, che guarda a sud (+Z) e ha la destra verso -X: l'elmo va
+     * nel suo slot, il braccio cliccato a -X va sul braccio destro, la cella entra; ogni oggetto lascia la mano (in
+     * sopravvivenza), lo stato del record li ha e il riassunto dell'entita' pure. Una seconda cella trova lo slot
+     * occupato e resta in mano; la mano secondaria e un oggetto qualsiasi passano senza effetto.
+     */
+    private static void mountPieceAndCellByHand(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(3.5, 1.0, 3.5), 0f);
+        FrameState state = recordState(helper, frame);
+
+        player.setItemInHand(InteractionHand.OFF_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+        InteractionResult offHand = frame.interactAt(player, new Vec3(0.0, 2.5, 0.0), InteractionHand.OFF_HAND);
+        helper.assertTrue(offHand == InteractionResult.PASS && state.pieces().isEmpty()
+                && player.getOffhandItem().getCount() == 1, "off hand click acted: " + offHand);
+        player.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.STICK));
+        helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0) == InteractionResult.PASS
+                && player.getMainHandItem().is(Items.STICK), "a stick did something to the frame");
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+        helper.assertTrue(click(frame, player, 0.0, 2.5, 0.0).consumesAction(), "helmet click not consumed");
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_ARM.get()));
+        helper.assertTrue(click(frame, player, -0.35, 1.6, 0.0).consumesAction(), "arm click not consumed");
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.HELMET, PieceSlot.RIGHT_ARM)),
+                "expected helmet and right arm, found " + state.pieces().keySet());
+        helper.assertTrue(player.getMainHandItem().isEmpty(), "mounted piece left in hand");
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, CellItem.fromCell(new EnergyCell(capacity, 4_000)));
+        helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "cell click not consumed");
+        helper.assertTrue(state.cell() != null && state.cell().stored() == 4_000, "cell not inserted: " + state.cell());
+        helper.assertTrue(player.getMainHandItem().isEmpty(), "inserted cell left in hand");
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, CellItem.fromCell(new EnergyCell(capacity, 1_000)));
+        click(frame, player, 0.0, 1.6, 0.0);
+        helper.assertTrue(state.cell().stored() == 4_000, "second cell replaced the first: " + state.cell());
+        helper.assertTrue(player.getMainHandItem().is(ModItems.REDSTONE_CELL.get())
+                && player.getMainHandItem().getCount() == 1, "second cell taken from the hand");
+
+        helper.assertTrue(frame.summary().equals(SuitSummary.of(state))
+                && frame.summary().pieces().keySet().equals(EnumSet.of(PieceSlot.HELMET, PieceSlot.RIGHT_ARM)),
+                "entity summary not updated: " + frame.summary());
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Su un telaio con yaw 90 (guarda a ovest, -X, e ha la destra verso -Z) un braccio cliccato a +Z va sul braccio
+     * sinistro, un secondo braccio cliccato sullo stesso lato va sul destro, libero; un terzo trova tutto occupato e
+     * resta in mano. Una gamba cliccata a -Z va sulla gamba destra.
+     */
+    private static void secondArmGoesToTheFreeSide(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(3.5, 1.0, 3.5), 90f);
+        FrameState state = recordState(helper, frame);
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_ARM.get(), 3));
+        click(frame, player, 0.0, 1.6, 0.35);
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.LEFT_ARM)),
+                "first arm not on the left: " + state.pieces().keySet());
+        click(frame, player, 0.0, 1.6, 0.35);
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.LEFT_ARM, PieceSlot.RIGHT_ARM)),
+                "second arm not on the free right side: " + state.pieces().keySet());
+        helper.assertTrue(player.getMainHandItem().getCount() == 1, "hand holds " + player.getMainHandItem());
+        click(frame, player, 0.0, 1.6, -0.35);
+        helper.assertTrue(player.getMainHandItem().getCount() == 1 && state.pieces().size() == 2,
+                "third arm taken from the hand with both arms mounted");
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_LEG.get()));
+        click(frame, player, 0.0, 0.5, -0.2);
+        helper.assertTrue(state.pieces().containsKey(PieceSlot.RIGHT_LEG)
+                && !state.pieces().containsKey(PieceSlot.LEFT_LEG), "leg clicked at -Z not on the right");
+        helper.assertTrue(frame.summary().equals(SuitSummary.of(state)), "entity summary not updated");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Accovacciati a mano vuota: prima torna tutta l'armatura stivata; poi la testa cliccata in alto; in basso a
+     * destra la gamba destra non c'e' e viene la sinistra, la piu' vicina della fascia; con le gambe vuote la cella;
+     * infine il telaio vuoto torna oggetto e record ed entita' spariscono.
+     */
+    private static void unmountByHeightThenCellThenPickUp(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        FrameState state = ownedBy(player);
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        state.mount(scrapPiece(PieceSlot.LEFT_LEG));
+        state.insertCell(new EnergyCell(capacity, 2_500));
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 1.0, 3.5));
+        UUID frameId = frames.place(level, state, feet, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)),
+                new StowedStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS))));
+        helper.assertTrue(frames.exit(player, level, feet, 0f).isPresent(), "exit refused");
+        ExoframeEntity frame = spawnFrame(level, frameId, feet, 0f);
+        player.setShiftKeyDown(true);
+
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 1
+                && countInMainInventory(player, Items.IRON_BOOTS) == 1, "stowed armor not given back");
+        helper.assertTrue(state.pieces().containsKey(PieceSlot.HELMET)
+                && !frames.placed(server, frameId).orElseThrow().hasStowed(), "stowed armor not taken first");
+
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(countInMainInventory(player, ModItems.SCRAP_HELMET.get()) == 1
+                && !state.pieces().containsKey(PieceSlot.HELMET), "helmet not unmounted from the head band");
+        helper.assertTrue(frame.summary().equals(SuitSummary.of(state)), "summary not updated after the helmet");
+
+        click(frame, player, -0.2, 0.5, 0.0);
+        helper.assertTrue(countInMainInventory(player, ModItems.SCRAP_LEG.get()) == 1 && state.pieces().isEmpty(),
+                "left leg not unmounted by a click on the empty right leg");
+        helper.assertTrue(state.cell() != null, "cell taken before the legs");
+
+        click(frame, player, -0.2, 0.5, 0.0);
+        helper.assertTrue(state.cell() == null, "cell not removed with the band empty");
+        ItemStack cell = findInMainInventory(player, ModItems.REDSTONE_CELL.get());
+        helper.assertTrue(ModItems.REDSTONE_CELL.get().toCell(cell).stored() == 2_500, "cell charge changed");
+        helper.assertTrue(frames.placed(server, frameId).isPresent() && !frame.isRemoved(), "frame picked up early");
+
+        click(frame, player, 0.0, 1.6, 0.0);
+        helper.assertTrue(countInMainInventory(player, ModItems.EXOFRAME.get()) == 1, "empty frame not given back");
+        helper.assertTrue(frames.placed(server, frameId).isEmpty(), "record still placed after the pick up");
+        helper.assertTrue(frame.isRemoved() && level.getEntity(frameId) == null, "entity still in the level");
+        helper.succeed();
+    }
+
+    /**
+     * Con l'inventario pieno nulla si perde: smontare vuole la mano vuota, quindi un solo oggetto entra sempre nella
+     * mano; con tutti gli altri slot pieni, in creativa (dove {@code Inventory.add} cancellerebbe cio' che non entra),
+     * l'armatura stivata riempie la mano e il resto cade ai piedi del giocatore, fermo. Poi, in sopravvivenza, l'elmo
+     * smontato va nella mano con la sua durabilita', e un pezzo dato a un inventario del tutto pieno cade ai piedi
+     * con i suoi dati.
+     */
+    private static void unmountWithFullInventoryDropsThePiece(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 standing = helper.absoluteVec(new Vec3(1.5, 1.0, 3.5));
+        player.moveTo(standing.x, standing.y, standing.z, 0f, 0f);
+        List<ItemStack> items = player.getInventory().items;
+        int selected = player.getInventory().selected;
+        for (int i = 0; i < items.size(); i++) {
+            if (i != selected) {
+                items.set(i, new ItemStack(Items.DIRT, 64));
+            }
+        }
+        FrameState state = ownedBy(player);
+        Piece helmet = scrapPiece(PieceSlot.HELMET);
+        helmet.damage(10);
+        state.mount(helmet);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 1.0, 3.5));
+        UUID frameId = frames.place(level, state, feet, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)),
+                new StowedStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS))));
+        helper.assertTrue(frames.exit(player, level, feet, 0f).isPresent(), "exit refused");
+        ExoframeEntity frame = spawnFrame(level, frameId, feet, 0f);
+        player.setShiftKeyDown(true);
+
+        player.setGameMode(GameType.CREATIVE);
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(player.getMainHandItem().is(Items.IRON_HELMET), "first stowed stack not in the free hand");
+        assertDroppedAtFeet(helper, player, Items.IRON_BOOTS).discard();
+
+        player.setGameMode(GameType.SURVIVAL);
+        player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(state.pieces().isEmpty(), "helmet still mounted");
+        PieceData inHand = Compat.itemData().piece(player.getMainHandItem()).orElse(null);
+        helper.assertTrue(player.getMainHandItem().is(ModItems.SCRAP_HELMET.get()) && inHand != null
+                && inHand.durability() == helmet.durability(), "unmounted helmet not in the hand: " + inHand);
+
+        ItemStack leg = PieceItem.fromPiece(scrapPiece(PieceSlot.LEFT_LEG), List.of(ModuleType.NIGHT_VISION),
+                new Appearance(0x00FF00, Appearance.UNPAINTED, List.of()));
+        Handouts.give(player, leg);
+        ItemEntity dropped = assertDroppedAtFeet(helper, player, ModItems.SCRAP_LEG.get());
+        helper.assertTrue(ItemStack.matches(leg, dropped.getItem()), "dropped leg lost its data");
+        dropped.discard();
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == (items.size() - 1) * 64,
+                "inventory contents changed");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Un telaio con proprietario, bloccato, con la regola di default {@code ownerOnlyFrames}: un altro giocatore (in
+     * sopravvivenza, senza permessi) non monta, non smonta e non raccoglie nulla, e non riceve nulla.
+     */
+    private static void strangerCannotTouchALockedFrame(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        stranger.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        helper.assertTrue(RedstoneExoframes.config().server.ownerOnlyFrames, "ownerOnlyFrames is not the default");
+        FrameState state = ownedBy(owner);
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        state.insertCell(new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, 100));
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(2.5, 1.0, 2.5), 0f);
+        ExoframeEntity empty = placeFrame(helper, ownedBy(owner), new Vec3(5.5, 1.0, 5.5), 0f);
+
+        stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+        click(frame, stranger, 0.0, 2.5, 0.0);
+        helper.assertTrue(stranger.getMainHandItem().getCount() == 1 && !state.pieces().containsKey(PieceSlot.HELMET),
+                "stranger mounted a helmet");
+        stranger.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        stranger.setShiftKeyDown(true);
+        click(frame, stranger, 0.0, 1.6, 0.0);
+        click(frame, stranger, 0.0, 0.5, 0.0);
+        click(empty, stranger, 0.0, 1.6, 0.0);
+
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.TORSO)) && state.cell() != null,
+                "stranger changed the frame: " + state.pieces().keySet() + " cell " + state.cell());
+        helper.assertTrue(Compat.frameState().placed(server, empty.frameId()).isPresent() && !empty.isRemoved(),
+                "stranger picked up a locked frame");
+        helper.assertTrue(stranger.getInventory().isEmpty(), "stranger was given something");
+        removeFrame(server, frame);
+        removeFrame(server, empty);
+        helper.succeed();
+    }
+
+    /** Un telaio sbloccato dal proprietario, e uno senza proprietario, li monta e li smonta chiunque. */
+    private static void unlockedFrameIsOpenToAll(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        stranger.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameState unlocked = ownedBy(owner);
+        unlocked.setUnlocked(true);
+        ExoframeEntity frame = placeFrame(helper, unlocked, new Vec3(2.5, 1.0, 2.5), 0f);
+        ExoframeEntity ownerless = placeFrame(helper, new FrameState(RedstoneExoframes.config()),
+                new Vec3(5.5, 1.0, 5.5), 0f);
+
+        stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+        click(frame, stranger, 0.0, 2.5, 0.0);
+        helper.assertTrue(unlocked.pieces().containsKey(PieceSlot.HELMET),
+                "stranger could not mount on an unlocked frame");
+        stranger.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_TORSO.get()));
+        click(ownerless, stranger, 0.0, 1.6, 0.0);
+        FrameState ownerlessState = recordState(helper, ownerless);
+        helper.assertTrue(ownerlessState.pieces().containsKey(PieceSlot.TORSO),
+                "stranger could not mount on a frame without owner");
+
+        stranger.setShiftKeyDown(true);
+        click(frame, stranger, 0.0, 2.5, 0.0);
+        click(ownerless, stranger, 0.0, 1.6, 0.0);
+        helper.assertTrue(unlocked.pieces().isEmpty() && ownerlessState.pieces().isEmpty(),
+                "stranger could not unmount");
+        helper.assertTrue(countInMainInventory(stranger, ModItems.SCRAP_HELMET.get()) == 1
+                && countInMainInventory(stranger, ModItems.SCRAP_TORSO.get()) == 1, "unmounted pieces not given");
+        removeFrame(server, frame);
+        removeFrame(server, ownerless);
+        helper.succeed();
+    }
+
+    /**
+     * Un braccio consumato, con un modulo e dipinto, montato a mano porta nello slot del telaio durabilita', modulo e
+     * aspetto (che il riassunto mostra); smontato torna lo stesso oggetto con gli stessi dati.
+     */
+    private static void unmountedPieceKeepsDurabilityAndColours(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        Piece worn = scrapPiece(PieceSlot.LEFT_ARM);
+        worn.damage(23);
+        Appearance painted = new Appearance(0x123456, 0xABCDEF, List.of(new Decal("minecraft:creeper", "red")));
+        ItemStack original = PieceItem.fromPiece(worn, List.of(ModuleType.NIGHT_VISION), painted);
+        PieceData before = Compat.itemData().piece(original).orElseThrow();
+        ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(3.5, 1.0, 3.5), 0f);
+        FrameState state = recordState(helper, frame);
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, original.copy());
+        click(frame, player, -0.4, 1.6, 0.0);
+        Piece mounted = state.pieces().get(PieceSlot.RIGHT_ARM);
+        helper.assertTrue(mounted != null && mounted.durability() == worn.durability(),
+                "arm not mounted with its durability: " + mounted);
+        helper.assertTrue(state.modules().get(PieceSlot.RIGHT_ARM).equals(List.of(ModuleType.NIGHT_VISION)),
+                "module not in the slot: " + state.modules());
+        helper.assertTrue(state.appearance(PieceSlot.RIGHT_ARM).equals(painted),
+                "appearance not in the slot: " + state.appearance(PieceSlot.RIGHT_ARM));
+        helper.assertTrue(frame.summary().pieces().get(PieceSlot.RIGHT_ARM).appearance().equals(painted),
+                "summary does not show the colours");
+
+        player.setShiftKeyDown(true);
+        click(frame, player, -0.4, 1.6, 0.0);
+        ItemStack back = findInMainInventory(player, ModItems.SCRAP_ARM.get());
+        helper.assertTrue(state.pieces().isEmpty() && state.modules().isEmpty(), "arm or modules left on the frame");
+        PieceData after = Compat.itemData().piece(back).orElse(null);
+        helper.assertTrue(before.equals(after), "piece data changed: " + before + " -> " + after);
+        helper.assertTrue(ItemStack.matches(original, back), "unmounted stack differs from the mounted one");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
      * Usa l'oggetto telaio (uno, in mano) sulla faccia superiore del blocco dato con il suo {@code useOn}; se
      * {@code expectPlaced} restituisce l'unico telaio in piedi sul blocco, altrimenti verifica il rifiuto e da' null.
      */
@@ -1252,6 +1569,70 @@ public final class ExoframeGameTests {
         frame.moveTo(feet.x, feet.y, feet.z, yaw, 0f);
         level.addFreshEntity(frame);
         return frame;
+    }
+
+    /** Piazza nel registro un telaio con lo stato dato e ne aggiunge l'entita' nel punto relativo alla struttura. */
+    private static ExoframeEntity placeFrame(GameTestHelper helper, FrameState state, Vec3 relativeFeet, float yaw) {
+        Vec3 feet = helper.absoluteVec(relativeFeet);
+        UUID frameId = Compat.frameState().place(helper.getLevel(), state, feet, yaw);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+        return spawnFrame(helper.getLevel(), frameId, feet, yaw);
+    }
+
+    /** Lo stato vivo del record piazzato del telaio. */
+    private static FrameState recordState(GameTestHelper helper, ExoframeEntity frame) {
+        PlacedFrame record = Compat.frameState().placed(helper.getLevel().getServer(), frame.frameId()).orElse(null);
+        helper.assertTrue(record != null, "frame " + frame.frameId() + " is not placed");
+        return record.state();
+    }
+
+    /** Toglie il record piazzato del telaio, se c'e' ancora, e l'entita'. */
+    private static void removeFrame(MinecraftServer server, ExoframeEntity frame) {
+        Compat.frameState().removePlaced(server, frame.frameId());
+        frame.discard();
+    }
+
+    /**
+     * L'unico oggetto del tipo dato a terra vicino al giocatore: uno stack da uno, ai suoi piedi e fermo (non
+     * lanciato). Chi chiama lo toglie dal mondo.
+     */
+    private static ItemEntity assertDroppedAtFeet(GameTestHelper helper, ServerPlayer player, Item item) {
+        List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                player.getBoundingBox().inflate(2.0), entity -> entity.getItem().is(item));
+        helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
+                dropped.size() + " dropped " + item + ", expected one stack of 1");
+        ItemEntity drop = dropped.get(0);
+        helper.assertTrue(drop.position().distanceTo(player.position()) < 1e-6
+                && drop.getDeltaMovement().equals(Vec3.ZERO), "dropped " + item + " not lying at the feet: "
+                + drop.position() + " moving " + drop.getDeltaMovement() + ", feet " + player.position());
+        return drop;
+    }
+
+    /** Uno stato vuoto con il giocatore come proprietario. */
+    private static FrameState ownedBy(ServerPlayer player) {
+        FrameState state = new FrameState(RedstoneExoframes.config());
+        state.setOwner(player.getUUID());
+        return state;
+    }
+
+    /** Un pezzo Rottame nuovo nello slot. */
+    private static Piece scrapPiece(PieceSlot slot) {
+        return Piece.fresh(slot, Tier.SCRAP, RedstoneExoframes.config().tiers);
+    }
+
+    /** Un clic destro con la mano principale sul telaio, nel punto dato relativo ai suoi piedi. */
+    private static InteractionResult click(ExoframeEntity frame, ServerPlayer player, double x, double y, double z) {
+        return frame.interactAt(player, new Vec3(x, y, z), InteractionHand.MAIN_HAND);
+    }
+
+    /** L'unico stack del tipo dato nell'inventario principale; vuoto se non c'e'. */
+    private static ItemStack findInMainInventory(ServerPlayer player, Item item) {
+        for (ItemStack stack : player.getInventory().items) {
+            if (stack.is(item)) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     /** Le identita' dei telai piazzati nel livello. */
