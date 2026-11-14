@@ -103,9 +103,10 @@ loom {
     }
 }
 
-// Mixin (solo client, vedi docs/compat.md "Mixin client"). Fabric e NeoForge leggono la configurazione dai metadati
-// (fabric.mod.json, neoforge.mods.toml); Forge 1.20.1 dall'attributo MixinConfigs del manifest, che Loom scrive nel jar
-// da forge.mixinConfigs e passa anche alle esecuzioni di sviluppo. Nessun refmap: con questa Loom il processore di
+// Mixin (la grandezza reale su tutti e due i lati, il disegno solo sul client: vedi docs/compat.md, "Mixin (mixin/ e
+// mixin/client/)"). Fabric e NeoForge leggono la configurazione dai metadati (fabric.mod.json, neoforge.mods.toml);
+// Forge 1.20.1 dall'attributo MixinConfigs del manifest, che Loom scrive nel jar da forge.mixinConfigs e passa anche
+// alle esecuzioni di sviluppo. Nessun refmap: con questa Loom il processore di
 // annotazioni dei mixin e' spento (useLegacyMixinAp = false), e remapJar riscrive direttamente i nomi nelle
 // annotazioni dei mixin (estensione mixin di tiny-remapper) verso intermediary su Fabric e SRG su Forge.
 if (loader == "forge") {
