@@ -24,7 +24,8 @@ import net.minecraft.world.item.ItemStack;
  * <p>
  * I posti del giocatore in cui un segnaposto puo' finire, e da cui {@link #removeAll} e {@link #removeStrays} lo
  * tolgono: gli slot armatura, l'inventario principale, la mano secondaria, lo stack sul cursore, la griglia 2x2 di
- * fabbricazione e gli slot del menu aperto che non sono l'inventario del giocatore (una cassa, un banco da lavoro).
+ * fabbricazione e gli slot del menu aperto che non sono l'inventario di un giocatore (una cassa, un banco da lavoro: mai
+ * gli slot dell'inventario di un altro giocatore che un menu mostra, che sono dell'autoriparazione di quel giocatore).
  * Alla morte e alla rimozione del giocatore morto il gioco lascerebbe cadere a terra cio' che resta nelle griglie e
  * nel menu aperto ({@code AbstractContainerMenu.clearContainer}), percio' la rimozione li copre tutti.
  */
@@ -95,6 +96,21 @@ public final class Placeholders {
     }
 
     /**
+     * Toglie i segnaposto dai soli quattro slot armatura del giocatore, in silenzio: il controllo di ogni tick per chi
+     * non indossa un telaio ({@link SlotGuard}). Non ricalcola le dimensioni: lo fa chi chiama.
+     *
+     * @return quanti segnaposto ha tolto
+     */
+    static int removeFromArmor(ServerPlayer player) {
+        Objects.requireNonNull(player, "player must not be null");
+        int removed = clear(player.getInventory().armor);
+        if (removed > 0) {
+            player.getInventory().setChanged();
+        }
+        return removed;
+    }
+
+    /**
      * Come {@link #removeAll}, ma lascia gli slot armatura come sono: le copie dei segnaposto finite altrove.
      *
      * @return quanti segnaposto ha tolto
@@ -110,9 +126,9 @@ public final class Placeholders {
         if (inInventory > 0) {
             inventory.setChanged();
         }
-        int removed = inInventory + clearMenu(inventory, player.inventoryMenu);
+        int removed = inInventory + clearMenu(player.inventoryMenu);
         if (player.containerMenu != player.inventoryMenu) {
-            removed += clearMenu(inventory, player.containerMenu);
+            removed += clearMenu(player.containerMenu);
         }
         return removed;
     }
@@ -130,10 +146,12 @@ public final class Placeholders {
     }
 
     /**
-     * Il cursore del menu e i suoi slot che non sono dell'inventario del giocatore (quelli li copre gia'
-     * {@link #remove}, e gli slot armatura del menu dell'inventario non vanno toccati da {@link #removeStrays}).
+     * Il cursore del menu e i suoi slot che non sono dell'inventario di un giocatore: quelli del giocatore li copre gia'
+     * {@link #remove} (e gli slot armatura del menu dell'inventario non vanno toccati da {@link #removeStrays}); quelli
+     * di un altro giocatore, mostrati da un menu (una mod che apre l'inventario altrui), sono i suoi segnaposto, che il
+     * suo tick tiene allineati al suo registro.
      */
-    private static int clearMenu(Inventory inventory, AbstractContainerMenu menu) {
+    private static int clearMenu(AbstractContainerMenu menu) {
         int removed = 0;
         ItemStack carried = menu.getCarried();
         if (isPlaceholder(carried)) {
@@ -142,7 +160,7 @@ public final class Placeholders {
         }
         for (Slot slot : menu.slots) {
             ItemStack stack = slot.getItem();
-            if (slot.container != inventory && isPlaceholder(stack)) {
+            if (!(slot.container instanceof Inventory) && isPlaceholder(stack)) {
                 removed += stack.getCount();
                 slot.set(ItemStack.EMPTY);
             }

@@ -29,9 +29,15 @@ import net.minecraft.world.item.ItemStack;
  * <p>
  * Per un giocatore con tuta e slot in ordine il tick non decodifica dati degli stack e non scrive nulla: ricorda, per
  * giocatore, gli stack che ha visto o scritto negli slot armatura e il riassunto del torso, e li confronta per
- * identita'. Solo sul thread del server.
+ * identita'. Per chi non indossa un telaio (quasi tutti, quasi sempre) il tick guarda solo i quattro slot armatura, e
+ * il resto (inventario, cursore, griglia, menu aperto) una volta ogni {@link #FULL_SCAN_TICKS} tick del giocatore: un
+ * segnaposto finito li' senza telaio (da {@code /give}, dopo un rientro) se ne va entro un secondo. Solo sul thread
+ * del server.
  */
 public final class SlotGuard {
+    /** Ogni quanti tick del giocatore, senza un telaio indossato, si guarda tutto l'inventario: un secondo. */
+    public static final int FULL_SCAN_TICKS = 20;
+
     /**
      * Cio' che il tick ha lasciato negli slot armatura del giocatore con un record indossato. Chiavi deboli e
      * confrontate per identita': nulla sopravvive al giocatore (il giocatore rinato e' un oggetto nuovo).
@@ -61,8 +67,9 @@ public final class SlotGuard {
      * sbagliato si elimina e si sostituisce, un oggetto vero trovato li' va al giocatore con {@link Handouts#give}. Il
      * riassunto sul torso e' quello dello stato, e si riscrive solo se e' diverso. Le copie dei segnaposto altrove
      * (inventario, mano secondaria, cursore, griglia di fabbricazione, menu aperto) si eliminano.</li>
-     * <li>Senza record indossato: ogni segnaposto, ovunque, slot armatura compresi, si elimina
-     * ({@link Placeholders#removeAll}).</li>
+     * <li>Senza record indossato: i segnaposto negli slot armatura si eliminano a ogni tick
+     * ({@link Placeholders#removeFromArmor}), quelli in ogni altro posto quando il contatore dei tick del giocatore e'
+     * un multiplo di {@link #FULL_SCAN_TICKS} ({@link Placeholders#removeAll}).</li>
      * </ul>
      * Gli slot armatura cambiano in silenzio; se sono cambiati, le dimensioni del giocatore si ricalcolano subito.
      */
@@ -71,7 +78,9 @@ public final class SlotGuard {
         Optional<FrameState> state = Compat.frameState().get(player);
         if (state.isEmpty()) {
             DRESSED.remove(player);
-            if (Placeholders.removeAll(player) > 0) {
+            int removed = player.tickCount % FULL_SCAN_TICKS == 0 ? Placeholders.removeAll(player)
+                    : Placeholders.removeFromArmor(player);
+            if (removed > 0) {
                 player.refreshDimensions();
             }
             return;

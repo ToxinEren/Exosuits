@@ -83,7 +83,11 @@ import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -227,6 +231,10 @@ public final class ExoframeGameTests {
         add(tests, "exoframeItemRefusesADeepDrop", ExoframeGameTests::exoframeItemRefusesADeepDrop);
         add(tests, "deadPlayerCannotMountOrUnmount", ExoframeGameTests::deadPlayerCannotMountOrUnmount);
         add(tests, "spectatorCannotLeaveWithTheKey", ExoframeGameTests::spectatorCannotLeaveWithTheKey);
+        add(tests, "guardLeavesAnotherPlayersPlaceholdersAlone",
+                ExoframeGameTests::guardLeavesAnotherPlayersPlaceholdersAlone);
+        add(tests, "guardScansTheRestOncePerSecondWithoutAFrame",
+                ExoframeGameTests::guardScansTheRestOncePerSecondWithoutAFrame);
         return tests;
     }
 
@@ -2383,6 +2391,7 @@ public final class ExoframeGameTests {
         player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_LEGS.get()));
         SuitSize.tick(player);
         assertSize(helper, player, "with a torso placeholder", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+        player.tickCount = SlotGuard.FULL_SCAN_TICKS; // il tick che guarda tutto l'inventario
 
         SlotGuard.tick(player);
 
@@ -3139,6 +3148,75 @@ public final class ExoframeGameTests {
             player.setGameMode(GameType.CREATIVE);
         }
         leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un giocatore senza telaio apre un menu che mostra gli slot armatura di chi ne indossa uno (come fa una mod che
+     * apre l'inventario altrui) e uno slot di un contenitore con un segnaposto: il tick dell'autoriparazione di chi
+     * guarda toglie il segnaposto del contenitore e lascia quelli dell'altro giocatore, gli stessi stack, al loro posto.
+     */
+    private static void guardLeavesAnotherPlayersPlaceholdersAlone(GameTestHelper helper) {
+        ServerPlayer wearer = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer viewer = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(wearer, SuitSummary.BARE);
+        List<ItemStack> worn = List.copyOf(wearer.getInventory().armor);
+        SimpleContainer box = new SimpleContainer(1);
+        box.setItem(0, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+        AbstractContainerMenu menu = new AbstractContainerMenu(null, 1) {
+            {
+                for (int i = 0; i < 4; i++) {
+                    addSlot(new Slot(wearer.getInventory(), Inventory.INVENTORY_SIZE + i, 0, 0));
+                }
+                addSlot(new Slot(box, 0, 0, 0));
+            }
+
+            @Override
+            public ItemStack quickMoveStack(Player player, int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public boolean stillValid(Player player) {
+                return true;
+            }
+        };
+        viewer.containerMenu = menu;
+        viewer.tickCount = SlotGuard.FULL_SCAN_TICKS; // il tick guarda tutto, menu aperto compreso
+        try {
+            SlotGuard.tick(viewer);
+        } finally {
+            viewer.containerMenu = viewer.inventoryMenu;
+        }
+        helper.assertTrue(box.getItem(0).isEmpty(), "placeholder left in the container slot of the menu");
+        for (int i = 0; i < worn.size(); i++) {
+            helper.assertTrue(wearer.getInventory().armor.get(i) == worn.get(i),
+                    "the viewer's guard touched the wearer's armor slot " + i);
+        }
+        assertPlaceholdersWorn(helper, wearer);
+        DebugWear.remove(wearer);
+        helper.succeed();
+    }
+
+    /**
+     * Senza un telaio indossato il tick toglie a ogni tick i segnaposto dagli slot armatura e quelli nel resto
+     * dell'inventario solo quando il contatore dei tick e' un multiplo di {@link SlotGuard#FULL_SCAN_TICKS}: con 7
+     * il segnaposto dello slot della testa sparisce e quello nell'inventario resta, con 20 sparisce anche quello.
+     */
+    private static void guardScansTheRestOncePerSecondWithoutAFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.getInventory().armor.set(EquipmentSlot.HEAD.getIndex(), placeholderFor(EquipmentSlot.HEAD));
+        player.getInventory().items.set(4, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+
+        player.tickCount = 7;
+        SlotGuard.tick(player);
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).isEmpty(), "armor placeholder left");
+        helper.assertTrue(player.getInventory().items.get(4).is(ModItems.EXOFRAME_LEGS.get()),
+                "the inventory was scanned outside the once-a-second tick");
+
+        player.tickCount = 2 * SlotGuard.FULL_SCAN_TICKS;
+        SlotGuard.tick(player);
+        helper.assertTrue(countPlaceholders(player) == 0, countPlaceholders(player) + " placeholders left");
         helper.succeed();
     }
 
