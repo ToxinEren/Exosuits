@@ -2,7 +2,7 @@
 # Scatti in terza persona dal client vero di Minecraft, senza schermo. Solo Linux (Xvfb e OpenGL software di Mesa):
 # e' per la sessione cloud e per macchine simili alla CI, non per il PC Windows.
 #
-#   EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> ["comando" ...]
+#   EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> ["comando" | "@passo" ...]
 #
 # Avvia un server dedicato locale in modalita' offline (con RCON) e il client di sviluppo della variante sotto Xvfb,
 # fa entrare il giocatore, lo mette in creativa su un mondo piatto, di giorno, rivolto a sud, esegue i comandi via
@@ -11,7 +11,20 @@
 # i log: gradle-server.log e gradle-client.log (uscita di Gradle e del gioco), server.log e client.log (latest.log
 # delle due cartelle di esecuzione), rcon.log (comandi e risposte), xvfb.log (uscita di Xvfb), log-check.txt
 # (avvisi ed errori del mod o dei mixin nei due log, vuoto se non ce ne sono). Prima di cominciare cancella dalla
-# cartella solo questi file, per nome. Alla fine chiude server, client e Xvfb, anche dopo un errore o Ctrl-C.
+# cartella solo questi file, per nome (e gli scatti dei passi @scatto). Alla fine chiude server, client e Xvfb, anche
+# dopo un errore o Ctrl-C.
+#
+# Fra i comandi possono stare passi del client, che cominciano con @ e si eseguono nello stesso ordine:
+#   @click destro|sinistro             un clic del mouse dove punta il mirino
+#   @tieni <tasto> <secondi> [<nome> <dopo>]
+#                                      tiene premuto un tasto (nome di xdotool: v, F5, space...) per quei secondi;
+#                                      con <nome> e <dopo> salva <nome>.png <dopo> secondi dopo la pressione, a tasto
+#                                      ancora premuto (<dopo> minore di <secondi>)
+#   @scatto <nome>                     salva <nome>.png subito, con l'interfaccia com'e' in quel momento
+#   @attendi <secondi>                 aspetta
+# I secondi possono avere decimali (0.5). Un passo sconosciuto o con argomenti sbagliati ferma lo script prima di
+# avviare qualunque cosa (uscita 2); un passo che non si riesce a eseguire lo ferma con uscita 1. Dove guarda il
+# giocatore e cosa tiene in mano si decide con comandi del server (tp, item replace) fra un passo e l'altro.
 #
 # Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
 # run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta.
@@ -29,9 +42,9 @@
 #   EXO_SHOT_USER     nome del giocatore offline, default Exo
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
 #
-# Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, scatto);
-# 2 uso o ambiente sbagliati (variante, programmi mancanti, EULA, porta occupata, Xvfb che non parte, OpenGL core 3.2
-# assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+# Uscite: 0 scatti salvati; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato, passo non
+# riuscito, scatto); 2 uso o ambiente sbagliati (variante, passo sconosciuto o scritto male, tasto sconosciuto,
+# programmi mancanti, EULA, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -39,7 +52,7 @@ root=$(cd "$here/../.." && pwd)
 variants=(1.20.1-forge 1.20.1-fabric 1.21.1-fabric 1.21.1-neoforge)
 
 usage() {
-    echo "Uso: EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> [\"comando\" ...]" >&2
+    echo "Uso: EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> [\"comando\" | \"@passo\" ...]" >&2
     echo "Varianti: ${variants[*]}" >&2
 }
 fatal() { echo "ERRORE: $*" >&2; exit 2; }
@@ -58,6 +71,49 @@ if [ "$known" -eq 0 ]; then
     usage
     fatal "variante sconosciuta '$variant'"
 fi
+
+# --- passi del client ----------------------------------------------------------------------------------------------
+# Tutti controllati prima di avviare qualunque cosa: un passo sbagliato non costa un avvio di server e client.
+is_seconds() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v s="$1" 'BEGIN { exit !(s > 0) }'; }
+is_name() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; }
+reserved=(back front quarter)
+step_names=() # scatti dei passi, in ordine
+step_keys=()  # tasti dei passi @tieni, da provare quando c'e' lo schermo virtuale
+add_shot_name() { # nome passo
+    local r
+    is_name "$1" || fatal "passo \"$2\": nome di scatto non valido '$1' (lettere, cifre, _ e -)"
+    for r in "${reserved[@]}" "${step_names[@]}"; do
+        [ "$r" = "$1" ] && fatal "passo \"$2\": lo scatto '$1' esiste gia' (o e' uno dei tre scatti finali)"
+    done
+    step_names+=("$1")
+}
+for c in "$@"; do
+    case "$c" in @*) ;; *) continue ;; esac
+    read -r -a w <<<"$c"
+    case "${w[0]}" in
+        @click)
+            [ "${#w[@]}" -eq 2 ] && { [ "${w[1]}" = destro ] || [ "${w[1]}" = sinistro ]; } \
+                || fatal "passo \"$c\": si scrive @click destro oppure @click sinistro" ;;
+        @tieni)
+            { [ "${#w[@]}" -eq 3 ] || [ "${#w[@]}" -eq 5 ]; } \
+                || fatal "passo \"$c\": si scrive @tieni <tasto> <secondi> [<nome> <dopo>]"
+            [[ "${w[1]}" =~ ^[A-Za-z0-9_]+$ ]] || fatal "passo \"$c\": tasto non valido '${w[1]}'"
+            is_seconds "${w[2]}" || fatal "passo \"$c\": secondi non validi '${w[2]}' (numero maggiore di 0)"
+            if [ "${#w[@]}" -eq 5 ]; then
+                add_shot_name "${w[3]}" "$c"
+                is_seconds "${w[4]}" && awk -v a="${w[4]}" -v b="${w[2]}" 'BEGIN { exit !(a < b) }' \
+                    || fatal "passo \"$c\": lo scatto va fatto prima di lasciare il tasto (<dopo> fra 0 e ${w[2]})"
+            fi
+            step_keys+=("${w[1]}") ;;
+        @scatto)
+            [ "${#w[@]}" -eq 2 ] || fatal "passo \"$c\": si scrive @scatto <nome>"
+            add_shot_name "${w[1]}" "$c" ;;
+        @attendi)
+            [ "${#w[@]}" -eq 2 ] && is_seconds "${w[1]}" \
+                || fatal "passo \"$c\": si scrive @attendi <secondi> (numero maggiore di 0)" ;;
+        *) fatal "passo sconosciuto \"$c\" (passi: @click, @tieni, @scatto, @attendi; vedi tools/client/README.md)" ;;
+    esac
+done
 
 # --- ambiente -------------------------------------------------------------------------------------------------------
 [ "$(uname -s)" = Linux ] || fatal "lo strumento funziona solo su Linux (Xvfb); sul PC Windows segui la checklist"
@@ -109,7 +165,7 @@ flock -n 9 || fatal "un'altra esecuzione di client_shot.sh usa gia' la variante 
 
 # Si tolgono solo i file che lo script scrive, per nome: la cartella e' dell'utente e puo' contenere altro.
 for f in back.png front.png quarter.png gradle-server.log gradle-client.log server.log client.log rcon.log xvfb.log \
-        log-check.txt; do
+        log-check.txt "${step_names[@]/%/.png}"; do
     rm -f "$out/$f"
 done
 
@@ -205,8 +261,9 @@ cleanup() {
     fi
     [ "${#pids[@]}" -gt 0 ] && wait "${pids[@]}" 2>/dev/null
     [ -n "$xpid" ] && kill "$xpid" 2>/dev/null && wait "$xpid" 2>/dev/null
-    cp "$sdir/logs/latest.log" "$out/server.log" 2>/dev/null
-    cp "$cdir/logs/latest.log" "$out/client.log" 2>/dev/null
+    # solo i log dei processi di questa esecuzione, non quelli rimasti da una precedente
+    [ -n "$spid" ] && cp "$sdir/logs/latest.log" "$out/server.log" 2>/dev/null
+    [ -n "$cpid" ] && cp "$cdir/logs/latest.log" "$out/client.log" 2>/dev/null
     exit "$code"
 }
 trap cleanup EXIT
@@ -242,6 +299,12 @@ case "$core" in
             "glxinfo dice: $(echo "$glx" | grep -m1 -E 'renderer|Error|error' || echo niente)" ;;
 esac
 log "schermo :$n ${width}x${height}, $(echo "$glx" | sed -n 's/.*OpenGL renderer string: *//p' | head -n 1)"
+# I tasti dei passi @tieni: xdotool non fallisce con un nome sconosciuto (avvisa ed esce con 0), quindi si provano qui,
+# sullo schermo ancora senza finestre, dove premerli non arriva a nessuno.
+for k in "${step_keys[@]}"; do
+    err=$({ xdotool keydown "$k" && xdotool keyup "$k"; } 2>&1)
+    [ -z "$err" ] || fatal "tasto sconosciuto per xdotool: '$k' ($(echo "$err" | head -n 1))"
+done
 
 gradle=(./gradlew --console=plain -I "$here/shot.init.gradle" "-Pexo.shot.tag=$tag" "-Pexo.shot.user=$user"
         "-Pexo.shot.server=127.0.0.1:$port" "-Pexo.shot.width=$width" "-Pexo.shot.height=$height")
@@ -314,39 +377,79 @@ sleep 0.8
 xdotool keyup w
 sleep 0.5
 rc "tp $user 0.5 -60 0.5 0 15" || fail "ritorno al punto di partenza: comando rifiutato (vedi $out/rcon.log)"
-for c in "$@"; do
-    checked "${c#/}" || fail "comando rifiutato o non riuscito: \"$c\" (risposta in $out/rcon.log)"
-    log "comando eseguito: $c"
-done
-sleep "$settle" # i chunk si costruiscono piano col rendering software, e il corpo si gira dietro la testa
-
-# Prima di ogni scatto: il client deve essere ancora vivo e nel mondo (mai uno scatto del menu principale).
+# Prima di ogni scatto e di ogni passo: il client deve essere ancora vivo e nel mondo (mai uno scatto del menu
+# principale, mai un tasto mandato a nessuno).
 alive() {
-    kill -0 "$cpid" 2>/dev/null || fail "il client si e' chiuso prima dello scatto $1 (vedi $out/gradle-client.log)"
+    kill -0 "$cpid" 2>/dev/null || fail "il client si e' chiuso prima di $1 (vedi $out/gradle-client.log)"
     if grep -qE "$user lost connection|$user left the game" "$out/gradle-server.log"; then
-        fail "il giocatore ha lasciato il server prima dello scatto $1 (vedi $out/gradle-server.log)"
+        fail "il giocatore ha lasciato il server prima di $1 (vedi $out/gradle-server.log)"
     fi
 }
-key() { xdotool key --clearmodifiers "$1"; sleep 1.5; }
+# Uno scatto subito, senza attese: chi vuole aspettare lo dice (sleep qui sotto, @attendi nei passi).
 shot() {
-    sleep 2
-    alive "$1"
+    alive "lo scatto $1"
     import -window root "$out/$1.png" || fail "import non ha salvato $1.png"
     local colours
     colours=$(identify -format '%k' "$out/$1.png" 2>/dev/null || echo 0)
     [ "$colours" -ge 64 ] || fail "$1.png ha solo $colours colori: schermo vuoto o nero, non uno scatto del mondo"
     log "salvato $1.png"
 }
+# xdotool, con l'errore che diventa un errore del passo (xdotool avvisa ma esce con 0 su certi sbagli).
+xdo() { # passo argomenti...
+    local step=$1 err
+    shift
+    err=$(xdotool "$@" 2>&1) && [ -z "$err" ] || fail "passo \"$step\": xdotool $* non riuscito: $err"
+}
+now() { date +%s.%N; }
+# Un passo del client, gia' controllato all'inizio.
+run_step() {
+    local w t0s rest
+    read -r -a w <<<"$1"
+    alive "il passo \"$1\""
+    case "${w[0]}" in
+        @click) xdo "$1" click "$([ "${w[1]}" = destro ] && echo 3 || echo 1)" ;;
+        @tieni)
+            t0s=$(now)
+            xdo "$1" keydown "${w[1]}"
+            if [ "${#w[@]}" -eq 5 ]; then
+                sleep "${w[4]}"
+                shot "${w[3]}"
+            fi
+            rest=$(awk -v d="${w[2]}" -v a="$t0s" -v b="$(now)" 'BEGIN { r = d - (b - a); print (r > 0 ? r : 0) }')
+            sleep "$rest"
+            xdo "$1" keyup "${w[1]}" ;;
+        @scatto) shot "${w[1]}" ;;
+        @attendi) sleep "${w[1]}" ;;
+    esac
+}
+for c in "$@"; do
+    case "$c" in
+        @*)
+            run_step "$c"
+            log "passo eseguito: $c" ;;
+        *)
+            checked "${c#/}" || fail "comando rifiutato o non riuscito: \"$c\" (risposta in $out/rcon.log)"
+            log "comando eseguito: $c" ;;
+    esac
+done
+sleep "$settle" # i chunk si costruiscono piano col rendering software, e il corpo si gira dietro la testa
+
+# I tre scatti finali partono dalla prima persona con l'interfaccia visibile: chi con i passi lascia la telecamera in
+# terza persona (F5) o l'interfaccia nascosta (F1) li cambia.
+key() { xdotool key --clearmodifiers "$1"; sleep 1.5; }
 key F1 # nasconde l'interfaccia
 key F5
+sleep 2
 shot back # terza persona, da dietro
 key F5
+sleep 2
 shot front # terza persona, davanti
 # Tre quarti: /tp gira il corpo con la testa, quindi si gira solo la testa con il mouse (circa 0,15 gradi per
 # pixel); il corpo la segue in ritardo di 15-50 gradi. Non e' una vista laterale vera.
 key F5 # prima persona
 key F5 # di nuovo da dietro
 for _ in $(seq 12); do xdotool mousemove_relative -- 60 0; sleep 0.15; done
+sleep 2
 shot quarter
 
 # Log del client e del server: righe WARN/ERROR che nominano il mod o i mixin, eccezioni e tracce che passano dal

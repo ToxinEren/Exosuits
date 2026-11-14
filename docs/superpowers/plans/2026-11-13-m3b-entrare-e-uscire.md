@@ -248,7 +248,7 @@
 - Consumes: Task 2, 4, 9; `DebugWear.PLACEHOLDERS`, `ItemDataAccess.setSuitSummary`.
 - Produces `FrameEntry.enter(ServerPlayer player, ExoframeEntity frame)` → `boolean`, tutto nello stesso tick e in quest'ordine:
   1. rifiuti con messaggio, senza toccare nulla: senza permesso (`…locked`); nessuna cella con carica (`…no_cell`); il giocatore è già in un telaio (`…already_inside`); `!level.noCollision(frame, SuitSize.standingBox(frame.position()))` (`…no_room`);
-  2. l'armatura già stivata nel record va a chi entra se è il proprietario (`Handouts.give`), altrimenti cade accanto al telaio;
+  2. l'armatura già stivata nel record va a chi entra se è il proprietario (`Handouts.give`); chi non è il proprietario non entra in un telaio che ne contiene ancora (rifiuto `…holds_armor` al passo 1, senza toccare nulla: nulla cade a terra);
   3. `Compat.frameState().enter(player, frameId)`; se dà falso (un altro è entrato nello stesso tick) ci si ferma senza altri effetti;
   4. l'armatura indossata (non i segnaposto) si stiva nel record con il suo slot; i quattro segnaposto vanno negli slot; il riassunto visivo dello stato va sullo stack del torso;
   5. il giocatore si sposta nel punto e con lo yaw del telaio; l'entità si elimina; `player.refreshDimensions()`.
