@@ -5,6 +5,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.FrameStateAccess;
+import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.NbtKeys;
@@ -28,6 +29,8 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.FramePlacement;
+import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -42,6 +45,7 @@ import java.util.function.Consumer;
 import net.minecraft.SharedConstants;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -51,6 +55,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.MobCategory;
@@ -60,9 +68,13 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import software.bernie.geckolib.animatable.GeoItem;
 
@@ -120,6 +132,20 @@ public final class ExoframeGameTests {
         add(tests, "frameEntityKeepsItsIdentityAndSummary", ExoframeGameTests::frameEntityKeepsItsIdentityAndSummary);
         add(tests, "frameEntityIgnoresDamageAndExplosions", ExoframeGameTests::frameEntityIgnoresDamageAndExplosions);
         add(tests, "frameEntityHasTheSuitBox", ExoframeGameTests::frameEntityHasTheSuitBox);
+        add(tests, "placingCreatesRecordAndEntity", ExoframeGameTests::placingCreatesRecordAndEntity);
+        add(tests, "placingRefusedWhereNoRoom", ExoframeGameTests::placingRefusedWhereNoRoom);
+        add(tests, "placingRefusedWhereAnotherFrameStands", ExoframeGameTests::placingRefusedWhereAnotherFrameStands);
+        add(tests, "entityWithoutRecordDiscardsItself", ExoframeGameTests::entityWithoutRecordDiscardsItself);
+        add(tests, "entityOfRecordInAnotherDimensionDiscardsItself",
+                ExoframeGameTests::entityOfRecordInAnotherDimensionDiscardsItself);
+        add(tests, "missingEntityIsRecreated", ExoframeGameTests::missingEntityIsRecreated);
+        add(tests, "movedEntityIsBroughtBack", ExoframeGameTests::movedEntityIsBroughtBack);
+        add(tests, "realignLeavesUnloadedChunksAlone", ExoframeGameTests::realignLeavesUnloadedChunksAlone);
+        add(tests, "groundBelowFindsTheFloor", ExoframeGameTests::groundBelowFindsTheFloor);
+        add(tests, "exoframeItemPlacesAnEmptyFrame", ExoframeGameTests::exoframeItemPlacesAnEmptyFrame);
+        add(tests, "exoframeItemRefusedUnderLowCeiling", ExoframeGameTests::exoframeItemRefusedUnderLowCeiling);
+        add(tests, "debugPlaceBareAndScrap", ExoframeGameTests::debugPlaceBareAndScrap);
+        add(tests, "frameEntityIgnoresPortals", ExoframeGameTests::frameEntityIgnoresPortals);
         return tests;
     }
 
@@ -794,7 +820,8 @@ public final class ExoframeGameTests {
         helper.assertTrue(!frame.hurt(level.damageSources().generic(), 1000f), "hurt by generic damage");
         helper.assertTrue(!frame.hurt(level.damageSources().genericKill(), Float.MAX_VALUE), "hurt by a generic kill");
         helper.assertTrue(!frame.hurt(level.damageSources().playerAttack(player), 1000f), "hurt by a player attack");
-        level.explode(null, spot.x + 1.5, spot.y + 1.0, spot.z, 3f, Level.ExplosionInteraction.NONE);
+        // potenza 1 a un blocco: i test condividono il server, e un'esplosione piu' forte arriva alle strutture vicine
+        level.explode(null, spot.x + 1.0, spot.y + 1.0, spot.z, 1f, Level.ExplosionInteraction.NONE);
         helper.assertTrue(frame.isAlive() && !frame.isRemoved(), "entity removed by an explosion");
         helper.assertTrue(level.getEntity(frameId) == frame, "entity gone from the level after an explosion");
         helper.assertTrue(frame.position().equals(spot), "explosion moved the entity: " + frame.position());
@@ -835,6 +862,387 @@ public final class ExoframeGameTests {
         helper.assertTrue(frame.isNoGravity(), "frame entity has gravity");
         helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "new frame entity not bare: " + frame.summary());
         helper.succeed();
+    }
+
+    /**
+     * {@link FramePlacement#place} su un pavimento libero crea il record piazzato (stato, dimensione, punto,
+     * orientamento) e l'entita' con il suo UUID, nel punto, con l'orientamento e con il riassunto dello stato; al
+     * primo tick l'entita' trova il suo record e resta.
+     */
+    private static void placingCreatesRecordAndEntity(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        int scrapMax = RedstoneExoframes.config().tiers.maxDurability.get(Tier.SCRAP);
+        FrameState state = new FrameState(RedstoneExoframes.config());
+        state.mount(new Piece(PieceSlot.HELMET, Tier.SCRAP, scrapMax, scrapMax));
+
+        Optional<ExoframeEntity> placed = FramePlacement.place(level, state, feet, 30f);
+        helper.assertTrue(placed.isPresent(), "place refused on a free floor");
+        ExoframeEntity frame = placed.get();
+        UUID frameId = frame.frameId();
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.state() == state && record.dimension().equals(level.dimension())
+                && record.position().equals(feet) && record.yaw() == 30f,
+                "record differs from the placement: " + record);
+        helper.assertTrue(level.getEntity(frameId) == frame, "entity not in the level under the frame id");
+        helper.assertTrue(frame.position().equals(feet) && frame.getYRot() == 30f,
+                "entity not at the record's spot: " + frame.position() + " yaw " + frame.getYRot());
+        helper.assertTrue(frame.summary().equals(SuitSummary.of(state)),
+                "summary is not the state's: " + frame.summary());
+
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(!frame.isRemoved() && level.getEntity(frameId) == frame,
+                    "placed entity removed itself at its first tick");
+            helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+            frame.discard();
+            helper.succeed();
+        });
+    }
+
+    /** Con un soffitto a 2 blocchi sopra il punto la tuta in piedi (2,97) non ci sta: niente record, niente entita'. */
+    private static void placingRefusedWhereNoRoom(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 4, 3), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+
+        Optional<ExoframeEntity> placed =
+                FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), feet, 0f);
+        helper.assertTrue(placed.isEmpty(), "place accepted under a ceiling at 2");
+        assertNothingPlacedAt(helper, feet);
+        helper.succeed();
+    }
+
+    /** Dove c'e' gia' un telaio (anche spostato di mezzo blocco) non se ne piazza un altro. */
+    private static void placingRefusedWhereAnotherFrameStands(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        ExoframeEntity first = FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), feet, 0f)
+                .orElse(null);
+        helper.assertTrue(first != null, "first place refused");
+
+        Vec3 beside = feet.add(0.5, 0.0, 0.0);
+        Optional<ExoframeEntity> second =
+                FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), beside, 0f);
+        helper.assertTrue(second.isEmpty(), "second frame placed inside the first one");
+        helper.assertTrue(Compat.frameState().placedIn(level).stream().noneMatch(p -> p.position().equals(beside)),
+                "a record was placed at " + beside);
+        helper.assertTrue(level.getEntitiesOfClass(ExoframeEntity.class, SuitSize.standingBox(beside))
+                .equals(List.of(first)), "another frame entity stands beside the first one");
+
+        helper.assertTrue(Compat.frameState().removePlaced(server, first.frameId()), "removePlaced refused");
+        first.discard();
+        helper.succeed();
+    }
+
+    /** Un'entita' telaio con un UUID che il registro non conosce sparisce al primo tick. */
+    private static void entityWithoutRecordDiscardsItself(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        UUID frameId = UUID.randomUUID();
+        ExoframeEntity frame = spawnFrame(level, frameId, helper.absoluteVec(new Vec3(3.5, 2.0, 3.5)), 0f);
+        helper.assertTrue(level.getEntity(frameId) == frame, "entity not added to the level");
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(frame.isRemoved() && level.getEntity(frameId) == null,
+                    "entity without a record still in the level after its first tick");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Un'entita' telaio il cui record e' piazzato in un'altra dimensione (il Nether del server di test) sparisce al
+     * primo tick, e il record resta dov'e'.
+     */
+    private static void entityOfRecordInAnotherDimensionDiscardsItself(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        ServerLevel nether = server.getLevel(Level.NETHER);
+        helper.assertTrue(nether != null && nether != level, "test server has no separate Nether level");
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 netherSpot = new Vec3(8.5, 70.0, -3.5);
+        UUID frameId = frames.place(nether, new FrameState(RedstoneExoframes.config()), netherSpot, 0f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+        ExoframeEntity frame = spawnFrame(level, frameId, helper.absoluteVec(new Vec3(3.5, 2.0, 3.5)), 0f);
+
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(frame.isRemoved() && level.getEntity(frameId) == null,
+                    "entity of a record in another dimension still in the level after its first tick");
+            PlacedFrame record = frames.placed(server, frameId).orElse(null);
+            helper.assertTrue(record != null && record.dimension().equals(Level.NETHER)
+                    && record.position().equals(netherSpot), "the record moved or went away: " + record);
+            helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Un'entita' eliminata con {@code discard()} torna alla seconda verifica consecutiva (la prima la ricorda
+     * soltanto): una sola, con lo stesso UUID, nel punto e con l'orientamento del record.
+     */
+    private static void missingEntityIsRecreated(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        ExoframeEntity frame = FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), feet, -60f)
+                .orElse(null);
+        helper.assertTrue(frame != null, "place refused");
+        UUID frameId = frame.frameId();
+        frame.discard();
+        helper.assertTrue(level.getEntity(frameId) == null, "discarded entity still in the level");
+
+        FrameRealign.checkNow(level);
+        helper.assertTrue(level.getEntity(frameId) == null, "entity recreated at the first check");
+        int recreated = FrameRealign.checkNow(level);
+        Entity back = level.getEntity(frameId);
+        helper.assertTrue(recreated >= 1 && back instanceof ExoframeEntity && back != frame,
+                "entity not recreated at the second check (recreated " + recreated + ", found " + back + ")");
+        List<ExoframeEntity> copies = level.getEntitiesOfClass(ExoframeEntity.class,
+                SuitSize.standingBox(feet).inflate(2.0), entity -> entity.getUUID().equals(frameId));
+        helper.assertTrue(copies.size() == 1, copies.size() + " entities with the frame id, expected 1");
+        helper.assertTrue(back.position().equals(feet) && back.getYRot() == -60f,
+                "recreated entity not at the record's spot: " + back.position() + " yaw " + back.getYRot());
+
+        helper.assertTrue(Compat.frameState().removePlaced(server, frameId), "removePlaced refused");
+        back.discard();
+        helper.succeed();
+    }
+
+    /** Un'entita' spostata (come da un {@code /tp}) torna al punto e all'orientamento del record a una verifica. */
+    private static void movedEntityIsBroughtBack(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        ExoframeEntity frame = FramePlacement.place(level, new FrameState(RedstoneExoframes.config()), feet, 15f)
+                .orElse(null);
+        helper.assertTrue(frame != null, "place refused");
+        frame.moveTo(feet.x + 2.0, feet.y + 1.0, feet.z, 100f, 0f);
+
+        FrameRealign.checkNow(level);
+        helper.assertTrue(level.getEntity(frame.frameId()) == frame, "the moved entity was replaced");
+        helper.assertTrue(frame.position().equals(feet) && frame.getYRot() == 15f,
+                "moved entity not brought back: " + frame.position() + " yaw " + frame.getYRot());
+
+        helper.assertTrue(Compat.frameState().removePlaced(server, frame.frameId()), "removePlaced refused");
+        frame.discard();
+        helper.succeed();
+    }
+
+    /** Un record piazzato a 10.000 blocchi, in un chunk senza entita' caricate: le verifiche non creano nulla. */
+    private static void realignLeavesUnloadedChunksAlone(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        Vec3 far = new Vec3(10_000.5, 64.0, 10_000.5);
+        long chunk = ChunkPos.asLong(BlockPos.containing(far));
+        helper.assertTrue(!level.areEntitiesLoaded(chunk), "the far chunk has its entities loaded");
+        UUID frameId = Compat.frameState().place(level, new FrameState(RedstoneExoframes.config()), far, 0f);
+        helper.assertTrue(frameId != null, "place returned no frame id");
+
+        FrameRealign.checkNow(level);
+        FrameRealign.checkNow(level);
+        helper.assertTrue(level.getEntity(frameId) == null, "entity created in a chunk without loaded entities");
+        helper.assertTrue(!level.areEntitiesLoaded(chunk), "the checks loaded the far chunk");
+
+        helper.assertTrue(Compat.frameState().removePlaced(server, frameId), "removePlaced refused");
+        helper.succeed();
+    }
+
+    /**
+     * {@link FramePlacement#groundBelow}: il primo appoggio sotto il punto, con la forma di collisione vera (sopra una
+     * lastra a meta' blocco), il punto stesso se ci appoggia gia', il fondo sotto l'acqua (i fluidi non sono suolo);
+     * vuoto dove sotto non c'e' nulla fino al fondo del mondo (una colonna senza blocchi caricati).
+     */
+    private static void groundBelowFindsTheFloor(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE);
+        helper.setBlock(new BlockPos(5, 1, 2), Blocks.STONE_SLAB);
+        helper.setBlock(new BlockPos(2, 1, 5), Blocks.STONE);
+        helper.setBlock(new BlockPos(2, 2, 5), Blocks.WATER);
+        helper.setBlock(new BlockPos(2, 3, 5), Blocks.WATER);
+
+        assertGround(helper, new Vec3(2.5, 6.0, 2.5), new Vec3(2.5, 2.0, 2.5), "above stone");
+        assertGround(helper, new Vec3(2.5, 2.0, 2.5), new Vec3(2.5, 2.0, 2.5), "already resting on stone");
+        assertGround(helper, new Vec3(5.5, 4.0, 2.5), new Vec3(5.5, 1.5, 2.5), "above a bottom slab");
+        assertGround(helper, new Vec3(2.5, 5.0, 5.5), new Vec3(2.5, 2.0, 5.5), "above water");
+        Optional<Vec3> none = FramePlacement.groundBelow(level, new Vec3(10_000.5, 100.0, 10_000.5));
+        helper.assertTrue(none.isEmpty(), "ground found in a column without blocks: " + none);
+        helper.succeed();
+    }
+
+    /**
+     * L'oggetto telaio usato sulla faccia superiore di un blocco, con il suo {@code useOn}: un record con il giocatore
+     * come proprietario e nulla di montato, l'entita' in piedi sul blocco cliccato e rivolta verso il giocatore; in
+     * sopravvivenza l'oggetto si consuma, in creativa resta.
+     */
+    private static void exoframeItemPlacesAnEmptyFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(2, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(5, 1, 3), Blocks.STONE);
+        player.setYRot(170f);
+
+        player.setGameMode(GameType.SURVIVAL);
+        ExoframeEntity survival = useExoframeItem(helper, player, new BlockPos(2, 1, 3), true);
+        helper.assertTrue(player.getMainHandItem().isEmpty(), "item not consumed in survival: "
+                + player.getMainHandItem());
+        PlacedFrame record = Compat.frameState().placed(server, survival.frameId()).orElse(null);
+        helper.assertTrue(record != null && player.getUUID().equals(record.state().owner())
+                && record.state().pieces().isEmpty() && record.state().cell() == null,
+                "record is not an empty frame owned by the player: " + record);
+        helper.assertTrue(survival.getYRot() == Mth.wrapDegrees(170f + 180f),
+                "frame not facing the player: yaw " + survival.getYRot());
+
+        player.setGameMode(GameType.CREATIVE);
+        ExoframeEntity creative = useExoframeItem(helper, player, new BlockPos(5, 1, 3), true);
+        helper.assertTrue(player.getMainHandItem().is(ModItems.EXOFRAME.get())
+                && player.getMainHandItem().getCount() == 1, "item consumed in creative: " + player.getMainHandItem());
+
+        for (ExoframeEntity frame : List.of(survival, creative)) {
+            helper.assertTrue(Compat.frameState().removePlaced(server, frame.frameId()), "removePlaced refused");
+            frame.discard();
+        }
+        helper.succeed();
+    }
+
+    /** Sotto un soffitto basso l'oggetto telaio non piazza nulla e resta in mano, intero. */
+    private static void exoframeItemRefusedUnderLowCeiling(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 4, 3), Blocks.STONE);
+        player.setGameMode(GameType.SURVIVAL);
+        useExoframeItem(helper, player, new BlockPos(3, 1, 3), false);
+        helper.assertTrue(player.getMainHandItem().is(ModItems.EXOFRAME.get())
+                && player.getMainHandItem().getCount() == 1, "refused item not left untouched: "
+                + player.getMainHandItem());
+        assertNothingPlacedAt(helper, helper.absoluteVec(new Vec3(3.5, 2.0, 3.5)));
+        helper.succeed();
+    }
+
+    /**
+     * {@code /exoframe debug place nudo} e {@code rottame}: il telaio al suolo sotto i piedi di chi esegue, con il suo
+     * orientamento e lui come proprietario; nudo senza nulla, rottame con i sei pezzi Rottame e una cella carica. Dove
+     * c'e' gia' un telaio il comando non piazza nulla.
+     */
+    private static void debugPlaceBareAndScrap(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+        helper.setBlock(new BlockPos(2, 1, 2), Blocks.STONE);
+        helper.setBlock(new BlockPos(5, 1, 5), Blocks.STONE);
+
+        Vec3 bareFeet = helper.absoluteVec(new Vec3(2.5, 2.0, 2.5));
+        player.moveTo(bareFeet.x, bareFeet.y, bareFeet.z, 90f, 0f);
+        runCommand(dispatcher, player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "exoframe debug place nudo");
+        ExoframeEntity bare = frameAt(helper, bareFeet);
+        PlacedFrame bareRecord = Compat.frameState().placed(server, bare.frameId()).orElseThrow();
+        helper.assertTrue(player.getUUID().equals(bareRecord.state().owner()) && bareRecord.state().pieces().isEmpty()
+                && bareRecord.state().cell() == null && bareRecord.yaw() == 90f,
+                "nudo did not place an empty frame owned by the executor: " + bareRecord);
+
+        int again = 0;
+        try {
+            again = dispatcher.execute("exoframe debug place nudo",
+                    player.createCommandSourceStack().withPermission(2).withSuppressedOutput());
+        } catch (CommandSyntaxException e) {
+            again = 0;
+        }
+        helper.assertTrue(again == 0, "a second frame placed where the first one stands");
+        helper.assertTrue(level.getEntitiesOfClass(ExoframeEntity.class, SuitSize.standingBox(bareFeet)).size() == 1,
+                "more than one frame where the first one stands");
+
+        Vec3 scrapFeet = helper.absoluteVec(new Vec3(5.5, 2.0, 5.5));
+        player.moveTo(scrapFeet.x, scrapFeet.y + 2.0, scrapFeet.z, -30f, 0f);
+        runCommand(dispatcher, player.createCommandSourceStack().withPermission(2).withSuppressedOutput(),
+                "exoframe debug place rottame");
+        ExoframeEntity scrap = frameAt(helper, scrapFeet);
+        FrameState scrapState = Compat.frameState().placed(server, scrap.frameId()).orElseThrow().state();
+        helper.assertTrue(player.getUUID().equals(scrapState.owner()), "rottame not owned by the executor");
+        helper.assertTrue(scrapState.pieces().keySet().equals(EnumSet.allOf(PieceSlot.class))
+                && scrapState.pieces().values().stream().allMatch(piece -> piece.tier() == Tier.SCRAP),
+                "rottame does not have the six scrap pieces: " + scrapState.pieces().keySet());
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        helper.assertTrue(scrapState.cell() != null && scrapState.cell().stored() == capacity,
+                "rottame has no charged cell: " + scrapState.cell());
+
+        for (ExoframeEntity frame : List.of(bare, scrap)) {
+            helper.assertTrue(Compat.frameState().removePlaced(server, frame.frameId()), "removePlaced refused");
+            frame.discard();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Il telaio non usa portali: i controlli che i blocchi portale del Nether e dell'End e il portale di passaggio
+     * dell'End fanno sull'entita' nella versione del gioco ({@link GameTests#portalsAccept}) la rifiutano, e accettano
+     * un oggetto a terra (controllo). Il viaggio vero non si prova: genererebbe l'altra dimensione.
+     */
+    private static void frameEntityIgnoresPortals(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        ServerLevel nether = level.getServer().getLevel(Level.NETHER);
+        helper.assertTrue(nether != null && nether != level, "test server has no separate Nether level");
+        Vec3 spot = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        ExoframeEntity frame = new ExoframeEntity(ModEntities.EXOFRAME.get(), level);
+        frame.setPos(spot.x, spot.y, spot.z);
+        ItemEntity control = new ItemEntity(level, spot.x, spot.y, spot.z, new ItemStack(Items.STONE));
+        helper.assertTrue(Compat.gameTests().portalsAccept(control, nether), "portals refuse a dropped item");
+        helper.assertTrue(!Compat.gameTests().portalsAccept(frame, nether), "portals accept the frame entity");
+        helper.succeed();
+    }
+
+    /**
+     * Usa l'oggetto telaio (uno, in mano) sulla faccia superiore del blocco dato con il suo {@code useOn}; se
+     * {@code expectPlaced} restituisce l'unico telaio in piedi sul blocco, altrimenti verifica il rifiuto e da' null.
+     */
+    private static ExoframeEntity useExoframeItem(GameTestHelper helper, ServerPlayer player, BlockPos relative,
+            boolean expectPlaced) {
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.EXOFRAME.get()));
+        BlockPos clicked = helper.absolutePos(relative);
+        BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(clicked).add(0.0, 0.5, 0.0), Direction.UP, clicked,
+                false);
+        InteractionResult result = ModItems.EXOFRAME.get().useOn(new UseOnContext(player, InteractionHand.MAIN_HAND,
+                hit));
+        if (!expectPlaced) {
+            helper.assertTrue(!result.consumesAction(), "refused use reported " + result);
+            return null;
+        }
+        helper.assertTrue(result.consumesAction(), "use of the exoframe item reported " + result);
+        return frameAt(helper, Vec3.atBottomCenterOf(clicked.above()));
+    }
+
+    /** L'unico telaio in piedi esattamente in {@code feet} (riquadro della tuta). */
+    private static ExoframeEntity frameAt(GameTestHelper helper, Vec3 feet) {
+        List<ExoframeEntity> found = helper.getLevel().getEntitiesOfClass(ExoframeEntity.class,
+                SuitSize.standingBox(feet).inflate(0.5));
+        helper.assertTrue(found.size() == 1, found.size() + " frames near " + feet + ", expected 1");
+        ExoframeEntity frame = found.get(0);
+        helper.assertTrue(frame.position().equals(feet), "frame at " + frame.position() + ", expected " + feet);
+        return frame;
+    }
+
+    /** Nessun record piazzato in {@code feet} e nessun telaio nel riquadro della tuta li'. */
+    private static void assertNothingPlacedAt(GameTestHelper helper, Vec3 feet) {
+        ServerLevel level = helper.getLevel();
+        helper.assertTrue(Compat.frameState().placedIn(level).stream().noneMatch(p -> p.position().equals(feet)),
+                "a record was placed at " + feet);
+        helper.assertTrue(level.getEntitiesOfClass(ExoframeEntity.class, SuitSize.standingBox(feet)).isEmpty(),
+                "a frame entity stands at " + feet);
+    }
+
+    /** Verifica il suolo trovato da {@link FramePlacement#groundBelow} partendo da un punto relativo alla struttura. */
+    private static void assertGround(GameTestHelper helper, Vec3 from, Vec3 expected, String where) {
+        Optional<Vec3> ground = FramePlacement.groundBelow(helper.getLevel(), helper.absoluteVec(from));
+        Vec3 want = helper.absoluteVec(expected);
+        helper.assertTrue(ground.isPresent() && ground.get().distanceTo(want) < 1e-6,
+                where + ": ground " + ground + ", expected " + want);
     }
 
     /** Crea l'entita' telaio con l'identita' data nel punto e con l'orientamento dati e la aggiunge al livello. */

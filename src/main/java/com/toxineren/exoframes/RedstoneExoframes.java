@@ -6,6 +6,7 @@ import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.events.common.TickEvent;
@@ -26,10 +27,11 @@ public final class RedstoneExoframes {
     public static void init() {
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
         Compat.armorMaterials().register(); // prima degli item: su 1.21.1 i pezzi usano il materiale registrato
-        ModEntities.register(); // prima degli item: l'oggetto che piazza il telaio usera' il tipo dell'entita'
+        ModEntities.register(); // prima degli item: l'oggetto che piazza il telaio usa il tipo dell'entita'
         ModItems.register();
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
+        FrameRealign.register(); // registro ed entita' dei telai piazzati allineati, ogni 5 secondi per livello
         ExoframeCommand.register();
         TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione

@@ -309,8 +309,29 @@ def draw_sprite(rows):
     return outline(px)
 
 
+# Telaio vuoto (parte 3b), l'oggetto che lo piazza: lo scheletro d'acciaio della tuta senza pezzi, con il nucleo di
+# redstone nel petto.
+EXOFRAME = (
+    "................",
+    "......kssk......",
+    "......kSSk......",
+    ".......kk.......",
+    "..sssssSSsssss..",
+    "..kS..kRRk..Sk..",
+    "..kS...kk...Sk..",
+    "..kS...SS...Sk..",
+    "..kS...SS...Sk..",
+    ".......SS.......",
+    ".....ssSSss.....",
+    ".....kS..Sk.....",
+    ".....kS..Sk.....",
+    ".....kS..Sk.....",
+    "....kSS..SSk....",
+    "................",
+)
+
 SCRAP_ICONS = (("scrap_helmet", SCRAP_HELMET), ("scrap_torso", SCRAP_TORSO),
-               ("scrap_arm", SCRAP_ARM), ("scrap_leg", SCRAP_LEG))
+               ("scrap_arm", SCRAP_ARM), ("scrap_leg", SCRAP_LEG), ("exoframe", EXOFRAME))
 
 
 def main():

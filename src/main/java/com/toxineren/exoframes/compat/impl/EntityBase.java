@@ -21,6 +21,11 @@ import net.minecraft.world.level.Explosion;
  * (quindi le chiavi vanno in campi statici);</li>
  * <li>esplosioni: {@code ignoreExplosion()} su 1.20.1, {@code ignoreExplosion(Explosion)} su 1.21.1; le sottoclassi
  * rispondono con {@link #ignoresExplosions}.</li>
+ * <li>portali: su 1.20.1 i blocchi portale del Nether e dell'End chiedono {@code canChangeDimensions()} e il portale di
+ * passaggio dell'End (dal tick del suo block entity, {@code TheEndGatewayBlockEntity.canEntityTeleport}) chiede
+ * {@code isOnPortalCooldown()}; su 1.21.1 i tre blocchi chiedono {@code canUsePortal(boolean)}, e
+ * {@code Entity.handlePortal} anche {@code canChangeDimensions(Level, Level)}. Le sottoclassi rispondono con
+ * {@link #usesPortals}.</li>
  * </ul>
  * Il pacchetto di spawn resta quello vanilla sulle due versioni: {@code getAddEntityPacket()} non e' astratto in
  * {@link Entity} di 1.20.1 (crea un {@code ClientboundAddEntityPacket}, anche con le patch di Forge 47.4) e
@@ -43,6 +48,11 @@ public abstract class EntityBase extends Entity {
         return false;
     }
 
+    /** False se nessun portale (Nether, End, passaggio dell'End) porta via l'entita'; vero di base. */
+    protected boolean usesPortals() {
+        return true;
+    }
+
     //? if >=1.21 {
     @Override
     protected final void defineSynchedData(SynchedEntityData.Builder builder) {
@@ -58,6 +68,16 @@ public abstract class EntityBase extends Entity {
     public boolean ignoreExplosion(Explosion explosion) {
         return ignoresExplosions() || super.ignoreExplosion(explosion);
     }
+
+    @Override
+    public boolean canUsePortal(boolean allowPassengers) {
+        return usesPortals() && super.canUsePortal(allowPassengers);
+    }
+
+    @Override
+    public boolean canChangeDimensions(Level from, Level to) {
+        return usesPortals() && super.canChangeDimensions(from, to);
+    }
     //?} else {
     /*@Override
     protected final void defineSynchedData() {
@@ -72,6 +92,16 @@ public abstract class EntityBase extends Entity {
     @Override
     public boolean ignoreExplosion() {
         return ignoresExplosions() || super.ignoreExplosion();
+    }
+
+    @Override
+    public boolean canChangeDimensions() {
+        return usesPortals() && super.canChangeDimensions();
+    }
+
+    @Override
+    public boolean isOnPortalCooldown() {
+        return !usesPortals() || super.isOnPortalCooldown();
     }
     *///?}
 

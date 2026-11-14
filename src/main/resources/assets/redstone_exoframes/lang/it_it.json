@@ -1,4 +1,5 @@
 {
+  "item.redstone_exoframes.exoframe": "Telaio",
   "item.redstone_exoframes.redstone_cell": "Cella di redstone",
   "item.redstone_exoframes.scrap_helmet": "Elmo Rottame",
   "item.redstone_exoframes.scrap_torso": "Torso Rottame",
@@ -14,5 +15,8 @@
   "commands.redstone_exoframes.debug.wear.bare": "Indossi il telaio nudo",
   "commands.redstone_exoframes.debug.wear.scrap": "Indossi il telaio di rottame",
   "commands.redstone_exoframes.debug.wear.removed": "Segnaposto del telaio rimossi: %s",
-  "commands.redstone_exoframes.debug.invalid_color": "Colore non valido '%s': servono sei cifre esadecimali RRGGBB"
+  "commands.redstone_exoframes.debug.place.bare": "Hai piazzato un telaio nudo",
+  "commands.redstone_exoframes.debug.place.scrap": "Hai piazzato un telaio di rottame",
+  "commands.redstone_exoframes.debug.invalid_color": "Colore non valido '%s': servono sei cifre esadecimali RRGGBB",
+  "message.redstone_exoframes.no_room": "Qui non c'è abbastanza spazio per il telaio"
 }

@@ -14,6 +14,10 @@ import net.minecraft.world.item.Item;
 public final class ModItems {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(RedstoneExoframes.MOD_ID, Registries.ITEM);
 
+    /** L'oggetto che piazza un telaio vuoto nel mondo (design, par. 5.4). */
+    public static final RegistrySupplier<ExoframeItem> EXOFRAME = ITEMS.register("exoframe",
+            () -> new ExoframeItem(new Item.Properties().stacksTo(1)));
+
     public static final RegistrySupplier<CellItem> REDSTONE_CELL = ITEMS.register("redstone_cell",
             () -> new CellItem(new Item.Properties().stacksTo(1)));
 

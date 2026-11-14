@@ -1,4 +1,5 @@
 {
+  "item.redstone_exoframes.exoframe": "Exoframe",
   "item.redstone_exoframes.redstone_cell": "Redstone Cell",
   "item.redstone_exoframes.scrap_helmet": "Scrap Helmet",
   "item.redstone_exoframes.scrap_torso": "Scrap Torso",
@@ -14,5 +15,8 @@
   "commands.redstone_exoframes.debug.wear.bare": "Wearing the bare exoframe",
   "commands.redstone_exoframes.debug.wear.scrap": "Wearing the scrap exoframe",
   "commands.redstone_exoframes.debug.wear.removed": "Removed %s exoframe placeholders",
-  "commands.redstone_exoframes.debug.invalid_color": "Invalid color '%s': expected six hexadecimal digits RRGGBB"
+  "commands.redstone_exoframes.debug.place.bare": "Placed a bare exoframe",
+  "commands.redstone_exoframes.debug.place.scrap": "Placed a scrap exoframe",
+  "commands.redstone_exoframes.debug.invalid_color": "Invalid color '%s': expected six hexadecimal digits RRGGBB",
+  "message.redstone_exoframes.no_room": "There is not enough room for the exoframe here"
 }

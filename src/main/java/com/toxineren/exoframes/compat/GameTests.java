@@ -5,7 +5,9 @@ import java.util.UUID;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -52,4 +54,13 @@ public interface GameTests {
      * il dato salvato (vedi {@link FrameStateAccess#removePlaced}); vuota se non ce ne sono. Esiste solo per i test.
      */
     List<CompoundTag> orphanedStowed(MinecraftServer server, UUID frameId);
+
+    /**
+     * True se almeno uno dei controlli che i portali fanno su un'entita' prima di portarla via la accetta, come li fa
+     * la versione del gioco: su 1.20.1 {@code canChangeDimensions()} (portali del Nether e dell'End) e
+     * {@code TheEndGatewayBlockEntity.canEntityTeleport} (passaggio dell'End); su 1.21.1 {@code canUsePortal(false)}
+     * (i tre blocchi portale) e {@code canChangeDimensions(livello dell'entita', destination)} (il viaggio). Non sposta
+     * nulla e non carica l'altra dimensione. Esiste solo per i test.
+     */
+    boolean portalsAccept(Entity entity, ServerLevel destination);
 }

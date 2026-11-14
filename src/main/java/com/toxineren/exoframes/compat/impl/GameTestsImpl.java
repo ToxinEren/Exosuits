@@ -10,13 +10,16 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 //? if <1.21 {
 /*import com.mojang.authlib.GameProfile;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 *///?}
 //? if fabric {
 /*import net.minecraft.gametest.framework.GameTestRegistry;
@@ -120,5 +123,14 @@ public final class GameTestsImpl implements GameTests {
             }
         }
         return entries;
+    }
+
+    @Override
+    public boolean portalsAccept(Entity entity, ServerLevel destination) {
+        //? if >=1.21 {
+        return entity.canUsePortal(false) || entity.canChangeDimensions(entity.level(), destination);
+        //?} else {
+        /*return entity.canChangeDimensions() || TheEndGatewayBlockEntity.canEntityTeleport(entity);
+        *///?}
     }
 }

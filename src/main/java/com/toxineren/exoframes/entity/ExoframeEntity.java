@@ -30,7 +30,8 @@ import net.minecraft.world.phys.Vec3;
  * Immobile: nessuna gravita', e nessun movimento (il tick non la muove e {@link #move} non fa nulla, quindi nemmeno i
  * pistoni la spostano). Si clicca ({@link #isPickable}), ma non si spinge, non spinge e non blocca il movimento di
  * nessuno ({@code canBeCollidedWith} resta falso come in {@code Entity}). Non si distrugge a colpi ne' con le
- * esplosioni; {@code kill()} e {@code discard()} la tolgono come al solito (il record resta, e il registro la ricrea).
+ * esplosioni, e nessun portale la porta via; {@code kill()} e {@code discard()} la tolgono come al solito (il record
+ * resta, e il riallineamento la ricrea, vedi {@code frame/FrameRealign}).
  */
 public final class ExoframeEntity extends CompatEntity {
     /** Il riassunto visivo, scritto con {@code FrameStateAccess.writeSummaryTag}. */
@@ -135,6 +136,15 @@ public final class ExoframeEntity extends CompatEntity {
     @Override
     protected boolean ignoresExplosions() {
         return true;
+    }
+
+    /**
+     * Nessun portale la porta via: la copia arrivata dall'altra parte si eliminerebbe (il record e' di qui) e il
+     * riallineamento la ricreerebbe qui, a ogni giro caricando o generando l'altra parte.
+     */
+    @Override
+    protected boolean usesPortals() {
+        return false;
     }
 
     @Override
