@@ -14,8 +14,9 @@
 #                            guarda: a sinistra nello scatto)
 #   04-armato                cella carica in mano, clic destro: il telaio armato
 #   05-prima-di-entrare      terza persona da dietro, a mano vuota davanti al telaio
-#   06-entrato-subito        subito dopo il clic destro a mano vuota (niente lampo alla misura vanilla, niente scatto
-#   07-entrato-mezzo-secondo indietro), poi dopo mezzo secondo
+#   06-entrato-subito        subito dopo il clic destro a mano vuota e dopo mezzo secondo: la tuta grande nel punto
+#   07-entrato-mezzo-secondo del telaio, non il giocatore alla misura vanilla ne' tornato indietro (lo scatto a 0 s puo'
+#                            essere ancora quello di prima della risposta del server)
 #   08-dentro-da-dietro      dentro la tuta, da dietro; 09-dentro-davanti: davanti
 #   10-uscita-tasto-tenuto   V tenuto, a 0,6 s: l'avanzamento sulla barra delle azioni
 #   11-uscito                dopo l'uscita, ancora davanti: il giocatore con la sua armatura dentro il telaio rimasto
@@ -28,10 +29,12 @@
 # Fra un passo e l'altro i comandi del server controllano lo stato (execute if/unless: un controllo che non torna ferma
 # l'esecuzione): dove sta l'entita' telaio e quante ce ne sono, i segnaposto negli slot armatura solo mentre il
 # giocatore e' dentro, l'armatura di ferro restituita all'uscita, niente a terra dopo la morte; "data get entity"
-# sull'entita' telaio scrive in rcon.log il suo stato. Alla fine la telecamera torna in prima persona e
-# client_shot.sh fa i suoi tre scatti (back, front, quarter) con il giocatore otto blocchi davanti al telaio. Dura circa due minuti e mezzo a cache calde. Le
-# variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in
-# tools/client/README.md.
+# sull'entita' telaio scrive in rcon.log il suo stato. Dove e' finito un pezzo (l'elmo sulla testa, il braccio sul
+# lato destro del telaio) nessun comando lo controlla, perche' il registro non si legge con i comandi: lo dicono solo
+# gli scatti 02 e 03, da guardare; la cella la prova l'ingresso riuscito. Alla fine la telecamera torna in prima
+# persona e client_shot.sh fa i suoi tre scatti (back, front, quarter) con il giocatore otto blocchi davanti al
+# telaio. Dura circa due minuti a cache calde (misurati 115-132 s sulle quattro varianti). Le variabili d'ambiente
+# sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)

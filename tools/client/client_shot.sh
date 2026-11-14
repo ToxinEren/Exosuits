@@ -222,6 +222,7 @@ EOF
 
 # --- chiusura -------------------------------------------------------------------------------------------------------
 xpid=""
+held_key="" # il tasto che un passo @tieni tiene premuto in questo momento
 spid=""
 cpid=""
 # Chiusura, su ogni uscita: "stop" via RCON al server, TERM ai due processi Gradle dello script (il client di Gradle
@@ -233,6 +234,12 @@ cleanup() {
     local code=$?
     trap - EXIT
     trap '' INT TERM
+    # un tasto rimasto premuto da @tieni (scatto fallito o interruzione durante la pressione) si rilascia per primo,
+    # con lo schermo virtuale ancora vivo: il client non lo riceve per tutta la chiusura
+    if [ -n "$held_key" ] && [ -n "$xpid" ] && kill -0 "$xpid" 2>/dev/null; then
+        xdotool keyup "$held_key" 2>/dev/null && echo "tasto $held_key rilasciato" >&2
+        held_key=""
+    fi
     if [ -n "$spid" ] && kill -0 "$spid" 2>/dev/null; then
         EXO_RCON_PASSWORD="$rpass" python3 "$here/rcon.py" --no-check "$rport" stop >/dev/null 2>&1
     fi
@@ -410,6 +417,7 @@ run_step() {
         @click) xdo "$1" click "$([ "${w[1]}" = destro ] && echo 3 || echo 1)" ;;
         @tieni)
             t0s=$(now)
+            held_key=${w[1]}
             xdo "$1" keydown "${w[1]}"
             if [ "${#w[@]}" -eq 5 ]; then
                 sleep "${w[4]}"
@@ -417,7 +425,8 @@ run_step() {
             fi
             rest=$(awk -v d="${w[2]}" -v a="$t0s" -v b="$(now)" 'BEGIN { r = d - (b - a); print (r > 0 ? r : 0) }')
             sleep "$rest"
-            xdo "$1" keyup "${w[1]}" ;;
+            xdo "$1" keyup "${w[1]}"
+            held_key="" ;;
         @scatto) shot "${w[1]}" ;;
         @attendi) sleep "${w[1]}" ;;
     esac
