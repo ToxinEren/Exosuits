@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Genera in modo deterministico le texture placeholder (solo stdlib).
 
-Uso, dalla radice del repository: python3 -I tools/gen_placeholders.py
+Uso, dalla radice del repository:
+    python3 -I tools/gen_placeholders.py               scrive nei sorgenti (src/main/resources...)
+    python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir>, con i percorsi relativi a
+                                                       src/main (resources/..., resources-mc1.20.1/...): lo usa
+                                                       tools/check_art.sh per confrontarli con quelli committati
 Disegni originali: nessun riferimento a opere o marchi di terzi.
 """
+import argparse
 import os
 import struct
 import zlib
@@ -334,20 +339,27 @@ SCRAP_ICONS = (("scrap_helmet", SCRAP_HELMET), ("scrap_torso", SCRAP_TORSO),
                ("scrap_arm", SCRAP_ARM), ("scrap_leg", SCRAP_LEG), ("exoframe", EXOFRAME))
 
 
-def main():
-    written = [CELL_PATH, ICON_PATH]
-    write_png(CELL_PATH, 16, 16, draw_cell())
-    write_png(ICON_PATH, 64, 64, draw_icon())
+def outputs():
+    """I file che il generatore scrive: (percorso nei sorgenti, larghezza, altezza, funzione che disegna)."""
+    files = [(CELL_PATH, 16, 16, draw_cell), (ICON_PATH, 64, 64, draw_icon)]
     for name, draw in PIECE_ICONS:
-        path = os.path.join(ITEM_DIR, name + ".png")
-        write_png(path, 16, 16, draw())
-        written.append(path)
+        files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, draw))
     for name, rows in SCRAP_ICONS:
-        path = os.path.join(ITEM_DIR, name + ".png")
-        write_png(path, 16, 16, draw_sprite(rows))
-        written.append(path)
+        files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, lambda rows=rows: draw_sprite(rows)))
     for path in ARMOR_LAYER_PATHS:
-        write_png(path, 64, 32, canvas(64, 32))
+        files.append((path, 64, 32, lambda: canvas(64, 32)))
+    return files
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Genera le texture placeholder.")
+    ap.add_argument("--out", default=None, help="cartella al posto di src/main (stessi percorsi relativi)")
+    args = ap.parse_args()
+    written = []
+    for path, width, height, draw in outputs():
+        if args.out is not None:
+            path = os.path.join(args.out, os.path.relpath(path, MAIN))
+        write_png(path, width, height, draw())
         written.append(path)
     print("scritti:", *(os.path.normpath(p) for p in written))
 

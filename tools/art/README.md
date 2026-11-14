@@ -69,12 +69,26 @@ nell'atlante); anche questo si decide cella per cella sulla griglia dei quarti d
 striscia scoperta di 0.25 px non sparisce.
 
 `tools/art/selftest.py` (eseguito da `check_art.sh`, quindi anche dalla CI) prova che i controlli funzionano:
-inietta un difetto alla volta in una copia del modello costruita in memoria e pretende la segnalazione (striscia
-complanare coperta solo da un pezzo di un altro slot o da una decalcomania; faccia sepolta con una striscia
-scoperta su un lato dispari; scatola nella testa del pilota; fuori dai limiti; fuori dalla griglia; linea sottile
-fuori dalla sua scatola; stato piu' chiaro del precedente; regione dell'atlante piena; faccia fine diversa dalla sua
-versione a densita' normale).
-Esce con 1 se un difetto passa. Un controllo nuovo va aggiunto anche li'.
+inietta un difetto alla volta in una copia del modello costruita in memoria e pretende la segnalazione. Le prove:
+
+1. facce complanari con la stessa normale: (a) la parte comune coperta solo da un pezzo di un altro slot, (b) solo
+   da una decalcomania, (c) una faccia "sepolta" con una striscia scoperta di 0.25 px su un lato di 0.75 px, che non
+   deve sparire dall'atlante;
+2. scatola nella testa del pilota;
+3. scatola fuori dai limiti;
+4. coordinata fuori dalla griglia dei quarti di pixel;
+5. linea sottile fuori dalla sua scatola;
+6. stato visivo piu' chiaro del precedente;
+7. regione dell'atlante piena;
+8. faccia fine diversa dalla sua versione a densita' normale;
+9. un osso di primo livello con i pezzi di due slot (regola: un solo slot per osso di primo livello, su cui si
+   regge il controllo delle facce complanari);
+10. `build.py` si ferma su un modello che non passa i controlli: esce con 1 senza scrivere nessun file.
+
+Le prove 1a, 1b e 1c verificano prima la loro premessa sul disegno del mod (che cosa copre la parte iniettata) e
+falliscono dicendolo se il disegno cambia; 1a e 1b contano solo la segnalazione sulla faccia di cui hanno verificato
+la premessa (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova
+registrata. Un controllo nuovo va aggiunto anche li'.
 
 `ExoframeGeometryTest` (JUnit) legge il file generato e controlla nomi e perni delle ossa (quelli dei
 pezzi e delle decalcomanie costruiti da `SuitBones`), i due ingombri, che le quattro copie di un pezzo abbiano le
@@ -130,8 +144,9 @@ def build(m):
 - **Ossa di primo livello** (fisse in `exo.TOP_BONES`, contratto con il renderer): `armorHead` e `armorBody` con
   perno (0,24,0), `armorRightArm` (-5,22,0), `armorLeftArm` (5,22,0), `armorRightLeg` (-2,12,0), `armorLeftLeg`
   (2,12,0). Ogni osso dichiarato con `m.bone` ne diventa figlio con lo stesso perno.
-- **Stati visivi:** due ossa con `state` diversi non sono mai visibili insieme, quindi i controlli non le
-  confrontano. Le quattro copie hanno le stesse scatole; le dipinge `paint.wear` (sotto).
+- **Stati visivi:** i controlli non confrontano due ossa con `state` diversi. Nello stesso pezzo non sono mai
+  visibili insieme; pezzi di slot diversi in stati diversi invece si', ed e' innocuo solo perche' le quattro copie di
+  un pezzo hanno le stesse scatole (lo verifica `ExoframeGeometryTest`); le dipinge `paint.wear` (sotto).
 - **Regioni di colore:** `paint='p1'`/`'p2'` per le ossa da colorare (materiale `paint`, in toni di grigio),
   `'n'` per il metallo neutro. Il nome dell'osso porta la regione (`piece<Slot>_s<0-3>_p1`, `_p2`, `_n`, come
   `SuitBones.piece`). `piece_bones` dichiara anche le ossa senza scatole (oggi `_n` delle braccia e delle gambe e

@@ -16,11 +16,14 @@ pretende che i controlli lo segnalino. Esce con 1 se un difetto passa inosservat
   6. stato visivo piu' chiaro del precedente;
   7. regione dell'atlante piena;
   8. faccia con la griglia fine diversa dalla sua versione a densita' normale;
-  9. un osso di primo livello con i pezzi di due slot.
+  9. un osso di primo livello con i pezzi di due slot;
+ 10. build.py si ferma su un modello che non passa i controlli: esce con 1 e non scrive nessun file.
 
 Le prove che dipendono dal disegno del mod (1a, 1b, 1c) verificano prima la loro premessa (che cosa copre la parte
 iniettata): se il disegno cambia e la premessa non vale piu', la prova fallisce dicendolo, invece di passare senza
-provare nulla.
+provare nulla. 1a e 1b verificano la premessa sulla faccia nord e contano solo una segnalazione su quella faccia: la
+coppia iniettata e' complanare anche su altre facce, e una segnalazione su un'altra faccia non proverebbe la regola.
+Senza nessuna prova registrata l'esecuzione fallisce.
 """
 import os
 import sys
@@ -117,7 +120,7 @@ def coplanar_other_slot():
     m.pack()
     a, b = (next(x for x in m.boxes if x.name == n) for n in ('selftest_a', 'selftest_b'))
     covers = old_rule_cover(m, a, b, 'north', 'slot')
-    hits = [p for p in m.check() if 'selftest_a' in p and 'selftest_b' in p]
+    hits = [p for p in m.check() if 'selftest_a' in p and 'selftest_b' in p and '(north,' in p]
     return bool(hits), (hits[0] + f' (coperta solo da {", ".join(covers)})') if hits else 'nessuna segnalazione'
 
 
@@ -131,7 +134,8 @@ def coplanar_decal():
     m.pack()
     a, b = (next(x for x in m.boxes if x.name == n) for n in ('selftest_d', 'selftest_e'))
     covers = old_rule_cover(m, a, b, 'north', 'decal')
-    hits = [p + f' (coperta solo da {", ".join(covers)})' for p in m.check() if 'selftest_d' in p and 'selftest_e' in p]
+    hits = [p + f' (coperta solo da {", ".join(covers)})' for p in m.check()
+            if 'selftest_d' in p and 'selftest_e' in p and '(north,' in p]
     return bool(hits), hits[0] if hits else 'nessuna segnalazione'
 
 
@@ -255,6 +259,40 @@ def two_slots_one_bone():
     return False, 'accettato'
 
 
+@case('10. build.py si ferma su un modello che non passa i controlli')
+def build_stops():
+    import tempfile
+    import build
+    saved_build, saved_argv = build.build_model, sys.argv
+
+    def broken(designs=None, fine=True):
+        m = saved_build(designs, fine)
+        m.box('frameBody', 'selftest_far', (20, 10, 0), (21, 11, 1), 'gun')
+        m.pack()
+        return m
+
+    import contextlib
+    import io
+    with tempfile.TemporaryDirectory() as out:
+        build.build_model = broken
+        sys.argv = ['build.py', '--out', out]
+        try:
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                build.main()
+        except SystemExit as e:
+            code = e.code
+        else:
+            code = 0
+        finally:
+            build.build_model, sys.argv = saved_build, saved_argv
+        written = [os.path.join(d, f) for d, _, fs in os.walk(out) for f in fs]
+    if code != 1:
+        return False, f'build.py e\' uscito con {code} invece di 1'
+    if written:
+        return False, f'build.py ha scritto {written} nonostante il difetto'
+    return True, 'uscita 1, nessun file scritto'
+
+
 def main():
     failed = 0
     for name, fn in CASES:
@@ -262,6 +300,9 @@ def main():
         print(f'{"ok  " if ok else "FAIL"} {name}: {detail}')
         failed += not ok
     total = len(CASES)
+    if not total:
+        print('FAIL selftest: nessuna prova registrata', file=sys.stderr)
+        sys.exit(1)
     if failed:
         print(f'FAIL selftest: {failed} prove su {total} fallite (difetto non segnalato o premessa non valida)',
               file=sys.stderr)
