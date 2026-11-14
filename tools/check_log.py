@@ -17,8 +17,10 @@ tools/client/client_shot.sh). Per ogni log si guardano:
 
 Una riga trovata passa solo se il suo messaggio (quello che segue il nome del logger) corrisponde per intero a una
 riga dell'elenco tools/log_allowlist.txt per lo stesso ambito, e solo fino al numero di volte che quella riga ammette
-in un log. Tutto il resto e' stampato su stdout, una riga per problema, e l'uscita e' 1; senza problemi non si stampa
-niente e l'uscita e' 0. Uscita 2 per un uso sbagliato o un elenco scritto male.
+in un log. Un log in cui non si riconosce nemmeno una riga con livello nella forma attesa (vuoto, o il gioco ha
+cambiato formato) e' un problema: non si e' potuto controllare nulla. Tutto il resto e' stampato su stdout, una riga
+per problema, e l'uscita e' 1; senza problemi non si stampa niente e l'uscita e' 0. Uscita 2 per un uso sbagliato o un
+elenco scritto male.
 
 Solo libreria standard di Python 3.
 """
@@ -108,9 +110,12 @@ def records(lines):
 def check(scope, path, rules):
     problems = []
     counts = [0] * len(rules)
+    recognised = 0
     with open(path, encoding="utf-8", errors="replace") as f:
         lines = f.read().splitlines()
     for number, level, message, text in records(lines):
+        if level is not None:
+            recognised += 1
         named = level in ("WARN", "ERROR", "FATAL") and MOD.search(text)
         if not named and not ALWAYS.search(text):
             continue
@@ -126,6 +131,10 @@ def check(scope, path, rules):
     for (most, _, line), count in zip(rules, counts):
         if count > most:
             problems.append(f"{path}: {count} volte la riga ammessa al massimo {most} volte: {line}")
+    if recognised == 0:
+        problems.append(f"{path}: nessuna riga con livello nella forma attesa ([ora] [thread/LIVELLO] ...) su "
+                        f"{len(lines)} righe: il log e' vuoto o il gioco ha cambiato formato, e nulla si e' potuto "
+                        f"controllare")
     return problems
 
 
