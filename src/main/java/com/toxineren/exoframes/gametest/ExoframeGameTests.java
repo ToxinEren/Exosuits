@@ -29,6 +29,8 @@ import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.FrameEntry;
+import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.Handouts;
@@ -155,6 +157,12 @@ public final class ExoframeGameTests {
         add(tests, "unlockedFrameIsOpenToAll", ExoframeGameTests::unlockedFrameIsOpenToAll);
         add(tests, "unmountedPieceKeepsDurabilityAndColours",
                 ExoframeGameTests::unmountedPieceKeepsDurabilityAndColours);
+        add(tests, "enterStowsArmorAndWearsTheFrame", ExoframeGameTests::enterStowsArmorAndWearsTheFrame);
+        add(tests, "enterRefusedWithoutAChargedCell", ExoframeGameTests::enterRefusedWithoutAChargedCell);
+        add(tests, "enterRefusedUnderLowCeiling", ExoframeGameTests::enterRefusedUnderLowCeiling);
+        add(tests, "secondEnterOnSameFrameFails", ExoframeGameTests::secondEnterOnSameFrameFails);
+        add(tests, "ownerGetsBackArmorLeftInTheFrame", ExoframeGameTests::ownerGetsBackArmorLeftInTheFrame);
+        add(tests, "strangerEnteringDropsTheOwnersArmor", ExoframeGameTests::strangerEnteringDropsTheOwnersArmor);
         return tests;
     }
 
@@ -1513,6 +1521,213 @@ public final class ExoframeGameTests {
         helper.assertTrue(ItemStack.matches(original, back), "unmounted stack differs from the mounted one");
         removeFrame(server, frame);
         helper.succeed();
+    }
+
+    /**
+     * Ingresso (design §5.5) con un clic a mano vuota, in piedi: l'elmo di ferro indossato finisce nel record con il
+     * suo slot, i quattro segnaposto sono negli slot e il torso porta il riassunto dello stato; il record e'
+     * indossato e non piu' piazzato, l'entita' e' sparita, il giocatore sta nel punto e con lo yaw del telaio (il
+     * pitch resta il suo) e ha subito la grandezza della tuta (0,8 x 2,97). Sul client il clic consuma.
+     */
+    private static void enterStowsArmorAndWearsTheFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 standing = helper.absoluteVec(new Vec3(1.5, 1.0, 1.5));
+        player.moveTo(standing.x, standing.y, standing.z, 0f, 20f);
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        FrameState state = charged(ownedBy(player));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(4.5, 1.0, 4.5), 30f);
+        UUID frameId = frame.frameId();
+        Vec3 spot = frame.position();
+
+        helper.assertTrue(FrameInteractions.clientResult(player, InteractionHand.MAIN_HAND).consumesAction(),
+                "client does not consume the empty hand click");
+        helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "enter click not consumed");
+
+        helper.assertTrue(frames.placed(server, frameId).isEmpty(), "frame still placed after enter");
+        helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)), "frame not worn after enter");
+        helper.assertTrue(frames.get(player).orElse(null) == state, "worn state is not the placed state");
+        assertPlaceholdersWorn(helper, player);
+        Optional<SuitSummary> written = Compat.itemData().suitSummary(player.getItemBySlot(EquipmentSlot.CHEST));
+        helper.assertTrue(Optional.of(SuitSummary.of(state)).equals(written), "wrong summary on the torso: " + written);
+        helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 0, "helmet left in the inventory");
+        helper.assertTrue(frame.isRemoved() && level.getEntity(frameId) == null, "frame entity still in the level");
+        helper.assertTrue(player.position().distanceTo(spot) < 1e-6 && player.getYRot() == 30f
+                && player.getXRot() == 20f, "player not moved into the frame: " + player.position() + " yaw "
+                + player.getYRot() + " pitch " + player.getXRot() + ", frame " + spot);
+        assertSize(helper, player, "after enter", 0.8f, 1.8f * 1.65f, 1.62f * 1.65f, 1.27f * 1.65f);
+        helper.assertTrue(near(player.getBoundingBox(), SuitSize.standingBox(spot)),
+                "bounding box not rebuilt after enter: " + player.getBoundingBox());
+
+        assertOneStowedHelmet(helper, frames.takeStowed(player), helmet, "entered frame");
+        leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /**
+     * Senza cella, e con una cella scarica, l'ingresso si rifiuta e non tocca nulla: record piazzato, entita',
+     * armatura del giocatore, nessun record indossato.
+     */
+    private static void enterRefusedWithoutAChargedCell(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        FrameState state = ownedBy(player);
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(3.5, 1.0, 3.5), 0f);
+
+        helper.assertTrue(!FrameEntry.enter(player, frame), "entered a frame without a cell");
+        assertNotEntered(helper, player, frame, "without a cell");
+        EnergyCell empty = new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, 0);
+        helper.assertTrue(Compat.frameState().updatePlaced(server, frame.frameId(), s -> s.insertCell(empty)),
+                "updatePlaced refused");
+        helper.assertTrue(!FrameEntry.enter(player, frame), "entered a frame with an empty cell");
+        assertNotEntered(helper, player, frame, "with an empty cell");
+        helper.assertTrue(state.cell() != null && state.cell().isEmpty(), "the empty cell changed");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /** Con un soffitto che taglia il riquadro della tuta in piedi nel punto del telaio l'ingresso si rifiuta. */
+    private static void enterRefusedUnderLowCeiling(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        ExoframeEntity frame = placeFrame(helper, charged(ownedBy(player)), new Vec3(3.5, 1.0, 3.5), 0f);
+        helper.setBlock(new BlockPos(3, 3, 3), Blocks.STONE);
+
+        helper.assertTrue(!FrameEntry.enter(player, frame), "entered a frame under a ceiling at 2");
+        assertNotEntered(helper, player, frame, "under a low ceiling");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Due giocatori entrano nello stesso telaio nello stesso tick: il primo e' dentro, il secondo resta com'era (la
+     * sua armatura, nessun segnaposto, nessun record indossato, la sua posizione) e il record e' uno solo.
+     */
+    private static void secondEnterOnSameFrameFails(GameTestHelper helper) {
+        ServerPlayer first = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer second = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 standing = helper.absoluteVec(new Vec3(1.5, 1.0, 6.5));
+        second.moveTo(standing.x, standing.y, standing.z, 0f, 0f);
+        second.setItemSlot(EquipmentSlot.CHEST, new ItemStack(Items.IRON_CHESTPLATE));
+        ExoframeEntity frame = placeFrame(helper, charged(new FrameState(RedstoneExoframes.config())),
+                new Vec3(4.5, 1.0, 4.5), 0f);
+        UUID frameId = frame.frameId();
+
+        boolean firstIn = FrameEntry.enter(first, frame);
+        boolean secondIn = FrameEntry.enter(second, frame);
+
+        helper.assertTrue(firstIn && !secondIn, "expected only the first in, got " + firstIn + " and " + secondIn);
+        helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(first)), "first player not inside");
+        helper.assertTrue(frames.wornFrameId(second).isEmpty() && frames.get(second).isEmpty(),
+                "second player has a worn record");
+        helper.assertTrue(frames.placed(server, frameId).isEmpty(), "frame still placed");
+        helper.assertTrue(second.getItemBySlot(EquipmentSlot.CHEST).is(Items.IRON_CHESTPLATE)
+                && countPlaceholders(second) == 0, "second player's armor changed");
+        helper.assertTrue(second.position().equals(standing), "second player moved to " + second.position());
+        helper.assertTrue(frames.takeStowed(first).isEmpty(), "first player had armor to stow");
+        leaveTestFrame(first);
+        helper.succeed();
+    }
+
+    /**
+     * Il proprietario che entra nel telaio lasciato con la sua armatura dentro (dopo una morte) la riprende
+     * nell'inventario; nel record resta solo quella che indossava entrando.
+     */
+    private static void ownerGetsBackArmorLeftInTheFrame(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        ExoframeEntity frame = frameWithStowedBoots(helper, owner, charged(ownedBy(owner)));
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        owner.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+
+        helper.assertTrue(FrameEntry.enter(owner, frame), "owner could not enter");
+
+        helper.assertTrue(countInMainInventory(owner, Items.IRON_BOOTS) == 1, "boots left in the frame not given back");
+        helper.assertTrue(helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                SuitSize.standingBox(frame.position()).inflate(2.0), e -> e.getItem().is(Items.IRON_BOOTS)).isEmpty(),
+                "boots dropped instead of given");
+        assertOneStowedHelmet(helper, frames.takeStowed(owner), helmet, "owner's frame");
+        leaveTestFrame(owner);
+        helper.succeed();
+    }
+
+    /**
+     * Un altro giocatore che entra in un telaio sbloccato con l'armatura del proprietario dentro non la prende: cade
+     * a terra nel punto del telaio, ferma, e nel record resta solo la sua.
+     */
+    private static void strangerEnteringDropsTheOwnersArmor(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer stranger = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        FrameState state = charged(ownedBy(owner));
+        state.setUnlocked(true);
+        ExoframeEntity frame = frameWithStowedBoots(helper, owner, state);
+        Vec3 spot = frame.position();
+
+        helper.assertTrue(FrameEntry.enter(stranger, frame), "stranger could not enter an unlocked frame");
+
+        helper.assertTrue(countInMainInventory(stranger, Items.IRON_BOOTS) == 0
+                && countInMainInventory(owner, Items.IRON_BOOTS) == 0, "boots given to a player");
+        List<ItemEntity> dropped = helper.getLevel().getEntitiesOfClass(ItemEntity.class,
+                SuitSize.standingBox(spot).inflate(2.0), e -> e.getItem().is(Items.IRON_BOOTS));
+        helper.assertTrue(dropped.size() == 1 && dropped.get(0).getItem().getCount() == 1,
+                dropped.size() + " dropped boots, expected one stack of 1");
+        ItemEntity boots = dropped.get(0);
+        helper.assertTrue(boots.position().distanceTo(spot) < 1e-6 && boots.getDeltaMovement().equals(Vec3.ZERO),
+                "boots not lying at the frame: " + boots.position() + " moving " + boots.getDeltaMovement());
+        boots.discard();
+        helper.assertTrue(frames.takeStowed(stranger).isEmpty(), "owner's boots still in the record");
+        leaveTestFrame(stranger);
+        helper.succeed();
+    }
+
+    /**
+     * Un telaio piazzato con lo stato dato e un paio di stivali di ferro stivati, come dopo una morte: il giocatore
+     * entra dal registro, stiva gli stivali ed esce; poi l'entita' nel punto.
+     */
+    private static ExoframeEntity frameWithStowedBoots(GameTestHelper helper, ServerPlayer player, FrameState state) {
+        ServerLevel level = helper.getLevel();
+        FrameStateAccess frames = Compat.frameState();
+        Vec3 feet = helper.absoluteVec(new Vec3(4.5, 1.0, 4.5));
+        UUID frameId = frames.place(level, state, feet, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS))));
+        helper.assertTrue(frames.exit(player, level, feet, 0f).isPresent(), "exit refused");
+        return spawnFrame(level, frameId, feet, 0f);
+    }
+
+    /** Nulla e' cambiato dopo un ingresso rifiutato: record piazzato, entita', elmo di ferro, nessun segnaposto. */
+    private static void assertNotEntered(GameTestHelper helper, ServerPlayer player, ExoframeEntity frame,
+            String when) {
+        FrameStateAccess frames = Compat.frameState();
+        helper.assertTrue(frames.placed(helper.getLevel().getServer(), frame.frameId()).isPresent()
+                && !frame.isRemoved(), when + ": frame no longer placed");
+        helper.assertTrue(frames.wornFrameId(player).isEmpty(), when + ": player has a worn record");
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET)
+                && countPlaceholders(player) == 0, when + ": player's armor changed");
+    }
+
+    /** Toglie il record indossato del test (l'armatura stivata la riprende prima chi chiama) e i segnaposto. */
+    private static void leaveTestFrame(ServerPlayer player) {
+        Compat.frameState().clear(player);
+        DebugWear.remove(player);
+    }
+
+    /** Lo stato con una cella carica a meta'. */
+    private static FrameState charged(FrameState state) {
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        state.insertCell(new EnergyCell(capacity, capacity / 2));
+        return state;
     }
 
     /**

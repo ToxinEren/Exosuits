@@ -75,9 +75,9 @@ public final class FrameInteractions {
     /**
      * Il clic destro di un giocatore sul telaio, sul server; {@code hit} e' relativo ai piedi dell'entita'. Regole, in
      * ordine: senza permesso ({@link FramePermissions#canUse}) solo il messaggio {@link #LOCKED}; un pezzo in mano si
-     * monta; una cella in mano si inserisce; mano vuota in piedi: ingresso (per ora nulla); mano vuota accovacciati:
-     * si smonta. La mano secondaria, uno spettatore, un altro oggetto in mano o un telaio senza record passano senza
-     * effetto.
+     * monta; una cella in mano si inserisce; mano vuota in piedi: si entra ({@link FrameEntry#enter}); mano vuota
+     * accovacciati: si smonta. La mano secondaria, uno spettatore, un altro oggetto in mano o un telaio senza record
+     * passano senza effetto.
      */
     public static InteractionResult onInteract(ServerPlayer player, ExoframeEntity frame, Vec3 hit,
             InteractionHand hand) {
@@ -115,7 +115,7 @@ public final class FrameInteractions {
      */
     public static InteractionResult clientResult(Player player, InteractionHand hand) {
         Action action = action(player, hand);
-        return action == Action.NONE || action == Action.ENTER ? InteractionResult.PASS : InteractionResult.SUCCESS;
+        return action == Action.NONE ? InteractionResult.PASS : InteractionResult.SUCCESS;
     }
 
     private static Action action(Player player, InteractionHand hand) {
@@ -218,9 +218,9 @@ public final class FrameInteractions {
         return InteractionResult.SUCCESS;
     }
 
-    /** Mano vuota, in piedi: qui entrera' il giocatore nel telaio (prossimo passo); per ora nessun effetto. */
+    /** Mano vuota, in piedi: il giocatore entra nel telaio ({@link FrameEntry#enter}); il clic si consuma comunque. */
     private static InteractionResult enter(ServerPlayer player, ExoframeEntity frame, PlacedFrame record) {
-        return InteractionResult.PASS;
+        return FrameEntry.enter(player, frame) ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
 
     /**
@@ -317,7 +317,8 @@ public final class FrameInteractions {
         Compat.frameState().placed(server, frameId).ifPresent(p -> frame.setSummary(SuitSummary.of(p.state())));
     }
 
-    private static void tell(ServerPlayer player, String key) {
+    /** Il messaggio con la chiave data sulla barra delle azioni del giocatore. */
+    static void tell(ServerPlayer player, String key) {
         player.displayClientMessage(Component.translatable(key), true);
     }
 }

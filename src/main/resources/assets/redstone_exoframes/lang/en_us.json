@@ -20,5 +20,7 @@
   "commands.redstone_exoframes.debug.invalid_color": "Invalid color '%s': expected six hexadecimal digits RRGGBB",
   "message.redstone_exoframes.no_room": "There is not enough room for the exoframe here",
   "message.redstone_exoframes.locked": "This exoframe is locked by its owner",
-  "message.redstone_exoframes.slot_taken": "That slot is already taken"
+  "message.redstone_exoframes.slot_taken": "That slot is already taken",
+  "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell",
+  "message.redstone_exoframes.already_inside": "You are already inside an exoframe"
 }

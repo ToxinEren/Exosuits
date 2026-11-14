@@ -20,5 +20,7 @@
   "commands.redstone_exoframes.debug.invalid_color": "Colore non valido '%s': servono sei cifre esadecimali RRGGBB",
   "message.redstone_exoframes.no_room": "Qui non c'è abbastanza spazio per il telaio",
   "message.redstone_exoframes.locked": "Questo telaio è bloccato dal suo proprietario",
-  "message.redstone_exoframes.slot_taken": "Quello slot è già occupato"
+  "message.redstone_exoframes.slot_taken": "Quello slot è già occupato",
+  "message.redstone_exoframes.no_cell": "Al telaio serve una cella carica",
+  "message.redstone_exoframes.already_inside": "Sei già dentro un telaio"
 }
