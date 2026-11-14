@@ -54,7 +54,9 @@ import net.minecraft.core.HolderLookup;
  * due file, quello del giocatore e questo: ogni operazione strutturale lo ricorda ({@link #structuralUnsaved()}) e
  * all'uscita di un giocatore, quando il gioco scrive il suo file, si scrivono anche gli altri giocatori e questo
  * ({@link #saveWithPlayersIfNeeded}); i salvataggi del gioco scrivono i giocatori e poi i livelli. Resta un arresto
- * brusco nei millisecondi di un salvataggio. L'armatura stivata qui e' una lista di tag opachi.
+ * brusco nei millisecondi di un salvataggio. Mentre il salvataggio e' spento con {@code /save-off} non e' cosi': il
+ * gioco scrive ancora i file dei giocatori al salvataggio automatico e all'uscita di un giocatore, questo file solo
+ * all'uscita di un giocatore che segue un'operazione strutturale. L'armatura stivata qui e' una lista di tag opachi.
  * <p>
  * Si usa un SavedData, e non gli attachment o le capability dei loader, perche' e' un'unica implementazione per i
  * quattro target e lo stato non dipende dall'entita' del giocatore (morte, respawn e cambio di dimensione non lo
@@ -64,8 +66,9 @@ import net.minecraft.core.HolderLookup;
  * <p>
  * Il file si scrive sempre per intero accanto e prende il posto del vecchio in un colpo, lasciando la copia
  * precedente ({@link RegistryFile#write}); una scrittura fallita lascia il dato da salvare. Un file che il gioco non
- * legge non vale mai come registro vuoto: si usa la copia precedente o, se nemmeno quella si legge, il dato resta in
- * sola lettura per la sessione con un ERROR che dice quale file ripristinare ({@link #get(DimensionDataStorage, Path)}).
+ * legge non vale mai come registro vuoto: la mod lo rilegge da se' e, se nemmeno cosi' si legge, si usa la copia
+ * precedente o, se nemmeno quella si legge, il dato resta in sola lettura per la sessione con un ERROR che dice quale
+ * file ripristinare ({@link #get(DimensionDataStorage, Path)}, {@link #afterUnreadFile}).
  * <p>
  * In lettura ogni voce e' isolata: una voce che non si legge (valore non compound, chiave non UUID, campo mancante o
  * del tipo sbagliato, eccezione del lettore dello stato) viene saltata con un avviso che ne nomina la chiave, e le
@@ -830,9 +833,9 @@ final class FrameStateSavedData extends SavedData {
     /**
      * All'uscita di un giocatore dal server ({@code PlayerEvent.PLAYER_QUIT}, che i quattro loader mandano in testa a
      * {@code PlayerList.remove}, prima che il gioco salvi il suo file): se un'operazione strutturale non e' ancora sul
-     * disco, il gioco salva i file di tutti i giocatori e poi i dati dell'overworld, registro compreso. Cosi' ogni volta
-     * che il file di un giocatore si scrive, il registro si scrive con lui, e cio' che si e' spostato fra un inventario
-     * e il registro e' sul disco da entrambe le parti.
+     * disco, il gioco salva i file di tutti i giocatori e poi i dati dell'overworld, registro compreso. Cosi'
+     * all'uscita cio' che si e' spostato fra un inventario e il registro e' sul disco da entrambe le parti. Questo
+     * salvataggio non guarda {@code /save-off}.
      */
     static void saveWithPlayersIfNeeded(MinecraftServer server) {
         FrameStateSavedData data = get(server);
