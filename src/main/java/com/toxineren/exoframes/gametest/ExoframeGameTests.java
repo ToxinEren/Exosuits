@@ -38,8 +38,14 @@ import com.toxineren.exoframes.frame.Placeholders;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
+import dev.architectury.event.events.common.PlayerEvent;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
@@ -48,6 +54,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
@@ -57,6 +64,8 @@ import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -82,6 +91,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.storage.LevelResource;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -201,6 +211,8 @@ public final class ExoframeGameTests {
         add(tests, "wallHidesTheFrameFromTheCommand", ExoframeGameTests::wallHidesTheFrameFromTheCommand);
         add(tests, "removeDropsTheContents", ExoframeGameTests::removeDropsTheContents);
         add(tests, "debugNeedsOperator", ExoframeGameTests::debugNeedsOperator);
+        add(tests, "registryFileIsReadBack", ExoframeGameTests::registryFileIsReadBack);
+        add(tests, "quitSavesTheRegistryWithThePlayers", ExoframeGameTests::quitSavesTheRegistryWithThePlayers);
         return tests;
     }
 
@@ -219,6 +231,7 @@ public final class ExoframeGameTests {
         Optional<FrameState> state = Compat.frameState().get(player);
         helper.assertTrue(state.isPresent(), "frame state missing after update");
         helper.assertTrue(state.get().reinforced(), "frame state not reinforced after update");
+        Compat.frameState().clear(player);
         helper.succeed();
     }
 
@@ -562,7 +575,6 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
-    /** Verifica larghezza, altezza, occhi e occhi da accovacciato del giocatore. */
     /**
      * Registro dei telai: lo stesso {@code frameId} e' prima piazzato, poi indossato, poi piazzato altrove, e non sta
      * mai in due posti; la modifica di un piazzato cambia lo stato che il giocatore poi indossa (lo stesso oggetto).
@@ -704,6 +716,7 @@ public final class ExoframeGameTests {
         helper.assertTrue(List.of(unreadable).equals(Compat.gameTests().orphanedStowed(server, frameId)),
                 "unreadable entry not kept among the orphaned ones of its frame: "
                         + Compat.gameTests().orphanedStowed(server, frameId));
+        Compat.gameTests().forgetOrphaned(server, frameId);
         helper.succeed();
     }
 
@@ -2713,6 +2726,130 @@ public final class ExoframeGameTests {
         helper.succeed();
     }
 
+    /**
+     * Il registro scritto dal gioco si rilegge (design §4.5), sulle quattro varianti: un telaio piazzato con pezzi,
+     * cella e due voci stivate (gli stivali, leggibili, e una voce illeggibile) e il gruppo orfano di un telaio tolto;
+     * il salvataggio del gioco ({@code DimensionDataStorage.save}) lo scrive nel file del mondo, e un secondo
+     * {@code DimensionDataStorage} sulla stessa cartella lo legge con la factory della mod: uguale a quello in memoria.
+     * Poi, su una copia del file in una cartella temporanea (mai sul file del mondo): il file troncato con una copia
+     * precedente buona si legge dalla copia; troncati entrambi, il registro resta in sola lettura e il file troncato
+     * resta dov'e', intero, con una sua copia messa da parte. Alla fine il test toglie i suoi telai e le sue voci
+     * orfane.
+     */
+    private static void registryFileIsReadBack(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        GameTests tests = Compat.gameTests();
+        FrameState state = charged(ownedBy(player));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        state.mount(scrapPiece(PieceSlot.LEFT_ARM));
+        ExoframeEntity frame = frameWithStowedBoots(helper, player, state, new Vec3(3.5, 1.0, 3.5));
+        UUID frameId = frame.frameId();
+        CompoundTag unknown = new CompoundTag();
+        unknown.putString("id", RedstoneExoframes.MOD_ID + ":no_such_item");
+        unknown.putByte("Count", (byte) 1);
+        unknown.putInt("count", 1);
+        int current = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
+        helper.assertTrue(tests.addRawStowed(server, frameId, stowedEntry(current, unknown)), "raw entry not added");
+        UUID gone = frames.place(level, new FrameState(RedstoneExoframes.config()),
+                helper.absoluteVec(new Vec3(6.5, 1.0, 6.5)), 0f);
+        helper.assertTrue(gone != null && tests.addRawStowed(server, gone, stowedEntry(current, unknown))
+                && frames.removePlaced(server, gone), "orphaned group not created");
+
+        Path file = tests.saveRegistry(server);
+        CompoundTag live = tests.registryContents(server);
+        helper.assertTrue(Files.isRegularFile(file), "registry file not written: " + file);
+        Optional<CompoundTag> read = tests.readRegistry(server, file.getParent());
+        helper.assertTrue(read.isPresent() && read.get().equals(live), "registry read back differs from memory");
+        CompoundTag entry = read.get().getCompound(NbtKeys.PLACED).getCompound(frameId.toString());
+        helper.assertTrue(entry.getList(NbtKeys.STOWED, Tag.TAG_COMPOUND).size() == 2
+                        && entry.getCompound(NbtKeys.STATE).getCompound(NbtKeys.PIECES).size() == 2
+                        && entry.getCompound(NbtKeys.STATE).contains(NbtKeys.CELL),
+                "the test's frame not read back with pieces, cell and two stowed entries: " + entry);
+        helper.assertTrue(read.get().getList(NbtKeys.ORPHANED, Tag.TAG_COMPOUND).stream()
+                .anyMatch(group -> gone.equals(NbtUtils.loadUUID(((CompoundTag) group).get(NbtKeys.FRAME)))),
+                "orphaned group not read back");
+
+        Path copy = null;
+        try {
+            copy = Files.createTempDirectory("exoframes-registry-test");
+            Path damaged = copy.resolve(file.getFileName());
+            // la copia precedente sta accanto con "_old" in coda, come il gioco fa per i file dei giocatori
+            Path previous = damaged.resolveSibling(damaged.getFileName() + "_old");
+            byte[] whole = Files.readAllBytes(file);
+            Files.write(previous, whole);
+            Files.write(damaged, Arrays.copyOf(whole, whole.length / 2));
+            Optional<CompoundTag> fromPrevious = tests.readRegistry(server, copy);
+            helper.assertTrue(fromPrevious.isPresent() && fromPrevious.get().equals(live),
+                    "truncated file with a good previous copy not read from the copy");
+
+            byte[] half = Arrays.copyOf(whole, whole.length / 2);
+            Files.write(damaged, half);
+            Files.write(previous, Arrays.copyOf(whole, whole.length / 3));
+            helper.assertTrue(tests.readRegistry(server, copy).isEmpty(),
+                    "registry with both files truncated is not read-only");
+            helper.assertTrue(Arrays.equals(half, Files.readAllBytes(damaged)), "the unreadable file was changed");
+            try (Stream<Path> kept = Files.list(copy)) {
+                helper.assertTrue(kept.anyMatch(p -> p.getFileName().toString().startsWith(
+                        damaged.getFileName() + ".unreadable-")), "no copy of the unreadable file kept aside");
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("could not prepare the copy of the registry file", e);
+        } finally {
+            deleteTree(copy);
+        }
+
+        helper.assertTrue(frames.takeStowedOfPlaced(server, frameId).size() == 1, "boots not taken back");
+        removeFrame(server, frame);
+        tests.forgetOrphaned(server, frameId);
+        tests.forgetOrphaned(server, gone);
+        helper.assertTrue(tests.orphanedStowed(server, frameId).isEmpty()
+                && tests.orphanedStowed(server, gone).isEmpty(), "orphaned entries left by the test");
+        helper.succeed();
+    }
+
+    /**
+     * Un giocatore che lascia il server mentre il registro ha un cambio strutturale non ancora sul disco (qui un telaio
+     * piazzato): l'evento dell'uscita ({@code PlayerEvent.PLAYER_QUIT}) salva i giocatori e il registro insieme, il
+     * file del giocatore c'e' e il registro sul disco ha il telaio; dopo, nessun cambio in sospeso.
+     */
+    private static void quitSavesTheRegistryWithThePlayers(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        GameTests tests = Compat.gameTests();
+        Path playerFile = server.getWorldPath(LevelResource.PLAYER_DATA_DIR).resolve(player.getStringUUID() + ".dat");
+        helper.assertTrue(!Files.exists(playerFile), "the new player already has a file");
+        ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(2.5, 1.0, 2.5), 0f);
+        helper.assertTrue(tests.registryChangeUnsaved(server), "placing a frame is not an unsaved change");
+
+        PlayerEvent.PLAYER_QUIT.invoker().quit(player);
+
+        helper.assertTrue(!tests.registryChangeUnsaved(server), "the registry was not saved when the player left");
+        helper.assertTrue(Files.isRegularFile(playerFile), "the player's file was not saved: " + playerFile);
+        Optional<CompoundTag> onDisk = tests.readRegistry(server,
+                server.getWorldPath(LevelResource.ROOT).resolve("data").normalize());
+        helper.assertTrue(onDisk.isPresent() && onDisk.get().getCompound(NbtKeys.PLACED)
+                .contains(frame.frameId().toString()), "the placed frame is not in the registry on disk");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /** Cancella la cartella temporanea di un test con tutto quello che contiene; nulla se e' null. */
+    private static void deleteTree(Path folder) {
+        if (folder == null) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(folder)) {
+            for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("could not delete " + folder, e);
+        }
+    }
+
     /** Il segnaposto dello slot, come lo darebbe {@code /give}: senza riassunto. */
     private static ItemStack placeholderFor(EquipmentSlot slot) {
         return new ItemStack(switch (slot) {
@@ -2946,6 +3083,7 @@ public final class ExoframeGameTests {
                 where + ": stowed stack " + stowed.stack() + " differs from " + expected);
     }
 
+    /** Verifica larghezza, altezza, occhi e occhi da accovacciato del giocatore. */
     private static void assertSize(GameTestHelper helper, ServerPlayer player, String when, float width,
             float height, float eyes, float crouchingEyes) {
         helper.assertTrue(near(player.getBbWidth(), width) && near(player.getBbHeight(), height)

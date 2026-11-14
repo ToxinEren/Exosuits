@@ -31,7 +31,9 @@ import net.minecraft.world.phys.Vec3;
  * Implementazione di {@link FrameStateAccess}: il server tiene gli stati in {@link FrameStateSavedData}, il client
  * la copia ricevuta in {@link FrameStateClientCache}; il pacchetto e' {@link FrameStateSyncPacket}.
  * <p>
- * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare; {@link #update} e
+ * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare (lo fa il dato
+ * stesso, a ogni sua operazione; {@link #mutate} non come cambio strutturale, vedi
+ * {@link FrameStateSavedData#structuralUnsaved()}); {@link #update} e
  * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. Nessuna scrittura toglie le voci grezze non
  * lette del giocatore: restano nel file, identiche (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola
  * lettura (schema piu' recente), le tre scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync, un
@@ -67,13 +69,10 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return;
         }
-        FrameState state = data.getOrCreateWorn(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()))
-                .state();
         try {
-            change.accept(state);
+            // il dato si segna da salvare anche se la modifica lancia a meta': disco e client allineati alla memoria
+            data.updateWorn(p.getUUID(), () -> new FrameState(RedstoneExoframes.config()), change);
         } finally {
-            // anche se la modifica lancia a meta': disco e client restano allineati alla memoria
-            data.setDirty();
             syncTo(p);
         }
     }
@@ -85,17 +84,8 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return false;
         }
-        FrameRecord record = data.worn(p.getUUID());
-        if (record == null) {
-            return false;
-        }
-        try {
-            change.accept(record.state());
-        } finally {
-            // anche se la modifica lancia a meta': il disco resta allineato alla memoria (nessuna sincronizzazione)
-            data.setDirty();
-        }
-        return true;
+        // anche se la modifica lancia a meta' il dato si segna da salvare (nessuna sincronizzazione)
+        return data.mutateWorn(p.getUUID(), change);
     }
 
     @Override
@@ -106,7 +96,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             return;
         }
         data.removeWorn(p.getUUID());
-        data.setDirty();
         syncTo(p);
     }
 
@@ -131,11 +120,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return null;
         }
-        UUID frameId = data.place(new FrameRecord(UUID.randomUUID(), state), spot);
-        if (frameId != null) {
-            data.setDirty();
-        }
-        return frameId;
+        return data.place(new FrameRecord(UUID.randomUUID(), state), spot);
     }
 
     @Override
@@ -178,11 +163,7 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
             data.logRefusedChange();
             return false;
         }
-        if (!data.removePlaced(frameId)) {
-            return false;
-        }
-        data.setDirty();
-        return true;
+        return data.removePlaced(frameId);
     }
 
     @Override
@@ -196,7 +177,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         if (!data.enter(player.getUUID(), frameId)) {
             return false;
         }
-        data.setDirty();
         syncTo(player);
         return true;
     }
@@ -211,7 +191,6 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         }
         Optional<UUID> frameId = data.exit(player.getUUID(), spot);
         if (frameId.isPresent()) {
-            data.setDirty();
             syncTo(player);
         }
         return frameId;
@@ -314,6 +293,8 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         Compat.net().registerS2C(FrameStateSyncPacket.ID, FrameStateSyncPacket.class, FrameStateSyncPacket.CODEC,
                 (msg, ctx) -> FrameStateClientCache.accept(msg));
         PlayerEvent.PLAYER_JOIN.register(this::syncTo);
+        // registro e giocatori sul disco insieme quando un giocatore esce (FrameStateSavedData.saveWithPlayersIfNeeded)
+        PlayerEvent.PLAYER_QUIT.register(player -> FrameStateSavedData.saveWithPlayersIfNeeded(player.server));
         //? if >=1.21 {
         PlayerEvent.PLAYER_RESPAWN.register((player, conqueredEnd, reason) -> syncTo(player));
         //?} else {

@@ -581,7 +581,6 @@ class FrameStateSavedDataTest {
         assertEquals(1, roundTrip(data).worn(GOOD).stowed().size());
     }
 
-    /** Vero se la sezione ha, sotto qualunque chiave, un valore uguale a {@code value}. */
     /** Quante voci della sezione sono uguali al valore. */
     private static int countValue(CompoundTag section, Tag value) {
         int count = 0;
@@ -604,6 +603,7 @@ class FrameStateSavedDataTest {
         return loadThrowingOnMarked(data.write(new CompoundTag()));
     }
 
+    /** Vero se la sezione ha, sotto qualunque chiave, un valore uguale a {@code value}. */
     private static boolean containsValue(CompoundTag section, Tag value) {
         for (String key : section.getAllKeys()) {
             if (value.equals(section.get(key))) {
@@ -693,5 +693,59 @@ class FrameStateSavedDataTest {
         assertTrue(data.removeWorn(GOOD));
         assertFalse(data.removeWorn(GOOD));
         assertTrue(data.frames().isEmpty());
+    }
+
+    /**
+     * Ogni operazione del registro che cambia il dato lo segna come da salvare, e quelle strutturali anche come cambio
+     * strutturale (l'uscita di un giocatore salva allora tutto insieme); {@code mutateWorn}, la scrittura ad alta
+     * frequenza, solo come da salvare. Un'operazione rifiutata non segna nulla; {@code markSaved} toglie entrambi.
+     */
+    @Test
+    void everyRegistryChangeMarksTheDataToBeSaved() {
+        FrameStateSavedData data = empty();
+        CompoundTag helmet = stowedEntry("head", "minecraft:iron_helmet");
+        assertMarks(data, true, "create worn", () -> assertNotNull(data.getOrCreateWorn(GOOD,
+                FrameStateSavedDataTest::state)));
+        assertMarks(data, false, "existing worn", () -> data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state));
+        assertMarks(data, true, "update worn", () -> assertTrue(data.updateWorn(GOOD, FrameStateSavedDataTest::state,
+                s -> s.setReinforced(true))));
+        assertDirtyNotStructural(data, () -> assertTrue(data.mutateWorn(GOOD, s -> s.setReinforced(false))));
+        assertMarks(data, false, "mutate without a worn frame", () -> assertFalse(data.mutateWorn(OTHER,
+                s -> s.setReinforced(true))));
+        assertMarks(data, true, "stow", () -> assertTrue(data.addStowed(GOOD, List.of(helmet))));
+        assertMarks(data, true, "take from worn", () -> data.takeStowedOfWorn(GOOD, (id, tag) -> Optional.of(tag)));
+        UUID worn = data.worn(GOOD).frameId();
+        assertMarks(data, true, "exit", () -> assertTrue(data.exit(GOOD, OVERWORLD_SPOT).isPresent()));
+        assertMarks(data, true, "update placed", () -> assertTrue(data.updatePlaced(worn,
+                s -> s.setUnlocked(false))));
+        assertMarks(data, false, "update of a frame that is not placed", () -> assertFalse(data.updatePlaced(FRAME_B,
+                s -> s.setUnlocked(true))));
+        assertMarks(data, true, "take from placed", () -> data.takeStowedOfPlaced(worn,
+                (id, tag) -> Optional.of(tag)));
+        assertMarks(data, true, "enter", () -> assertTrue(data.enter(OTHER, worn)));
+        assertMarks(data, false, "refused enter", () -> assertFalse(data.enter(OTHER, worn)));
+        assertMarks(data, true, "remove worn", () -> assertTrue(data.removeWorn(OTHER)));
+        assertMarks(data, true, "place", () -> assertEquals(FRAME_A, data.place(new FrameRecord(FRAME_A, state()),
+                NETHER_SPOT)));
+        assertMarks(data, false, "refused place", () -> assertNull(data.place(new FrameRecord(FRAME_A, state()),
+                OVERWORLD_SPOT)));
+        assertMarks(data, true, "remove placed", () -> assertTrue(data.removePlaced(FRAME_A)));
+        assertMarks(data, false, "refused remove", () -> assertFalse(data.removePlaced(FRAME_A)));
+    }
+
+    /** Dopo {@code markSaved}, l'operazione segna il dato come da salvare e strutturale se {@code marks}, o nulla. */
+    private static void assertMarks(FrameStateSavedData data, boolean marks, String operation, Runnable change) {
+        data.markSaved();
+        assertFalse(data.isDirty() || data.structuralUnsaved(), "markSaved left a mark");
+        change.run();
+        assertEquals(marks, data.isDirty(), operation + ": dirty");
+        assertEquals(marks, data.structuralUnsaved(), operation + ": structural");
+    }
+
+    private static void assertDirtyNotStructural(FrameStateSavedData data, Runnable change) {
+        data.markSaved();
+        change.run();
+        assertTrue(data.isDirty(), "mutate: not dirty");
+        assertFalse(data.structuralUnsaved(), "mutate: marked as structural");
     }
 }

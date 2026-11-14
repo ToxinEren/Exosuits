@@ -2,8 +2,10 @@ package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
@@ -21,6 +23,7 @@ import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gameevent.GameEventListener;
 import net.minecraft.world.level.gameevent.GameEventListenerRegistry;
 import net.minecraft.world.level.gameevent.PositionSource;
+import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.phys.Vec3;
 //? if >=1.21 {
 import net.minecraft.core.Holder;
@@ -134,6 +137,40 @@ public final class GameTestsImpl implements GameTests {
             }
         }
         return entries;
+    }
+
+    @Override
+    public int forgetOrphaned(MinecraftServer server, UUID frameId) {
+        return FrameStateSavedData.get(server).forgetOrphaned(frameId);
+    }
+
+    @Override
+    public Path saveRegistry(MinecraftServer server) {
+        FrameStateSavedData.get(server);
+        server.overworld().getDataStorage().save();
+        return FrameStateSavedData.dataFolder(server).resolve(FrameStateSavedData.NAME + ".dat");
+    }
+
+    @Override
+    public CompoundTag registryContents(MinecraftServer server) {
+        return FrameStateSavedData.get(server).write(new CompoundTag());
+    }
+
+    @Override
+    public Optional<CompoundTag> readRegistry(MinecraftServer server, Path dataFolder) {
+        //? if >=1.21 {
+        DimensionDataStorage storage = new DimensionDataStorage(dataFolder.toFile(), server.getFixerUpper(),
+                server.registryAccess());
+        //?} else {
+        /*DimensionDataStorage storage = new DimensionDataStorage(dataFolder.toFile(), server.getFixerUpper());*/
+        //?}
+        FrameStateSavedData data = FrameStateSavedData.get(storage, dataFolder);
+        return data.readOnly() ? Optional.empty() : Optional.of(data.write(new CompoundTag()));
+    }
+
+    @Override
+    public boolean registryChangeUnsaved(MinecraftServer server) {
+        return FrameStateSavedData.get(server).structuralUnsaved();
     }
 
     @Override

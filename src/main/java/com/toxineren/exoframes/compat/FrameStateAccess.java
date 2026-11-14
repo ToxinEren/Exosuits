@@ -33,11 +33,16 @@ import net.minecraft.world.phys.Vec3;
  * <p>
  * Registro dei telai (design §4.5 e §5.3): ogni telaio ha un'identita' ({@code frameId}) e sta in uno solo dei due
  * posti, indossato da un giocatore o piazzato nel mondo ({@link PlacedFrame}); {@link #enter} e {@link #exit} spostano
- * lo stesso record fra i due nello stesso dato salvato, quindi un crash non puo' duplicare ne' perdere un telaio. Ogni
- * record porta l'armatura stivata ({@link StowedStack}), che non va mai ai client. Le operazioni di registro sono solo
- * sul server, sul thread di gioco; ogni scrittura segna il dato come da salvare. Se il dato salvato e' in sola lettura
- * (salvato da una versione piu' recente della mod) le scritture non fanno nulla e danno falso, vuoto o null (un solo
- * ERROR nel log), e le letture non trovano nulla. Gli argomenti null sono rifiutati subito con un'eccezione.
+ * lo stesso record fra i due nello stesso dato salvato: gli spostamenti dentro il registro sono atomici, e un crash
+ * non puo' duplicare ne' perdere un telaio fra i due posti. Cio' che passa fra un inventario e il registro (armatura
+ * stivata e restituita, pezzi, celle, il telaio come oggetto) e' sul disco ogni volta che lo e' il file di un
+ * giocatore: all'uscita di un giocatore, se il registro ha cambi strutturali non salvati, si salvano tutti i giocatori
+ * e il registro insieme, e i salvataggi del gioco scrivono gli uni e l'altro. Resta solo un arresto brusco nei
+ * millisecondi di un salvataggio. Ogni record porta l'armatura stivata ({@link StowedStack}), che non va mai ai client.
+ * Le operazioni di registro sono solo sul server, sul thread di gioco; ogni scrittura segna il dato come da salvare.
+ * Se il dato salvato e' in sola lettura (salvato da una versione piu' recente della mod, o illeggibile con la sua
+ * copia precedente) le scritture non fanno nulla e danno falso, vuoto o null (un solo ERROR nel log), e le letture
+ * non trovano nulla. Gli argomenti null sono rifiutati subito con un'eccezione.
  * <p>
  * Un telaio tolto dal registro ({@link #removePlaced}, {@link #clear}) con armatura stivata ancora dentro non la
  * perde: le voci rimaste, che si leggano o no, passano identiche in una lista del dato salvato

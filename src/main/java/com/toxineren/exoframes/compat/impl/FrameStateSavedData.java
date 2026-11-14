@@ -4,6 +4,9 @@ import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameState;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -18,16 +21,20 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.DoubleTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
+import net.minecraft.world.level.storage.LevelResource;
 //? if >=1.21 {
 import net.minecraft.core.HolderLookup;
 //?}
@@ -39,14 +46,24 @@ import net.minecraft.core.HolderLookup;
  * Ogni telaio e' un {@link FrameRecord} (identita', stato, armatura stivata) e sta in una sola delle due mappe: gli
  * indossati per giocatore ({@link NbtKeys#WORN}) e i piazzati per identita' ({@link NbtKeys#PLACED}), con dimensione,
  * posizione e orientamento ({@link PlacedSpot}). Entrare ({@link #enter}) e uscire ({@link #exit}) spostano lo stesso
- * record fra le due mappe dentro questo stesso file, quindi un crash fra due salvataggi non puo' duplicare ne' perdere
- * un telaio (design §4.5). L'armatura stivata qui e' una lista di tag opachi.
+ * record fra le due mappe dentro questo stesso file: gli spostamenti dentro il registro sono atomici, e un crash non
+ * puo' duplicare ne' perdere un telaio fra le due mappe (design §4.5). Cio' che passa fra l'inventario di un giocatore e
+ * il registro (armatura stivata e restituita, pezzi e celle montati e smontati, il telaio come oggetto) sta invece in
+ * due file, quello del giocatore e questo: ogni operazione strutturale lo ricorda ({@link #structuralUnsaved()}) e
+ * all'uscita di un giocatore, quando il gioco scrive il suo file, si scrivono anche gli altri giocatori e questo
+ * ({@link #saveWithPlayersIfNeeded}); i salvataggi del gioco scrivono i giocatori e poi i livelli. Resta un arresto
+ * brusco nei millisecondi di un salvataggio. L'armatura stivata qui e' una lista di tag opachi.
  * <p>
  * Si usa un SavedData, e non gli attachment o le capability dei loader, perche' e' un'unica implementazione per i
  * quattro target e lo stato non dipende dall'entita' del giocatore (morte, respawn e cambio di dimensione non lo
- * toccano). Le condizioni di versione sono solo sulla firma di {@code save} e su {@code computeIfAbsent}. Su 1.21.1
+ * toccano). Le condizioni di versione sono solo sulle firme di {@code save} e su {@code computeIfAbsent}. Su 1.21.1
  * il {@code DataFixTypes} della factory e' null (nessun datafixer per i dati della mod): Fabric API e NeoForge
  * saltano il datafix in quel caso.
+ * <p>
+ * Il file si scrive sempre per intero accanto e prende il posto del vecchio in un colpo, lasciando la copia
+ * precedente ({@link RegistryFile#write}); una scrittura fallita lascia il dato da salvare. Un file che il gioco non
+ * legge non vale mai come registro vuoto: si usa la copia precedente o, se nemmeno quella si legge, il dato resta in
+ * sola lettura per la sessione con un ERROR che dice quale file ripristinare ({@link #get(DimensionDataStorage, Path)}).
  * <p>
  * In lettura ogni voce e' isolata: una voce che non si legge (valore non compound, chiave non UUID, campo mancante o
  * del tipo sbagliato, eccezione del lettore dello stato) viene saltata con un avviso che ne nomina la chiave, e le
@@ -67,10 +84,16 @@ import net.minecraft.core.HolderLookup;
  * <p>
  * Accanto alle sezioni c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link #CURRENT_SCHEMA}; assente vale 1). Lo schema 1
  * aveva solo la sezione {@code frames} (uno stato per giocatore): si legge ancora, e ogni stato diventa un record
- * indossato con un'identita' nuova; le sue voci non lette restano in {@code frames}, identiche, per sempre. Se il marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa
- * versione della mod ({@link #readOnly()}): un solo ERROR al caricamento, nessuna voce viene letta, e i punti di
- * modifica non cambiano nulla; il dato non risulta mai da salvare, e se viene salvato lo stesso riproduce il tag letto
- * per intero. Nulla si legge, si cambia o si perde.
+ * indossato con un'identita' nuova; le sue voci non lette restano in {@code frames}, identiche, per sempre. Se il
+ * marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa versione della
+ * mod ({@link #readOnly()}): un solo ERROR al caricamento, nessuna voce viene letta, e i punti di modifica non cambiano
+ * nulla; il dato non risulta mai da salvare, e se viene salvato lo stesso riproduce il tag letto per intero. Nulla
+ * si legge, si cambia o si perde.
+ * <p>
+ * Regola per le versioni future: dentro un record che si legge, un pezzo con un livello, uno slot o un modulo che
+ * questa versione non conosce si scarta alla lettura (con un avviso) e il salvataggio successivo lo cancella. Percio'
+ * una versione della mod che aggiunge un livello, uno slot o un id di modulo deve alzare {@link #CURRENT_SCHEMA}: cosi'
+ * una versione piu' vecchia apre il file in sola lettura invece di perdere quei pezzi.
  * <p>
  * Un record tolto dal registro ({@link #removeWorn}, {@link #removePlaced}) con armatura stivata ancora dentro, che si
  * legga o no, non la perde: le voci passano identiche in {@link NbtKeys#ORPHANED}, un gruppo per telaio con
@@ -79,10 +102,11 @@ import net.minecraft.core.HolderLookup;
  * {@link NbtKeys#ENTRIES}); nessuno la legge ancora per il gioco. Chi toglie un telaio riprende prima l'armatura che
  * si legge: la lista e' la rete per quello che resta.
  * <p>
- * Solo sul thread del server; i record sono vivi: chi cambia uno stato o un'armatura stivata deve chiamare
- * {@link #setDirty()}, come dopo ogni operazione del registro. Un ingresso nullo ({@code place}, {@code exit},
- * l'armatura stivata) e' rifiutato subito con un'eccezione, cosi' il salvataggio non lancia mai. Le identita' create
- * leggendo un file di schema 1 segnano il dato come da salvare gia' al caricamento, cosi' restano le stesse.
+ * Solo sul thread del server; i record sono vivi: ogni operazione del registro qui segna da se' il dato come da
+ * salvare, e chi cambia uno stato o un'armatura stivata da fuori deve chiamare {@link #setDirty()}. Un ingresso
+ * nullo ({@code place}, {@code exit}, l'armatura stivata) e' rifiutato subito con un'eccezione, cosi' il
+ * salvataggio non lancia mai. Le identita' create leggendo un file di schema 1 segnano il dato come da salvare gia'
+ * al caricamento, cosi' restano le stesse.
  */
 final class FrameStateSavedData extends SavedData {
     static final String NAME = "redstone_exoframes_frames";
@@ -110,6 +134,14 @@ final class FrameStateSavedData extends SavedData {
     private final Set<String> movedWarned = new HashSet<>();
     /** Vero dopo il primo ERROR per una modifica rifiutata, per scriverlo una volta sola. */
     private boolean refusalLogged;
+    /** Vero se il dato e' nato vuoto dalla factory e i file non sono ancora stati guardati ({@link #get}). */
+    private boolean createdEmpty;
+    /** Il file che non si e' potuto leggere, ne' lui ne' la sua copia precedente: il dato e' in sola lettura. */
+    private Path unreadableFile;
+    /** Vero se un'operazione strutturale ha cambiato il dato dopo l'ultima scrittura riuscita del file. */
+    private boolean structuralUnsaved;
+    /** Vero dopo l'ERROR per una scrittura fallita, fino alla prossima scrittura riuscita. */
+    private boolean writeFailureLogged;
 
     /** Un record piazzato con il suo posto. */
     private record Placed(FrameRecord record, PlacedSpot spot) {
@@ -117,21 +149,99 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Il dato si crea o si carica una volta per server: e' il momento in cui i risultati di lettura degli stack
-     * ricordati da un server precedente (nello stesso processo, con altri registri) vanno dimenticati.
+     * ricordati da un server precedente (nello stesso processo, con altri registri) vanno dimenticati. (Anche un dato
+     * aperto da un test su una copia del file li dimentica: al piu' un avviso per una voce illeggibile si ripete.)
      */
     private FrameStateSavedData() {
         StackTags.forgetOutcomes();
     }
 
-    /** Il dato del mondo del server, creato vuoto se non esiste ancora. */
+    /** Il dato del mondo del server, creato vuoto se non esiste ancora: {@link #get(DimensionDataStorage, Path)}. */
     static FrameStateSavedData get(MinecraftServer server) {
-        DimensionDataStorage storage = server.overworld().getDataStorage();
+        return get(server.overworld().getDataStorage(), dataFolder(server));
+    }
+
+    /** La cartella dei dati salvati dell'overworld, dove sta il file {@link #NAME}{@code .dat}. */
+    static Path dataFolder(MinecraftServer server) {
+        return server.getWorldPath(LevelResource.ROOT).resolve("data").normalize();
+    }
+
+    /**
+     * Il dato di {@code storage}, che tiene i suoi file in {@code folder}: lo legge il gioco con la factory della
+     * mod. Se il gioco non ha potuto leggere il file (lo dice solo nel log e fa nascere il dato vuoto), la prima
+     * richiesta guarda i file ({@link RegistryFile#recover}): con la copia precedente leggibile il dato viene da quella,
+     * e' da salvare e prende il posto di quello vuoto in {@code storage}; se nulla si legge il dato resta vuoto e in
+     * sola lettura per la sessione ({@link #readOnly()}), cosi' nessuno lo riscrive sopra il file da ripristinare; se
+     * nessuno dei due file esiste e' un mondo nuovo. Il server apre cosi' il suo dato; i test ne aprono altri sulla
+     * stessa cartella o su una copia.
+     */
+    static FrameStateSavedData get(DimensionDataStorage storage, Path folder) {
+        Supplier<FrameStateSavedData> fresh = () -> {
+            FrameStateSavedData data = new FrameStateSavedData();
+            data.createdEmpty = true;
+            return data;
+        };
+        Function<CompoundTag, FrameStateSavedData> loader = FrameStateSavedData::load;
         //? if >=1.21 {
-        return storage.computeIfAbsent(
-                new SavedData.Factory<>(FrameStateSavedData::new, (tag, provider) -> load(tag), null), NAME);
+        FrameStateSavedData data = storage.computeIfAbsent(
+                new SavedData.Factory<>(fresh, (tag, provider) -> loader.apply(tag), null), NAME);
         //?} else {
-        /*return storage.computeIfAbsent(FrameStateSavedData::load, FrameStateSavedData::new, NAME);*/
+        /*FrameStateSavedData data = storage.computeIfAbsent(loader, fresh, NAME);*/
         //?}
+        if (!data.createdEmpty) {
+            return data;
+        }
+        data.createdEmpty = false;
+        FrameStateSavedData recovered = afterUnreadFile(folder.resolve(NAME + ".dat"), data);
+        if (recovered != data) {
+            storage.set(NAME, recovered);
+        }
+        return recovered;
+    }
+
+    /**
+     * Il dato da usare quando il gioco non ha letto {@code file} e ha dato {@code empty} (vedi {@link #get}): {@code
+     * empty} per un mondo nuovo; il dato della copia precedente, da salvare, se si legge; altrimenti {@code empty} in
+     * sola lettura. Ogni caso diverso dal mondo nuovo scrive un ERROR che dice che cosa e' successo e che cosa fare.
+     */
+    static FrameStateSavedData afterUnreadFile(Path file, FrameStateSavedData empty) {
+        RegistryFile.Recovery recovery = RegistryFile.recover(file);
+        switch (recovery.kind()) {
+            case PREVIOUS -> {
+                FrameStateSavedData previous;
+                try {
+                    previous = load(recovery.root().getCompound("data"));
+                } catch (RuntimeException e) {
+                    empty.unreadableFile = file;
+                    RedstoneExoframes.LOGGER.error("Frame registry file {} and its previous copy {} could not be "
+                            + "read: frames are read-only for this session and nothing is written. Restore {} from "
+                            + "a backup and restart the server (the unreadable file is kept as {})", file,
+                            RegistryFile.oldCopy(file), file, recovery.keptAs(), e);
+                    return empty;
+                }
+                previous.markStructural();
+                if (recovery.keptAs() != null) {
+                    RedstoneExoframes.LOGGER.error("Frame registry file {} could not be read: using the previous copy "
+                            + "{}; the unreadable file is kept as {}", file, RegistryFile.oldCopy(file),
+                            recovery.keptAs());
+                } else {
+                    RedstoneExoframes.LOGGER.error("Frame registry file {} is missing: using the previous copy {}",
+                            file, RegistryFile.oldCopy(file));
+                }
+                return previous;
+            }
+            case UNREADABLE -> {
+                empty.unreadableFile = file;
+                RedstoneExoframes.LOGGER.error("Frame registry file {} could not be read, nor its previous copy {}: "
+                        + "frames are read-only for this session and nothing is written. Restore {} from a backup "
+                        + "and restart the server (a copy of the unreadable file is kept as {})", file,
+                        RegistryFile.oldCopy(file), file, recovery.keptAs() == null ? "none" : recovery.keptAs());
+                return empty;
+            }
+            default -> {
+                return empty;
+            }
+        }
     }
 
     /** Vista in sola lettura giocatore -> stato del telaio indossato (una copia della mappa; gli stati sono vivi). */
@@ -147,14 +257,60 @@ final class FrameStateSavedData extends SavedData {
     }
 
     /**
-     * Il record indossato dal giocatore, creato con un'identita' nuova e lo stato di {@code factory} se assente; null,
-     * senza cambiare nulla, in sola lettura.
+     * Il record indossato dal giocatore, creato con un'identita' nuova e lo stato di {@code factory} se assente (allora
+     * il dato e' da salvare, come dopo ogni operazione strutturale, vedi {@link #structuralUnsaved()}); null, senza
+     * cambiare nulla, in sola lettura.
      */
     FrameRecord getOrCreateWorn(UUID player, Supplier<FrameState> factory) {
         if (readOnly()) {
             return null;
         }
-        return worn.computeIfAbsent(player, k -> new FrameRecord(UUID.randomUUID(), factory.get()));
+        FrameRecord record = worn.get(player);
+        if (record == null) {
+            record = new FrameRecord(UUID.randomUUID(), factory.get());
+            worn.put(player, record);
+            markStructural();
+        }
+        return record;
+    }
+
+    /**
+     * Applica la modifica allo stato del record indossato dal giocatore, creato come in {@link #getOrCreateWorn} se
+     * assente, e segna il dato come da salvare con un cambio strutturale (anche se la modifica lancia): e' la scrittura
+     * rara, che sincronizza. Falso, senza cambiare nulla, in sola lettura.
+     */
+    boolean updateWorn(UUID player, Supplier<FrameState> factory, Consumer<FrameState> change) {
+        Objects.requireNonNull(change, "change must not be null");
+        FrameRecord record = getOrCreateWorn(player, factory);
+        if (record == null) {
+            return false;
+        }
+        try {
+            change.accept(record.state());
+        } finally {
+            markStructural();
+        }
+        return true;
+    }
+
+    /**
+     * Applica la modifica allo stato del record indossato dal giocatore e segna il dato come da salvare (anche se la
+     * modifica lancia), ma non come cambio strutturale: e' la scrittura ad alta frequenza (l'energia a ogni tick, in
+     * una parte successiva), e un salvataggio a ogni uscita di un giocatore per questo sarebbe troppo. Falso, senza
+     * cambiare nulla, se il giocatore non indossa un telaio o in sola lettura.
+     */
+    boolean mutateWorn(UUID player, Consumer<FrameState> change) {
+        Objects.requireNonNull(change, "change must not be null");
+        FrameRecord record = readOnly() ? null : worn.get(player);
+        if (record == null) {
+            return false;
+        }
+        try {
+            change.accept(record.state());
+        } finally {
+            setDirty();
+        }
+        return true;
     }
 
     /**
@@ -172,6 +328,7 @@ final class FrameStateSavedData extends SavedData {
         }
         UUID owner = record.state().owner();
         orphan(record, owner != null ? owner : player);
+        markStructural();
         return true;
     }
 
@@ -186,6 +343,7 @@ final class FrameStateSavedData extends SavedData {
             return null;
         }
         placed.put(record.frameId(), new Placed(record, spot));
+        markStructural();
         return record.frameId();
     }
 
@@ -225,12 +383,14 @@ final class FrameStateSavedData extends SavedData {
             return false;
         }
         orphan(entry.record(), entry.record().state().owner());
+        markStructural();
         return true;
     }
 
     /**
-     * Se il telaio e' piazzato, applica la modifica al suo stato e segna il dato come da salvare (anche se la
-     * modifica lancia); false, senza cambiare nulla, se non e' piazzato o se il dato e' in sola lettura.
+     * Se il telaio e' piazzato, applica la modifica al suo stato e segna il dato come da salvare con un cambio
+     * strutturale (anche se la modifica lancia: montaggio, smontaggio, blocco); false, senza cambiare nulla, se non
+     * e' piazzato o se il dato e' in sola lettura.
      */
     boolean updatePlaced(UUID frameId, Consumer<FrameState> change) {
         Objects.requireNonNull(change, "change must not be null");
@@ -241,7 +401,7 @@ final class FrameStateSavedData extends SavedData {
         try {
             change.accept(record.state());
         } finally {
-            setDirty();
+            markStructural();
         }
         return true;
     }
@@ -262,7 +422,7 @@ final class FrameStateSavedData extends SavedData {
             throw new IllegalStateException("player " + player + " wears no frame to stow armor in");
         }
         record.stowed().addAll(copy);
-        setDirty();
+        markStructural();
         return true;
     }
 
@@ -294,7 +454,7 @@ final class FrameStateSavedData extends SavedData {
                 }
             }
         } finally {
-            setDirty();
+            markStructural();
         }
         return taken;
     }
@@ -304,6 +464,19 @@ final class FrameStateSavedData extends SavedData {
         List<CompoundTag> copies = new ArrayList<>();
         orphaned.forEach(group -> copies.add(group.copy()));
         return copies;
+    }
+
+    /**
+     * Toglie i gruppi orfani del telaio con questa identita' e dice quanti erano. Solo per i test (vedi
+     * {@code GameTests.forgetOrphaned}): nel gioco le voci orfane non si tolgono mai.
+     */
+    int forgetOrphaned(UUID frameId) {
+        int before = orphaned.size();
+        orphaned.removeIf(group -> SchemaIds.readUuid(group, NbtKeys.FRAME).filter(frameId::equals).isPresent());
+        if (orphaned.size() != before) {
+            setDirty();
+        }
+        return before - orphaned.size();
     }
 
     /** Mette fra le orfane, identiche, le voci stivate rimaste nel record tolto, con un avviso; nulla se non ce ne sono. */
@@ -335,6 +508,7 @@ final class FrameStateSavedData extends SavedData {
             return false;
         }
         worn.put(player, placed.remove(frameId).record());
+        markStructural();
         return true;
     }
 
@@ -349,6 +523,7 @@ final class FrameStateSavedData extends SavedData {
         }
         FrameRecord record = worn.remove(player);
         placed.put(record.frameId(), new Placed(record, spot));
+        markStructural();
         return Optional.of(record.frameId());
     }
 
@@ -371,8 +546,8 @@ final class FrameStateSavedData extends SavedData {
     /**
      * Legge il dato con il lettore di stato dato (nel codice e' sempre {@link FrameStateCodec#read}; il parametro
      * esiste per i test). Ogni voce e' isolata: una voce che non si legge viene saltata con un avviso e conservata
-     * grezza. Un'eccezione che uscisse da qui farebbe ricreare il dato vuoto e il salvataggio successivo
-     * cancellerebbe tutti i telai.
+     * grezza. Un'eccezione che uscisse da qui varrebbe come un file illeggibile (vedi {@link #get(DimensionDataStorage,
+     * Path)}): la copia precedente o la sola lettura, mai il registro vuoto.
      */
     static FrameStateSavedData load(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader) {
         FrameStateSavedData data = new FrameStateSavedData();
@@ -549,10 +724,11 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Vero se il file e' stato salvato con uno schema piu' recente di {@link #CURRENT_SCHEMA} o con un marcatore non
-     * numerico: questa versione della mod non deve cambiare ne' riscrivere il dato.
+     * numerico, o se ne' il file ne' la sua copia precedente si sono potuti leggere ({@link #get}): questa versione
+     * della mod non deve cambiare ne' riscrivere il dato.
      */
     boolean readOnly() {
-        return readOnlyRoot != null;
+        return readOnlyRoot != null || unreadableFile != null;
     }
 
     /**
@@ -560,8 +736,14 @@ final class FrameStateSavedData extends SavedData {
      * lettura.
      */
     void logRefusedChange() {
-        if (readOnly() && !refusalLogged) {
-            refusalLogged = true;
+        if (!readOnly() || refusalLogged) {
+            return;
+        }
+        refusalLogged = true;
+        if (unreadableFile != null) {
+            RedstoneExoframes.LOGGER.error("Frame registry file {} could not be read: changes are not applied; "
+                    + "restore it and restart the server", unreadableFile);
+        } else {
             RedstoneExoframes.LOGGER.error("Frame registry was saved by a newer version of the mod with schema {}: "
                     + "changes are not applied; update the mod",
                     SchemaIds.safeId(String.valueOf(readOnlyRoot.get(NbtKeys.SCHEMA))));
@@ -574,17 +756,109 @@ final class FrameStateSavedData extends SavedData {
         return !readOnly() && super.isDirty();
     }
 
+    /**
+     * Segna il dato come da salvare dopo un'operazione strutturale: un telaio piazzato, tolto, indossato o lasciato,
+     * armatura stivata o ripresa, pezzi, cella o blocco di un telaio piazzato cambiati, un record indossato creato o
+     * tolto. Sono i cambi che spostano qualcosa fra un inventario e il registro: finche' non sono sul disco, l'uscita
+     * di un giocatore salva tutto insieme ({@link #saveWithPlayersIfNeeded}).
+     */
+    private void markStructural() {
+        structuralUnsaved = true;
+        setDirty();
+    }
+
+    /** Vero se un'operazione strutturale ha cambiato il dato dopo l'ultima scrittura riuscita del file. */
+    boolean structuralUnsaved() {
+        return structuralUnsaved;
+    }
+
+    /** Il dato e' sul disco: non piu' da salvare, nessun cambio strutturale in sospeso. */
+    void markSaved() {
+        setDirty(false);
+        structuralUnsaved = false;
+    }
+
+    /**
+     * All'uscita di un giocatore dal server ({@code PlayerEvent.PLAYER_QUIT}, che i quattro loader mandano in testa a
+     * {@code PlayerList.remove}, prima che il gioco salvi il suo file): se un'operazione strutturale non e' ancora sul
+     * disco, il gioco salva i file di tutti i giocatori e poi i dati dell'overworld, registro compreso. Cosi' ogni volta
+     * che il file di un giocatore si scrive, il registro si scrive con lui, e cio' che si e' spostato fra un inventario
+     * e il registro e' sul disco da entrambe le parti.
+     */
+    static void saveWithPlayersIfNeeded(MinecraftServer server) {
+        FrameStateSavedData data = get(server);
+        if (!data.structuralUnsaved || data.readOnly()) {
+            return;
+        }
+        server.getPlayerList().saveAll();
+        server.overworld().getDataStorage().save();
+    }
+
     //? if >=1.21 {
     @Override
     public CompoundTag save(CompoundTag tag, HolderLookup.Provider provider) {
         return write(tag);
     }
+
+    @Override
+    public void save(File file, HolderLookup.Provider provider) {
+        saveFile(file.toPath());
+    }
     //?} else {
     /*@Override
     public CompoundTag save(CompoundTag tag) {
         return write(tag);
+    }
+
+    @Override
+    public void save(File file) {
+        saveFile(file.toPath());
     }*/
     //?}
+
+    /**
+     * Il salvataggio del gioco ({@code DimensionDataStorage.save}): se il dato e' da salvare lo scrive con
+     * {@link RegistryFile#write} (file temporaneo, copia precedente, spostamento atomico) nel formato del gioco, la
+     * versione dei dati e il tag sotto {@code data}. Se la scrittura fallisce il dato resta da salvare, e il salvataggio
+     * successivo riprova.
+     */
+    private void saveFile(Path file) {
+        if (!isDirty()) {
+            return;
+        }
+        saveTo(file, fileRoot(SharedConstants.getCurrentVersion().getDataVersion().getVersion()),
+                NbtIo::writeCompressed);
+    }
+
+    /** Il tag radice del file: {@link #write} sotto {@code data} e la versione dei dati, come lo scrive il gioco. */
+    CompoundTag fileRoot(int dataVersion) {
+        CompoundTag root = new CompoundTag();
+        root.put("data", write(new CompoundTag()));
+        return NbtUtils.addDataVersion(root, dataVersion);
+    }
+
+    /**
+     * Scrive {@code root} in {@code file} con {@link RegistryFile#write}; se riesce il dato e' salvato
+     * ({@link #markSaved}), se fallisce resta da salvare e un solo ERROR, con il percorso, lo dice fino alla prossima
+     * scrittura riuscita. Non lancia.
+     *
+     * @return true se il file e' stato scritto
+     */
+    boolean saveTo(Path file, CompoundTag root, RegistryFile.TagWriter writer) {
+        try {
+            RegistryFile.write(file, root, writer);
+        } catch (IOException | RuntimeException e) {
+            if (!writeFailureLogged) {
+                writeFailureLogged = true;
+                RedstoneExoframes.LOGGER.error("Could not save the frame registry to {}: the previous file is kept, "
+                        + "and the next save tries again", file, e);
+            }
+            return false;
+        }
+        writeFailureLogged = false;
+        markSaved();
+        return true;
+    }
 
     /**
      * Scrive il marcatore di schema e le sezioni: in ognuna i record vivi e le voci grezze non lette, identiche (una

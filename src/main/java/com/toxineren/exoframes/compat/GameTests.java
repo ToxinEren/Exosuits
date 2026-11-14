@@ -1,6 +1,8 @@
 package com.toxineren.exoframes.compat;
 
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -55,6 +57,36 @@ public interface GameTests {
      * il dato salvato (vedi {@link FrameStateAccess#removePlaced}); vuota se non ce ne sono. Esiste solo per i test.
      */
     List<CompoundTag> orphanedStowed(MinecraftServer server, UUID frameId);
+
+    /**
+     * Toglie dal registro del server i gruppi di voci orfane del telaio con questa identita' (vedi
+     * {@link #orphanedStowed}) e dice quanti ne ha tolti. Esiste solo per i test, che cosi' non lasciano voci orfane nel
+     * dato condiviso: nel gioco nessuno toglie mai quelle voci.
+     */
+    int forgetOrphaned(MinecraftServer server, UUID frameId);
+
+    /**
+     * Salva il registro dei telai del server come il gioco salva i dati dell'overworld (a ogni salvataggio automatico:
+     * {@code DimensionDataStorage.save}) e da' il percorso del suo file. Esiste solo per i test.
+     */
+    Path saveRegistry(MinecraftServer server);
+
+    /** Il registro del server come lo scriverebbe adesso il salvataggio (il tag sotto {@code data}). Solo per i test. */
+    CompoundTag registryContents(MinecraftServer server);
+
+    /**
+     * Legge il registro dalla cartella dei dati {@code dataFolder} come il server legge il suo all'avvio: un
+     * {@code DimensionDataStorage} nuovo su quella cartella e la factory della mod, con il ripiego sulla copia
+     * precedente se il file non si legge. Da' il registro letto come lo scriverebbe il salvataggio, o vuoto se e'
+     * rimasto in sola lettura (nulla si e' potuto leggere). Non tocca il registro del server. Esiste solo per i test.
+     */
+    Optional<CompoundTag> readRegistry(MinecraftServer server, Path dataFolder);
+
+    /**
+     * Vero se il registro del server ha un cambio strutturale (un telaio piazzato, indossato, lasciato, armatura
+     * stivata...) non ancora scritto sul disco. Esiste solo per i test.
+     */
+    boolean registryChangeUnsaved(MinecraftServer server);
 
     /**
      * True se almeno uno dei controlli che i portali fanno su un'entita' prima di portarla via la accetta, come li fa
