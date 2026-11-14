@@ -18,7 +18,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.EquipmentSlot;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
@@ -139,7 +138,7 @@ public final class FrameEntry {
             if (isOwner) {
                 Handouts.give(player, entry.stack());
             } else {
-                level.addFreshEntity(new ItemEntity(level, spot.x, spot.y, spot.z, entry.stack(), 0.0, 0.0, 0.0));
+                Handouts.dropStill(level, spot, entry.stack());
             }
         }
     }

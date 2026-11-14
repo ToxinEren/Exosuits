@@ -152,7 +152,8 @@ public final class ExoframeGameTests {
         add(tests, "mountPieceAndCellByHand", ExoframeGameTests::mountPieceAndCellByHand);
         add(tests, "secondArmGoesToTheFreeSide", ExoframeGameTests::secondArmGoesToTheFreeSide);
         add(tests, "unmountByHeightThenCellThenPickUp", ExoframeGameTests::unmountByHeightThenCellThenPickUp);
-        add(tests, "unmountWithFullInventoryDropsThePiece", ExoframeGameTests::unmountWithFullInventoryDropsThePiece);
+        add(tests, "fullInventoryOverflowStaysOnTheGround", ExoframeGameTests::fullInventoryOverflowStaysOnTheGround);
+        add(tests, "unmountTakesTheClickedArmThenTheCell", ExoframeGameTests::unmountTakesTheClickedArmThenTheCell);
         add(tests, "strangerCannotTouchALockedFrame", ExoframeGameTests::strangerCannotTouchALockedFrame);
         add(tests, "unlockedFrameIsOpenToAll", ExoframeGameTests::unlockedFrameIsOpenToAll);
         add(tests, "unmountedPieceKeepsDurabilityAndColours",
@@ -818,9 +819,16 @@ public final class ExoframeGameTests {
         frame.setSummary(SuitSummary.BARE);
         helper.assertTrue(frame.summary().equals(SuitSummary.BARE), "bare summary not read back");
 
-        helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
-        frame.discard();
-        helper.succeed();
+        helper.runAfterDelay(2, () -> {
+            helper.assertTrue(!frame.isRemoved() && level.getEntity(frameId) == frame,
+                    "entity with a placed record gone after later ticks");
+            helper.assertTrue(frame.position().distanceTo(spot) < 1e-6 && frame.getYRot() == 45f,
+                    "entity left the record's spot after later ticks: " + frame.position() + " yaw "
+                            + frame.getYRot());
+            helper.assertTrue(frames.removePlaced(server, frameId), "removePlaced refused");
+            frame.discard();
+            helper.succeed();
+        });
     }
 
     /**
@@ -1356,13 +1364,15 @@ public final class ExoframeGameTests {
     }
 
     /**
-     * Con l'inventario pieno nulla si perde: smontare vuole la mano vuota, quindi un solo oggetto entra sempre nella
-     * mano; con tutti gli altri slot pieni, in creativa (dove {@code Inventory.add} cancellerebbe cio' che non entra),
-     * l'armatura stivata riempie la mano e il resto cade ai piedi del giocatore, fermo. Poi, in sopravvivenza, l'elmo
-     * smontato va nella mano con la sua durabilita', e un pezzo dato a un inventario del tutto pieno cade ai piedi
-     * con i suoi dati.
+     * Con l'inventario pieno nulla si perde (smontare vuole la mano vuota, quindi un solo oggetto entra sempre nella
+     * mano). Con tutti gli altri slot pieni, in creativa: l'armatura stivata riempie la mano e il resto (stivali
+     * consumati) cade ai piedi del giocatore, fermo, con il ritardo di raccolta di un oggetto lanciato; il gioco
+     * prova a farglielo raccogliere ({@code playerTouch}, che in creativa con l'inventario pieno lo cancellerebbe) e
+     * gli stivali restano a terra, uguali. Poi, in sopravvivenza, l'elmo smontato va nella mano con la sua
+     * durabilita', e un pezzo dato a un inventario del tutto pieno cade ai piedi con i suoi dati. Qualche tick dopo,
+     * con il giocatore di nuovo in creativa che fa il suo tick, entrambi sono ancora a terra.
      */
-    private static void unmountWithFullInventoryDropsThePiece(GameTestHelper helper) {
+    private static void fullInventoryOverflowStaysOnTheGround(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
         ServerLevel level = helper.getLevel();
         MinecraftServer server = level.getServer();
@@ -1383,8 +1393,10 @@ public final class ExoframeGameTests {
         Vec3 feet = helper.absoluteVec(new Vec3(3.5, 1.0, 3.5));
         UUID frameId = frames.place(level, state, feet, 0f);
         helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        ItemStack boots = new ItemStack(Items.IRON_BOOTS);
+        boots.setDamageValue(7);
         frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET)),
-                new StowedStack(EquipmentSlot.FEET, new ItemStack(Items.IRON_BOOTS))));
+                new StowedStack(EquipmentSlot.FEET, boots.copy())));
         helper.assertTrue(frames.exit(player, level, feet, 0f).isPresent(), "exit refused");
         ExoframeEntity frame = spawnFrame(level, frameId, feet, 0f);
         player.setShiftKeyDown(true);
@@ -1392,7 +1404,9 @@ public final class ExoframeGameTests {
         player.setGameMode(GameType.CREATIVE);
         click(frame, player, 0.0, 2.5, 0.0);
         helper.assertTrue(player.getMainHandItem().is(Items.IRON_HELMET), "first stowed stack not in the free hand");
-        assertDroppedAtFeet(helper, player, Items.IRON_BOOTS).discard();
+        ItemEntity droppedBoots = assertDroppedAtFeet(helper, player, Items.IRON_BOOTS);
+        droppedBoots.playerTouch(player);
+        assertStillOnTheGround(helper, droppedBoots, boots, "creative pick up in the tick of the hand-out");
 
         player.setGameMode(GameType.SURVIVAL);
         player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
@@ -1405,11 +1419,59 @@ public final class ExoframeGameTests {
         ItemStack leg = PieceItem.fromPiece(scrapPiece(PieceSlot.LEFT_LEG), List.of(ModuleType.NIGHT_VISION),
                 new Appearance(0x00FF00, Appearance.UNPAINTED, List.of()));
         Handouts.give(player, leg);
-        ItemEntity dropped = assertDroppedAtFeet(helper, player, ModItems.SCRAP_LEG.get());
-        helper.assertTrue(ItemStack.matches(leg, dropped.getItem()), "dropped leg lost its data");
-        dropped.discard();
+        ItemEntity droppedLeg = assertDroppedAtFeet(helper, player, ModItems.SCRAP_LEG.get());
+        assertStillOnTheGround(helper, droppedLeg, leg, "leg given to a full inventory");
         helper.assertTrue(countInMainInventory(player, Items.DIRT) == (items.size() - 1) * 64,
                 "inventory contents changed");
+        removeFrame(server, frame);
+
+        player.setGameMode(GameType.CREATIVE);
+        helper.runAfterDelay(5, () -> {
+            player.doTick();
+            droppedBoots.playerTouch(player);
+            droppedLeg.playerTouch(player);
+            assertStillOnTheGround(helper, droppedBoots, boots, "boots after 5 ticks beside a creative player");
+            assertStillOnTheGround(helper, droppedLeg, leg, "leg after 5 ticks beside a creative player");
+            droppedBoots.discard();
+            droppedLeg.discard();
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Accovacciati, su un telaio con yaw 0 e le due braccia montate: un clic a -X (la destra del telaio) nella fascia
+     * di mezzo toglie il braccio destro e lascia il sinistro; un clic sulla testa, fascia vuota con altri pezzi ancora
+     * montati, toglie la cella e lascia i pezzi; un altro clic li', senza cella, non fa nulla.
+     */
+    private static void unmountTakesTheClickedArmThenTheCell(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameState state = ownedBy(player);
+        state.mount(scrapPiece(PieceSlot.LEFT_ARM));
+        state.mount(scrapPiece(PieceSlot.RIGHT_ARM));
+        state.mount(scrapPiece(PieceSlot.LEFT_LEG));
+        state.insertCell(new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, 300));
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(3.5, 1.0, 3.5), 0f);
+        player.setShiftKeyDown(true);
+
+        click(frame, player, -0.4, 1.6, 0.0);
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.LEFT_ARM, PieceSlot.LEFT_LEG)),
+                "click on the right side did not take the right arm: " + state.pieces().keySet());
+        helper.assertTrue(countInMainInventory(player, ModItems.SCRAP_ARM.get()) == 1, "right arm not given");
+
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(state.cell() == null && countInMainInventory(player, ModItems.REDSTONE_CELL.get()) == 1,
+                "empty head band did not take the cell");
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.LEFT_ARM, PieceSlot.LEFT_LEG)),
+                "taking the cell changed the pieces: " + state.pieces().keySet());
+
+        click(frame, player, 0.0, 2.5, 0.0);
+        helper.assertTrue(state.pieces().size() == 2 && !frame.isRemoved()
+                && Compat.frameState().placed(server, frame.frameId()).isPresent(),
+                "a click on an empty band with no cell changed the frame");
+        helper.assertTrue(countInMainInventory(player, ModItems.SCRAP_ARM.get()) == 1
+                && countInMainInventory(player, ModItems.EXOFRAME.get()) == 0, "a click on nothing gave something");
         removeFrame(server, frame);
         helper.succeed();
     }
@@ -1821,6 +1883,15 @@ public final class ExoframeGameTests {
                 && drop.getDeltaMovement().equals(Vec3.ZERO), "dropped " + item + " not lying at the feet: "
                 + drop.position() + " moving " + drop.getDeltaMovement() + ", feet " + player.position());
         return drop;
+    }
+
+    /** L'oggetto a terra c'e' ancora, con uno stack uguale a quello atteso (dati compresi). */
+    private static void assertStillOnTheGround(GameTestHelper helper, ItemEntity drop, ItemStack expected,
+            String when) {
+        helper.assertTrue(!drop.isRemoved() && helper.getLevel().getEntity(drop.getUUID()) == drop,
+                "dropped " + expected + " gone (" + when + ")");
+        helper.assertTrue(ItemStack.matches(expected, drop.getItem()),
+                "dropped stack changed (" + when + "): " + drop.getItem() + ", expected " + expected);
     }
 
     /** Uno stato vuoto con il giocatore come proprietario. */

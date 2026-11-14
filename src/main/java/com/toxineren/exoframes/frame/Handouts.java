@@ -5,12 +5,21 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * Consegna al giocatore di cio' che gli torna da un telaio (pezzi, celle, armatura stivata, il telaio stesso): mai
  * perso, in nessuna modalita' di gioco.
+ * <p>
+ * Cio' che la mod lascia a terra ({@link #dropStill}) ha il ritardo di raccolta di un oggetto lanciato, cosi' nessuno
+ * lo raccoglie, o lo cancella, nel tick in cui arriva; che poi un giocatore in creativa con l'inventario del tutto
+ * pieno, passandoci sopra, lo cancelli e' la regola vanilla della creativa, e resta.
  */
 public final class Handouts {
+    /** Il ritardo di raccolta, in tick, che {@code Player.drop} da' a un oggetto lanciato (40 su 1.20.1 e 1.21.1). */
+    public static final int PICKUP_DELAY = 40;
+
     private Handouts() {
     }
 
@@ -35,10 +44,28 @@ public final class Handouts {
         }
         inventory.setChanged();
         if (!rest.isEmpty()) {
-            ItemEntity dropped = new ItemEntity(player.level(), player.getX(), player.getY(), player.getZ(), rest,
-                    0.0, 0.0, 0.0);
-            player.level().addFreshEntity(dropped);
+            dropStill(player.level(), player.position(), rest);
         }
+    }
+
+    /**
+     * Lascia lo stack a terra nel punto dato: un oggetto fermo (non lanciato), con il ritardo di raccolta
+     * {@link #PICKUP_DELAY}. Lo stack passa all'oggetto a terra cosi' com'e', dati compresi. Uno stack vuoto non fa
+     * nulla e da' null.
+     *
+     * @return l'oggetto a terra aggiunto al livello, o null per uno stack vuoto
+     */
+    public static ItemEntity dropStill(Level level, Vec3 spot, ItemStack stack) {
+        Objects.requireNonNull(level, "level must not be null");
+        Objects.requireNonNull(spot, "spot must not be null");
+        Objects.requireNonNull(stack, "stack must not be null");
+        if (stack.isEmpty()) {
+            return null;
+        }
+        ItemEntity dropped = new ItemEntity(level, spot.x, spot.y, spot.z, stack, 0.0, 0.0, 0.0);
+        dropped.setPickUpDelay(PICKUP_DELAY);
+        level.addFreshEntity(dropped);
+        return dropped;
     }
 
     /**
