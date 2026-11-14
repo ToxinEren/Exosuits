@@ -23,5 +23,8 @@
   "message.redstone_exoframes.slot_taken": "That slot is already taken",
   "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell",
   "message.redstone_exoframes.already_inside": "You are already inside an exoframe",
-  "message.redstone_exoframes.holds_armor": "This exoframe still holds armor: take it out first (sneak and right-click)"
+  "message.redstone_exoframes.holds_armor": "This exoframe still holds armor: take it out first (sneak and right-click)",
+  "key.redstone_exoframes.exit": "Leave the exoframe",
+  "key.categories.redstone_exoframes": "Redstone Exoframes",
+  "message.redstone_exoframes.exit_hold": "Hold to leave the exoframe… %s%%"
 }

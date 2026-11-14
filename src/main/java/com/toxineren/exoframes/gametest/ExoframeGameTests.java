@@ -164,6 +164,11 @@ public final class ExoframeGameTests {
         add(tests, "secondEnterOnSameFrameFails", ExoframeGameTests::secondEnterOnSameFrameFails);
         add(tests, "ownerGetsBackArmorLeftInTheFrame", ExoframeGameTests::ownerGetsBackArmorLeftInTheFrame);
         add(tests, "strangerCannotEnterAFrameHoldingArmor", ExoframeGameTests::strangerCannotEnterAFrameHoldingArmor);
+        add(tests, "exitReturnsArmorAndLeavesTheFrame", ExoframeGameTests::exitReturnsArmorAndLeavesTheFrame);
+        add(tests, "exitWithFullInventoryDropsArmor", ExoframeGameTests::exitWithFullInventoryDropsArmor);
+        add(tests, "exitInMidAirPutsTheFrameOnTheGround", ExoframeGameTests::exitInMidAirPutsTheFrameOnTheGround);
+        add(tests, "exitWithoutAFrameDoesNothing", ExoframeGameTests::exitWithoutAFrameDoesNothing);
+        add(tests, "enterExitAndEnterAgainKeepTheFrame", ExoframeGameTests::enterExitAndEnterAgainKeepTheFrame);
         return tests;
     }
 
@@ -1771,6 +1776,206 @@ public final class ExoframeGameTests {
         leaveTestFrame(stranger);
         frames.takeStowedOfPlaced(server, ownerless.frameId());
         removeFrame(server, ownerless);
+        helper.succeed();
+    }
+
+    /**
+     * L'uscita (design, par. 5.5): l'elmo stivato torna in testa con la sua durabilita', in silenzio (nessun evento
+     * EQUIP); i segnaposto spariscono dagli slot armatura, dall'inventario principale, dalla mano secondaria e dal
+     * cursore; il record e' piazzato ai piedi del giocatore con il suo yaw riportato a [-180, 180), l'entita' c'e', nel
+     * punto e con il riassunto dello stato; il giocatore resta dov'e' e ha subito la grandezza vanilla.
+     */
+    private static void exitReturnsArmorAndLeavesTheFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        helper.setBlock(new BlockPos(4, 1, 4), Blocks.STONE);
+        player.doTick(); // dopo il primo tick onEquipItem non tace piu' per firstTick
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        FrameState state = charged(ownedBy(player));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(4.5, 2.0, 4.5), 30f);
+        UUID frameId = frame.frameId();
+        helper.assertTrue(FrameEntry.enter(player, frame), "enter refused");
+        player.setYRot(200f);
+        player.getInventory().items.set(5, new ItemStack(ModItems.EXOFRAME_LEGS.get()));
+        player.getInventory().offhand.set(0, new ItemStack(ModItems.EXOFRAME_BOOTS.get()));
+        player.containerMenu.setCarried(new ItemStack(ModItems.EXOFRAME_HELMET.get()));
+        Vec3 feet = player.position();
+
+        try (GameTests.EquipEventCounter equips = Compat.gameTests().countEquipEvents(level,
+                BlockPos.containing(feet))) {
+            helper.assertTrue(FrameEntry.exit(player), "exit refused");
+            helper.assertTrue(equips.count() == 0, "leaving emitted " + equips.count() + " equip events");
+        }
+
+        ItemStack head = player.getItemBySlot(EquipmentSlot.HEAD);
+        helper.assertTrue(ItemStack.matches(helmet, head) && head.getDamageValue() == 5,
+                "helmet not back on the head: " + head);
+        helper.assertTrue(countPlaceholders(player) == 0 && !DebugWear.isPlaceholder(player.containerMenu.getCarried()),
+                "placeholders left on the player");
+        helper.assertTrue(frames.wornFrameId(player).isEmpty() && frames.get(player).isEmpty(),
+                "frame still worn after exit");
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.state() == state && record.position().equals(feet)
+                && record.yaw() == -160f && record.dimension().equals(level.dimension()) && !record.hasStowed(),
+                "frame not placed at the player's feet: " + record + ", feet " + feet);
+        helper.assertTrue(level.getEntity(frameId) instanceof ExoframeEntity view && !view.isRemoved()
+                && view.position().equals(feet) && view.getYRot() == -160f
+                && view.summary().equals(SuitSummary.of(state)), "frame entity missing or wrong: "
+                + level.getEntity(frameId));
+        helper.assertTrue(player.position().equals(feet), "player moved to " + player.position());
+        assertSize(helper, player, "after exit", 0.6f, 1.8f, 1.62f, 1.27f);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Uscire con lo slot della testa occupato da un elmo vero (al posto del segnaposto) e l'inventario pieno: l'elmo
+     * del giocatore resta in testa, l'elmo stivato e' a terra ai piedi, intero, e ci resta (anche accanto a un
+     * giocatore in creativa che fa il suo tick); l'inventario non cambia.
+     */
+    private static void exitWithFullInventoryDropsArmor(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        helper.setBlock(new BlockPos(2, 1, 5), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(2.5, 2.0, 5.5));
+        player.moveTo(feet.x, feet.y, feet.z, 0f, 0f);
+        player.setGameMode(GameType.CREATIVE);
+        FrameState state = charged(ownedBy(player));
+        UUID frameId = frames.place(level, state, feet, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        ItemStack stowed = new ItemStack(Items.IRON_HELMET);
+        stowed.setDamageValue(5);
+        frames.stow(player, List.of(new StowedStack(EquipmentSlot.HEAD, stowed.copy())));
+        FrameEntry.dress(player, SuitSummary.of(state));
+        player.getInventory().armor.set(EquipmentSlot.HEAD.getIndex(), new ItemStack(Items.GOLDEN_HELMET));
+        List<ItemStack> items = player.getInventory().items;
+        for (int i = 0; i < items.size(); i++) {
+            items.set(i, new ItemStack(Items.DIRT, 64));
+        }
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(Items.GOLDEN_HELMET),
+                "the player's own helmet left the head: " + player.getItemBySlot(EquipmentSlot.HEAD));
+        helper.assertTrue(countPlaceholders(player) == 0, "placeholders left on the player");
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == items.size() * 64, "inventory contents changed");
+        ItemEntity drop = assertDroppedAtFeet(helper, player, Items.IRON_HELMET);
+        assertStillOnTheGround(helper, drop, stowed, "stowed helmet given to a full inventory");
+        helper.assertTrue(frames.placed(server, frameId).isPresent(), "frame not placed after exit");
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+
+        helper.runAfterDelay(5, () -> {
+            player.doTick();
+            drop.playerTouch(player);
+            assertStillOnTheGround(helper, drop, stowed, "after 5 ticks beside a creative player");
+            drop.discard();
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Uscire a mezz'aria: il record e l'entita' nascono sul suolo sotto il giocatore, con il suo yaw; il giocatore
+     * resta dov'e'.
+     */
+    private static void exitInMidAirPutsTheFrameOnTheGround(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        Vec3 ground = helper.absoluteVec(new Vec3(3.5, 2.0, 3.5));
+        Vec3 air = helper.absoluteVec(new Vec3(3.5, 5.0, 3.5));
+        FrameState state = charged(ownedBy(player));
+        UUID frameId = frames.place(level, state, ground, 0f);
+        helper.assertTrue(frameId != null && frames.enter(player, frameId), "place or enter refused");
+        FrameEntry.dress(player, SuitSummary.of(state));
+        player.moveTo(air.x, air.y, air.z, 45f, 0f);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.position().equals(ground) && record.yaw() == 45f,
+                "frame not placed on the ground below: " + record + ", ground " + ground);
+        helper.assertTrue(level.getEntity(frameId) instanceof ExoframeEntity view && view.position().equals(ground),
+                "frame entity not on the ground: " + level.getEntity(frameId));
+        helper.assertTrue(player.position().equals(air), "player moved to " + player.position());
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Chi non indossa un telaio e chiede di uscire non cambia nulla: l'elmo resta in testa, il segnaposto che ha
+     * nell'inventario resta li', nessun telaio nasce ai suoi piedi.
+     */
+    private static void exitWithoutAFrameDoesNothing(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        helper.setBlock(new BlockPos(6, 1, 6), Blocks.STONE);
+        Vec3 feet = helper.absoluteVec(new Vec3(6.5, 2.0, 6.5));
+        player.moveTo(feet.x, feet.y, feet.z, 0f, 0f);
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        player.getInventory().items.set(3, new ItemStack(ModItems.EXOFRAME_TORSO.get()));
+
+        helper.assertTrue(!FrameEntry.exit(player), "exit without a frame reported true");
+
+        helper.assertTrue(Compat.frameState().wornFrameId(player).isEmpty(), "player has a worn record");
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET)
+                && player.getInventory().items.get(3).is(ModItems.EXOFRAME_TORSO.get()), "player's inventory changed");
+        assertNothingPlacedAt(helper, feet);
+        helper.succeed();
+    }
+
+    /**
+     * Entrare, uscire ed entrare di nuovo: e' sempre lo stesso telaio (stessa identita', stessi pezzi, stessa cella
+     * con la stessa carica), e fra le due volte l'armatura del giocatore e' di nuovo su di lui, nei suoi slot.
+     */
+    private static void enterExitAndEnterAgainKeepTheFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        helper.setBlock(new BlockPos(5, 1, 2), Blocks.STONE);
+        ItemStack helmet = new ItemStack(Items.IRON_HELMET);
+        helmet.setDamageValue(5);
+        ItemStack boots = new ItemStack(Items.IRON_BOOTS);
+        player.setItemSlot(EquipmentSlot.HEAD, helmet.copy());
+        player.setItemSlot(EquipmentSlot.FEET, boots.copy());
+        FrameState state = charged(ownedBy(player));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        EnergyCell cell = state.cell();
+        ExoframeEntity frame = placeFrame(helper, state, new Vec3(5.5, 2.0, 2.5), 0f);
+        UUID frameId = frame.frameId();
+
+        helper.assertTrue(FrameEntry.enter(player, frame), "first enter refused");
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        helper.assertTrue(ItemStack.matches(helmet, player.getItemBySlot(EquipmentSlot.HEAD))
+                && ItemStack.matches(boots, player.getItemBySlot(EquipmentSlot.FEET))
+                && player.getItemBySlot(EquipmentSlot.CHEST).isEmpty()
+                && player.getItemBySlot(EquipmentSlot.LEGS).isEmpty(), "own armor not back in its slots");
+        helper.assertTrue(countPlaceholders(player) == 0, "placeholders left on the player");
+        PlacedFrame record = frames.placed(server, frameId).orElse(null);
+        helper.assertTrue(record != null && record.state() == state && !record.hasStowed(),
+                "frame not placed again with the same state: " + record);
+        helper.assertTrue(level.getEntity(frameId) instanceof ExoframeEntity, "no frame entity after exit");
+
+        helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) level.getEntity(frameId)), "second enter refused");
+        helper.assertTrue(Optional.of(frameId).equals(frames.wornFrameId(player)), "another frame worn");
+        FrameState worn = frames.get(player).orElseThrow();
+        helper.assertTrue(worn == state && worn.pieces().keySet().equals(EnumSet.of(PieceSlot.TORSO, PieceSlot.HELMET))
+                && worn.cell() == cell && cell.stored() == cell.capacity() / 2,
+                "pieces or cell changed: " + worn.pieces().keySet() + ", " + worn.cell());
+        assertPlaceholdersWorn(helper, player);
+        List<StowedStack> stowed = frames.takeStowed(player);
+        helper.assertTrue(stowed.size() == 2, "expected helmet and boots stowed again, got " + stowed);
+        leaveTestFrame(player);
         helper.succeed();
     }
 

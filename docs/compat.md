@@ -185,7 +185,8 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 | `ArmorMaterial` enum → record registrato `Holder<ArmorMaterial>` con layer; `ArmorItem(Holder, Type, Properties)` | `ArmorMaterials` |
 | `ArmorMaterial.getName()` con namespace rompe `HumanoidArmorLayer` su Fabric 1.20.1 | `ArmorMaterials` (nome `redstone_exoframes_frame`, senza namespace, su 1.20.1) |
 | `FriendlyByteBuf` encode/decode → `CustomPacketPayload` + `StreamCodec` | `Net` + `PacketCodec` |
-| Pacchetti C2S `redstone_exoframes:module_toggle`, `frame_exit`, `cell_swap` | Rinviati (M3/M4): arriveranno con i consumatori, validati sul server con `Compat.frameState()` (regola 5) |
+| Pacchetto C2S `redstone_exoframes:frame_exit` | `Net` + `PacketCodec`: `FrameExitPacket`, senza contenuto, registrato con il suo gestore in `FrameEntry` (Milestone 3b); il server decide solo da chi lo manda e dal registro (`Compat.frameState()`, regola 5) |
+| Pacchetti C2S `redstone_exoframes:module_toggle`, `cell_swap` | Rinviati (M3/M4): arriveranno con i consumatori, validati sul server con `Compat.frameState()` (regola 5) |
 | Extra data dei menu (restano `FriendlyByteBuf` con `MenuRegistry` di Architectury) | — (nessuna interfaccia; arriva con la stazione) |
 | `AttributeModifier` UUID → `ResourceLocation`, nomi delle operazioni, `removeModifier`, `Attributes.*` come `Holder` | `FrameAttributes` (l'audit la chiamava `Attributes`) |
 | `SavedData.save` con `HolderLookup.Provider`; `DimensionDataStorage.computeIfAbsent` con `SavedData.Factory` (non nell'audit) | `FrameStateAccess` (`FrameStateSavedData`) |

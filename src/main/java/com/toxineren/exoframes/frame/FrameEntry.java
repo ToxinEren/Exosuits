@@ -13,18 +13,22 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * L'ingresso in un telaio piazzato (design §5.5): il record passa da piazzato a indossato, l'armatura del giocatore si
- * stiva nel record, i quattro segnaposto vanno negli slot armatura e l'entita' sparisce, tutto nello stesso tick. Il
- * registro e' la verita' (§4.5): ogni effetto sul giocatore e sul mondo segue l'esito di
- * {@link FrameStateAccess#enter}, e nulla (telaio, armatura, segnaposto) si perde o si duplica.
+ * L'ingresso in un telaio piazzato e l'uscita (design §5.5). Entrando il record passa da piazzato a indossato,
+ * l'armatura del giocatore si stiva nel record, i quattro segnaposto vanno negli slot armatura e l'entita' sparisce;
+ * uscendo i segnaposto se ne vanno, l'armatura torna al giocatore, il record torna piazzato ai suoi piedi e l'entita'
+ * rinasce; ogni volta tutto nello stesso tick. Il registro e' la verita' (§4.5): ogni effetto sul giocatore e sul mondo
+ * segue l'esito di {@link FrameStateAccess#enter} e {@link FrameStateAccess#exit}, e nulla (telaio, armatura,
+ * segnaposto) si perde o si duplica. Qui sta anche il pacchetto C2S dell'uscita ({@link #registerNet()}).
  */
 public final class FrameEntry {
     /** Messaggio sulla barra delle azioni quando il telaio non ha una cella con carica. */
@@ -110,6 +114,71 @@ public final class FrameEntry {
         frame.discard();
         player.refreshDimensions();
         return true;
+    }
+
+    /**
+     * Toglie il giocatore dal telaio che indossa, sul server (design, par. 5.5), tutto nello stesso tick. Se non ne
+     * indossa uno non tocca nulla e da' falso. Altrimenti, in quest'ordine:
+     * <ol>
+     * <li>il punto e' il suolo sotto la posizione del giocatore ({@link FramePlacement#groundBelow}), o la sua
+     * posizione se sotto non c'e' suolo;</li>
+     * <li>tutti i segnaposto lasciano il giocatore, in silenzio: slot armatura, inventario principale, mano secondaria
+     * ({@link DebugWear#remove}) e lo stack tenuto sul cursore; uno stack vero in uno slot armatura resta dov'e';</li>
+     * <li>l'armatura stivata esce dal record ({@link FrameStateAccess#takeStowed}) e ogni stack torna nel suo slot se e'
+     * vuoto, in silenzio, altrimenti va al giocatore con {@link Handouts#give}: cio' che esce dal record gli e' gia'
+     * restituito prima che succeda altro;</li>
+     * <li>{@link FrameStateAccess#exit} nel livello del giocatore, nel punto, con il suo yaw riportato a [-180, 180)
+     * come per l'oggetto telaio;</li>
+     * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}) e le dimensioni del giocatore ricalcolate
+     * subito.</li>
+     * </ol>
+     * Il giocatore resta dov'e'. Se {@link FrameStateAccess#exit} rifiuta (non dovrebbe: il giocatore indossa un
+     * telaio) non succede altro, il giocatore tiene cio' che ha riavuto, e il risultato e' falso.
+     *
+     * @return true se il giocatore e' uscito e il telaio e' piazzato
+     */
+    public static boolean exit(ServerPlayer player) {
+        Objects.requireNonNull(player, "player must not be null");
+        FrameStateAccess frames = Compat.frameState();
+        if (frames.wornFrameId(player).isEmpty()) {
+            return false;
+        }
+        ServerLevel level = player.serverLevel();
+        Vec3 here = player.position();
+        Vec3 spot = FramePlacement.groundBelow(level, here).orElse(here);
+
+        DebugWear.remove(player);
+        if (DebugWear.isPlaceholder(player.containerMenu.getCarried())) {
+            player.containerMenu.setCarried(ItemStack.EMPTY);
+        }
+        for (StowedStack entry : frames.takeStowed(player)) {
+            EquipmentSlot slot = entry.slot();
+            if (DebugWear.ARMOR_SLOTS.contains(slot) && player.getItemBySlot(slot).isEmpty()) {
+                setArmorSlot(player, slot, entry.stack());
+            } else {
+                Handouts.give(player, entry.stack());
+            }
+        }
+
+        Optional<UUID> frameId = frames.exit(player, level, spot, Mth.wrapDegrees(player.getYRot()));
+        if (frameId.isEmpty()) {
+            return false;
+        }
+        PlacedFrame record = frames.placed(level.getServer(), frameId.get()).orElseThrow(
+                () -> new IllegalStateException("placed frame " + frameId.get() + " not found after exit"));
+        FramePlacement.spawnView(level, record);
+        player.refreshDimensions();
+        return true;
+    }
+
+    /**
+     * Registra il pacchetto di uscita ({@link FrameExitPacket}) e il suo gestore, che chiama {@link #exit} per chi lo
+     * manda: a chi non indossa un telaio non succede nulla e non si dice nulla. Una volta, nell'init comune, su
+     * entrambi i lati.
+     */
+    public static void registerNet() {
+        Compat.net().registerC2S(FrameExitPacket.ID, FrameExitPacket.class, FrameExitPacket.CODEC,
+                (packet, player) -> exit(player));
     }
 
     /**

@@ -7,7 +7,6 @@ import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.client.SuitView;
 import com.toxineren.exoframes.entity.ExoframeEntity;
-import com.toxineren.exoframes.frame.SuitSize;
 import java.util.Map;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -28,12 +27,19 @@ import net.minecraft.world.entity.LivingEntity;
  * il corpo di un'entita' viva: i piedi della tuta stanno sul blocco e la tuta e' alta quanto quella indossata da un
  * giocatore in piedi accanto. Nessun sollevamento da annullare: il telaio non ha pilota.
  * <p>
- * L'ombra e' rotonda, larga quanto l'entita'. Il culling usa il riquadro allargato dell'entita'
+ * L'ombra e' rotonda e ha il raggio di quella del giocatore vanilla ({@link #SHADOW_RADIUS}), cosi' entrare e uscire
+ * da un telaio non la cambia. Il culling usa il riquadro allargato dell'entita'
  * ({@link ExoframeEntity#getBoundingBoxForCulling}), che {@code EntityRenderer.shouldRender} legge sulle due versioni.
  */
 public final class ExoframeEntityRenderer extends EntityRenderer<ExoframeEntity> {
     /** La scala del modello del giocatore in {@code PlayerRenderer.scale}: la tuta indossata la riceve con il giocatore. */
     private static final float PLAYER_MODEL_SCALE = 0.9375f;
+
+    /**
+     * Il raggio dell'ombra: quello del giocatore vanilla ({@code PlayerRenderer}), che la tuta indossata non cambia.
+     * Un'ombra piu' grande per entrambi e' una scelta di grafica successiva.
+     */
+    private static final float SHADOW_RADIUS = 0.5f;
 
     private static final ResourceLocation TEXTURE = Ids.of("textures/entity/exoframe.png");
 
@@ -52,7 +58,7 @@ public final class ExoframeEntityRenderer extends EntityRenderer<ExoframeEntity>
         this.restPose = new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER));
         // I modelli nascono "giovani": GeckoLib copia il segno e rimpicciolirebbe la tuta come quella di un cucciolo.
         this.restPose.young = false;
-        this.shadowRadius = SuitSize.WIDTH / 2f;
+        this.shadowRadius = SHADOW_RADIUS;
         SuitDraw.resetFailureLog();
     }
 

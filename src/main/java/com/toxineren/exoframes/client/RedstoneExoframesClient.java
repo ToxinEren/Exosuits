@@ -17,5 +17,6 @@ public final class RedstoneExoframesClient {
         Compat.frameState().registerClient();
         ClientCompat.renderHooks().addPlayerLayer(SuitLayer::new);
         EntityRendererRegistry.register(ModEntities.EXOFRAME, ExoframeEntityRenderer::new);
+        ExitKey.register();
     }
 }

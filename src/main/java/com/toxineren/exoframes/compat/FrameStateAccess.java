@@ -23,8 +23,9 @@ import net.minecraft.world.phys.Vec3;
  * Sincronizzazione: il server e' l'unica autorita'. Ogni giocatore riceve solo il proprio stato, intero, con un
  * pacchetto S2C: all'ingresso nel mondo, al respawn, dopo ogni {@link #update} e dopo {@link #clear} (stato
  * assente). Il client conserva l'ultima copia ricevuta finche' non esce dal mondo. Le modifiche avvengono solo sul
- * server con i metodi di scrittura ({@link #update}, {@link #mutate}, {@link #clear}); non esistono ancora pacchetti
- * C2S (arrivano con i loro consumatori).
+ * server con i metodi di scrittura ({@link #update}, {@link #mutate}, {@link #clear}). I pacchetti C2S non portano
+ * stato: chiedono un'azione (l'uscita dal telaio, {@code frame_exit}, senza contenuto), e il server decide solo in base
+ * a chi li manda e a questo registro.
  * <p>
  * Modifiche ad alta frequenza (per esempio il consumo di energia a ogni tick): {@link #mutate} segna il dato come da
  * salvare senza sincronizzare, e il chiamante invia lo stato con {@link #syncTo} al proprio ritmo (al massimo 4-5
