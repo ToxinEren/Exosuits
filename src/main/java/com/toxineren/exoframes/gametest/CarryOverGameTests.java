@@ -8,6 +8,7 @@ import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.configfile.ConfigFile;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
@@ -89,6 +90,7 @@ public final class CarryOverGameTests {
         add(tests, "exitAvoidsABoatBelowTheSpot", CarryOverGameTests::exitAvoidsABoatBelowTheSpot);
         add(tests, "exitAvoidsAMinecartBelowTheSpot", CarryOverGameTests::exitAvoidsAMinecartBelowTheSpot);
         add(tests, "exitRefusedOverAnotherFrame", CarryOverGameTests::exitRefusedOverAnotherFrame);
+        add(tests, "configFileExists", CarryOverGameTests::configFileExists);
         return tests;
     }
 
@@ -560,6 +562,20 @@ public final class CarryOverGameTests {
         helper.assertTrue(FrameEntry.exit(player), "exit refused once the spot is free");
         helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), "stowed helmet lost");
         removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il file di config esiste nella cartella di config del gioco e la config in uso e' quella dei predefiniti (design
+     * §12.9): {@code tools/run_gametests.sh} toglie il file prima di ogni variante e la mod lo riscrive all'avvio, in
+     * testa a {@code RedstoneExoframes.init()}; i numeri attesi di tutti i test sono quelli dei predefiniti.
+     */
+    private static void configFileExists(GameTestHelper helper) {
+        Path file = Compat.platform().configDir().resolve(ConfigFile.FILE_NAME);
+        helper.assertTrue(Files.isRegularFile(file), "config file missing: " + file);
+        helper.assertTrue(RedstoneExoframes.config().energy.cellCapacity == 10_000
+                        && RedstoneExoframes.config().energy.chargerRePerSecond == 50,
+                "config in use is not the defaults");
         helper.succeed();
     }
 }

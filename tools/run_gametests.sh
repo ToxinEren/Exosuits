@@ -6,6 +6,8 @@
 # comunque con 0, e un test perso nella registrazione non deve passare inosservato. Passa inoltre solo se nel log non
 # c'e' nessun avviso o errore del mod (o di vanilla che nomina il telaio) fuori dall'elenco di quelli voluti,
 # tools/log_allowlist.txt, letto da tools/check_log.py con la variante (--variant), che decide i conteggi per loader.
+# Prima di ogni variante toglie il file di config versions/<variante>/run-gametest/config/redstone_exoframes.json:
+# la mod lo riscrive con i predefiniti all'avvio, e i numeri attesi dei test sono quelli dei predefiniti.
 # Il log di ogni variante resta in versions/<variante>/build/gametest/server.log.
 set -u
 
@@ -28,6 +30,7 @@ fail=0
 for v in "${variants[@]}"; do
     log="versions/$v/build/gametest/server.log"
     mkdir -p "$(dirname "$log")"
+    rm -f "versions/$v/run-gametest/config/redstone_exoframes.json"
     ./gradlew --console=plain ":$v:runGameTestServer" 2>&1 | tee "$log"
     code=${PIPESTATUS[0]}
     passed=$(grep -oE 'All [0-9]+ required tests passed' "$log" | tail -n 1 | grep -oE '[0-9]+' || true)

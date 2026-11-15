@@ -7,8 +7,9 @@ import java.util.EnumMap;
 
 /**
  * Configurazione del mod: POJO con campi pubblici, una sezione annidata per area. Ogni costruttore senza
- * argomenti contiene i valori di specifica; la lettura/scrittura da file spetta a platform/. Le istanze
- * sono mutabili: per ottenere valori sicuri passare da {@link ConfigValidation#validate(ExoframesConfig)}.
+ * argomenti contiene i valori di specifica; la lettura del file {@code config/redstone_exoframes.json} (e la
+ * scrittura dei predefiniti quando manca) sta in {@code configfile/ConfigFile}, fuori dal core. Le istanze sono
+ * mutabili: per ottenere valori sicuri passare da {@link ConfigValidation#validate(ExoframesConfig)}.
  */
 public final class ExoframesConfig {
 
@@ -37,6 +38,7 @@ public final class ExoframesConfig {
         public double emptySpeedMultiplier = 0.30;
         public double emptyProtectionMultiplier = 0.50;
         public int chargerRePerRedstone = 500;
+        public int chargerRePerSecond = 50;
         public int cellSwapSeconds = 2;
     }
 

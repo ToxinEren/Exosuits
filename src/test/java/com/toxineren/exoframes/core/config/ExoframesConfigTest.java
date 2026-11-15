@@ -28,6 +28,7 @@ class ExoframesConfigTest {
         assertEquals(0.30, cfg.energy.emptySpeedMultiplier, 1e-9);
         assertEquals(0.50, cfg.energy.emptyProtectionMultiplier, 1e-9);
         assertEquals(500, cfg.energy.chargerRePerRedstone);
+        assertEquals(50, cfg.energy.chargerRePerSecond);
         assertEquals(2, cfg.energy.cellSwapSeconds);
         assertEquals(0.60, cfg.damage.primaryShare, 1e-9);
         assertEquals(0.25, cfg.damage.repairKitFraction, 1e-9);
@@ -164,6 +165,65 @@ class ExoframesConfigTest {
         assertTrue(result.problems().stream().anyMatch(p -> p.contains("energy.chargerRePerRedstone")));
         assertTrue(result.problems().stream().anyMatch(p -> p.contains("tiers.maxDurability.SCRAP")));
         assertTrue(result.problems().stream().anyMatch(p -> p.contains("energy.idlePerSecond")));
+    }
+
+    @Test
+    void upperBoundsFallBackToDefaults() {
+        assertEquals(1_000_000, ConfigValidation.MAX_CELL_CAPACITY);
+        assertEquals(100_000, ConfigValidation.MAX_RATE);
+        assertEquals(1_000_000, ConfigValidation.MAX_RE_PER_REDSTONE);
+        assertEquals(30, ConfigValidation.MAX_HOLD_SECONDS);
+        assertEquals(10.0, ConfigValidation.MAX_MULTIPLIER, 1e-12);
+
+        ExoframesConfig over = ExoframesConfig.defaults();
+        over.energy.cellCapacity = ConfigValidation.MAX_CELL_CAPACITY + 1;
+        over.energy.walkPerSecond = ConfigValidation.MAX_RATE + 1;
+        over.energy.chargerRePerRedstone = ConfigValidation.MAX_RE_PER_REDSTONE + 1;
+        over.frame.exitHoldSeconds = ConfigValidation.MAX_HOLD_SECONDS + 1;
+        over.damage.brokenTorsoConsumptionMultiplier = ConfigValidation.MAX_MULTIPLIER + 0.5;
+        ConfigValidation.ValidationResult result = ConfigValidation.validate(over);
+        assertEquals(10_000, result.normalized().energy.cellCapacity);
+        assertEquals(8, result.normalized().energy.walkPerSecond);
+        assertEquals(500, result.normalized().energy.chargerRePerRedstone);
+        assertEquals(1, result.normalized().frame.exitHoldSeconds);
+        assertEquals(1.25, result.normalized().damage.brokenTorsoConsumptionMultiplier, 1e-12);
+        assertEquals(5, result.problems().size(), result.problems().toString());
+        for (String field : new String[] {"energy.cellCapacity", "energy.walkPerSecond", "energy.chargerRePerRedstone",
+                "frame.exitHoldSeconds", "damage.brokenTorsoConsumptionMultiplier"}) {
+            assertTrue(result.problems().stream().anyMatch(p -> p.startsWith(field)),
+                    field + " " + result.problems());
+        }
+
+        ExoframesConfig atLimit = ExoframesConfig.defaults();
+        atLimit.energy.cellCapacity = ConfigValidation.MAX_CELL_CAPACITY;
+        atLimit.energy.walkPerSecond = ConfigValidation.MAX_RATE;
+        atLimit.energy.chargerRePerRedstone = ConfigValidation.MAX_RE_PER_REDSTONE;
+        atLimit.frame.exitHoldSeconds = ConfigValidation.MAX_HOLD_SECONDS;
+        atLimit.damage.brokenTorsoConsumptionMultiplier = ConfigValidation.MAX_MULTIPLIER;
+        ConfigValidation.ValidationResult kept = ConfigValidation.validate(atLimit);
+        assertTrue(kept.problems().isEmpty(), kept.problems().toString());
+        assertEquals(ConfigValidation.MAX_CELL_CAPACITY, kept.normalized().energy.cellCapacity);
+        assertEquals(ConfigValidation.MAX_RATE, kept.normalized().energy.walkPerSecond);
+        assertEquals(ConfigValidation.MAX_RE_PER_REDSTONE, kept.normalized().energy.chargerRePerRedstone);
+        assertEquals(ConfigValidation.MAX_HOLD_SECONDS, kept.normalized().frame.exitHoldSeconds);
+        assertEquals(ConfigValidation.MAX_MULTIPLIER, kept.normalized().damage.brokenTorsoConsumptionMultiplier, 1e-12);
+    }
+
+    @Test
+    void chargerRePerSecondDefaultsToFifty() {
+        assertEquals(50, ExoframesConfig.defaults().energy.chargerRePerSecond);
+        int[][] cases = {{0, 50, 1}, {ConfigValidation.MAX_RATE + 1, 50, 1}, {70, 70, 0}};
+        for (int[] c : cases) {
+            ExoframesConfig cfg = ExoframesConfig.defaults();
+            cfg.energy.chargerRePerSecond = c[0];
+            ConfigValidation.ValidationResult result = ConfigValidation.validate(cfg);
+            assertEquals(c[1], result.normalized().energy.chargerRePerSecond, "input " + c[0]);
+            assertEquals(c[2], result.problems().size(), "input " + c[0] + " " + result.problems());
+            if (c[2] == 1) {
+                assertTrue(result.problems().get(0).startsWith("energy.chargerRePerSecond"),
+                        result.problems().toString());
+            }
+        }
     }
 
     @Test

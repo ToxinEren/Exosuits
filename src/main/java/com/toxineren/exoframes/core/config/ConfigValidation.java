@@ -24,13 +24,36 @@ import java.util.Map;
  *   <li>quote dei pezzi: ogni quota non finita o negativa torna al default; se la somma e' finita e &gt; 0 ma
  *       diversa da 1 vengono normalizzate a somma 1; se la somma e' 0 o non finita (overflow a +inf con quote
  *       enormi) tornano tutte al default.</li>
+ *   <li>limiti superiori: un valore oltre il limite torna al default (un valore uguale al limite resta);
+ *       capacita' della cella &lt;= {@link #MAX_CELL_CAPACITY}; consumi (energy.idlePerSecond, walkPerSecond,
+ *       sprintPerSecond, jumpCost), RE al secondo del caricatore (energy.chargerRePerSecond, che deve anche essere
+ *       &gt; 0: con 0 il caricatore non caricherebbe) e costi dei moduli &lt;= {@link #MAX_RATE}; RE per redstone
+ *       del caricatore &lt;= {@link #MAX_RE_PER_REDSTONE}; secondi di attesa del cambio cella e dell'uscita
+ *       (energy.cellSwapSeconds, frame.exitHoldSeconds) &lt;= {@link #MAX_HOLD_SECONDS}; moltiplicatore di consumo
+ *       con il torso rotto e moltiplicatori di protezione dei livelli &lt;= {@link #MAX_MULTIPLIER}.</li>
  * </ul>
+ *
+ * <p>I limiti superiori tengono i conti della parte 3c lontani dal trabocco: con questi tetti i prodotti che il
+ * codice calcola (ritmi in millesimi per tick moltiplicati per i moltiplicatori, secondi di attesa in tick, capacita'
+ * e cariche sommate) restano sotto {@code Integer.MAX_VALUE}, e quelli che potrebbero superarlo si calcolano
+ * comunque in {@code long}. Un file scritto a mano con un numero enorme non arriva mai a quei conti.
  *
  * <p>I messaggi sono in inglese (finiscono nei log dei server) e iniziano con il percorso del campo.
  */
 public final class ConfigValidation {
 
     private static final double SHARE_TOLERANCE = 1e-9;
+
+    /** Capacita' massima della cella, in RE. */
+    public static final int MAX_CELL_CAPACITY = 1_000_000;
+    /** Consumo al secondo, costo di un salto o di un modulo, RE al secondo del caricatore: valore massimo. */
+    public static final int MAX_RATE = 100_000;
+    /** RE massimi per una polvere di redstone nel caricatore. */
+    public static final int MAX_RE_PER_REDSTONE = 1_000_000;
+    /** Secondi massimi di attesa per il cambio cella e per l'uscita dal telaio. */
+    public static final int MAX_HOLD_SECONDS = 30;
+    /** Moltiplicatore massimo (consumo con il torso rotto, protezione dei livelli). */
+    public static final double MAX_MULTIPLIER = 10.0;
 
     /** Esito: elenco delle correzioni (vuoto se la config era valida) e la config normalizzata (nuova istanza). */
     public record ValidationResult(List<String> problems, ExoframesConfig normalized) {
@@ -55,18 +78,24 @@ public final class ConfigValidation {
             ExoframesConfig.Energy in = input.energy;
             ExoframesConfig.Energy d = defaults.energy;
             ExoframesConfig.Energy o = out.energy;
-            o.cellCapacity = c.positive("energy.cellCapacity", in.cellCapacity, d.cellCapacity);
-            // Consumi: 0 ammesso. cellCapacity e chargerRePerRedstone restano > 0 (0 non ha senso).
-            o.idlePerSecond = c.nonNegative("energy.idlePerSecond", in.idlePerSecond, d.idlePerSecond);
-            o.walkPerSecond = c.nonNegative("energy.walkPerSecond", in.walkPerSecond, d.walkPerSecond);
-            o.sprintPerSecond = c.nonNegative("energy.sprintPerSecond", in.sprintPerSecond, d.sprintPerSecond);
-            o.jumpCost = c.nonNegative("energy.jumpCost", in.jumpCost, d.jumpCost);
+            o.cellCapacity = c.positive("energy.cellCapacity", in.cellCapacity, d.cellCapacity, MAX_CELL_CAPACITY);
+            // Consumi: 0 ammesso. cellCapacity, chargerRePerRedstone e chargerRePerSecond restano > 0 (0 non ha
+            // senso).
+            o.idlePerSecond = c.nonNegative("energy.idlePerSecond", in.idlePerSecond, d.idlePerSecond, MAX_RATE);
+            o.walkPerSecond = c.nonNegative("energy.walkPerSecond", in.walkPerSecond, d.walkPerSecond, MAX_RATE);
+            o.sprintPerSecond =
+                    c.nonNegative("energy.sprintPerSecond", in.sprintPerSecond, d.sprintPerSecond, MAX_RATE);
+            o.jumpCost = c.nonNegative("energy.jumpCost", in.jumpCost, d.jumpCost, MAX_RATE);
             o.lowThreshold = c.unit("energy.lowThreshold", in.lowThreshold, d.lowThreshold);
             o.emptySpeedMultiplier = c.unit("energy.emptySpeedMultiplier", in.emptySpeedMultiplier, d.emptySpeedMultiplier);
             o.emptyProtectionMultiplier =
                     c.unit("energy.emptyProtectionMultiplier", in.emptyProtectionMultiplier, d.emptyProtectionMultiplier);
-            o.chargerRePerRedstone = c.positive("energy.chargerRePerRedstone", in.chargerRePerRedstone, d.chargerRePerRedstone);
-            o.cellSwapSeconds = c.nonNegative("energy.cellSwapSeconds", in.cellSwapSeconds, d.cellSwapSeconds);
+            o.chargerRePerRedstone = c.positive("energy.chargerRePerRedstone", in.chargerRePerRedstone,
+                    d.chargerRePerRedstone, MAX_RE_PER_REDSTONE);
+            o.chargerRePerSecond =
+                    c.positive("energy.chargerRePerSecond", in.chargerRePerSecond, d.chargerRePerSecond, MAX_RATE);
+            o.cellSwapSeconds =
+                    c.nonNegative("energy.cellSwapSeconds", in.cellSwapSeconds, d.cellSwapSeconds, MAX_HOLD_SECONDS);
         }
 
         if (present(input.damage, "damage", c)) {
@@ -77,7 +106,7 @@ public final class ConfigValidation {
             o.repairKitFraction = c.unit("damage.repairKitFraction", in.repairKitFraction, d.repairKitFraction);
             o.brokenTorsoConsumptionMultiplier = c.atLeastOne(
                     "damage.brokenTorsoConsumptionMultiplier", in.brokenTorsoConsumptionMultiplier,
-                    d.brokenTorsoConsumptionMultiplier);
+                    d.brokenTorsoConsumptionMultiplier, MAX_MULTIPLIER);
             o.brokenLegSpeedPenalty = c.unit("damage.brokenLegSpeedPenalty", in.brokenLegSpeedPenalty, d.brokenLegSpeedPenalty);
         }
 
@@ -104,8 +133,8 @@ public final class ConfigValidation {
             if (presentMap(input.tiers.protectionMultiplier, "tiers.protectionMultiplier", c)) {
                 for (Tier tier : Tier.values()) {
                     double def = defaults.tiers.protectionMultiplier.get(tier);
-                    out.tiers.protectionMultiplier.put(tier, c.positive(
-                            "tiers.protectionMultiplier." + tier, input.tiers.protectionMultiplier.get(tier), def));
+                    out.tiers.protectionMultiplier.put(tier, c.positive("tiers.protectionMultiplier." + tier,
+                            input.tiers.protectionMultiplier.get(tier), def, MAX_MULTIPLIER));
                 }
             }
         }
@@ -129,7 +158,8 @@ public final class ConfigValidation {
             ExoframesConfig.Frame o = out.frame;
             o.baseSpeedPenalty = c.unit("frame.baseSpeedPenalty", in.baseSpeedPenalty, d.baseSpeedPenalty);
             o.knockbackResistance = c.unit("frame.knockbackResistance", in.knockbackResistance, d.knockbackResistance);
-            o.exitHoldSeconds = c.nonNegative("frame.exitHoldSeconds", in.exitHoldSeconds, d.exitHoldSeconds);
+            o.exitHoldSeconds =
+                    c.nonNegative("frame.exitHoldSeconds", in.exitHoldSeconds, d.exitHoldSeconds, MAX_HOLD_SECONDS);
         }
 
         if (present(input.world, "world", c)) {
@@ -185,7 +215,8 @@ public final class ConfigValidation {
     }
 
     /**
-     * I moduli presenti nei default devono avere un costo &gt;= 0 (0 ammesso: modulo gratuito); le voci in piu'
+     * I moduli presenti nei default devono avere un costo &gt;= 0 (0 ammesso: modulo gratuito) e &lt;=
+     * {@link #MAX_RATE}; le voci in piu'
      * (moduli senza quel tipo di costo) vengono scartate con un messaggio. {@code out} parte gia' dai default.
      */
     private static void validateCosts(String name, Map<ModuleType, Integer> in, Map<ModuleType, Integer> defaults,
@@ -197,7 +228,7 @@ public final class ConfigValidation {
             Integer def = defaults.get(type);
             Integer v = in.get(type);
             if (def != null) {
-                out.put(type, c.nonNegative(name + "." + type, v, def));
+                out.put(type, c.nonNegative(name + "." + type, v, def, MAX_RATE));
             } else if (v != null && v != 0) {
                 c.problems.add(name + "." + type + ": this module has no such cost, value " + v + " ignored");
             }
@@ -235,6 +266,12 @@ public final class ConfigValidation {
             return v;
         }
 
+        /** Come {@link #positive(String, Integer, int)}, e oltre {@code max} torna al default. */
+        int positive(String name, Integer v, int def, int max) {
+            int value = positive(name, v, def);
+            return atMost(name, value, def, max);
+        }
+
         int nonNegative(String name, Integer v, int def) {
             if (v == null) {
                 problems.add(name + ": missing, using default " + def);
@@ -247,6 +284,12 @@ public final class ConfigValidation {
             return v;
         }
 
+        /** Come {@link #nonNegative(String, Integer, int)}, e oltre {@code max} torna al default. */
+        int nonNegative(String name, Integer v, int def, int max) {
+            int value = nonNegative(name, v, def);
+            return atMost(name, value, def, max);
+        }
+
         double positive(String name, Double v, double def) {
             if (v == null) {
                 problems.add(name + ": missing, using default " + def);
@@ -257,6 +300,12 @@ public final class ConfigValidation {
                 return def;
             }
             return v;
+        }
+
+        /** Come {@link #positive(String, Double, double)}, e oltre {@code max} torna al default. */
+        double positive(String name, Double v, double def, double max) {
+            double value = positive(name, v, def);
+            return atMost(name, value, def, max);
         }
 
         /** Valore in [0, 1]: fuori intervallo viene clampato, NaN torna al default. */
@@ -282,6 +331,33 @@ public final class ConfigValidation {
             if (v < 1.0) {
                 problems.add(name + ": " + v + " is below 1, clamped to 1.0");
                 return 1.0;
+            }
+            return v;
+        }
+
+        /** Come {@link #atLeastOne(String, double, double)}, e oltre {@code max} torna al default. */
+        double atLeastOne(String name, double v, double def, double max) {
+            double value = atLeastOne(name, v, def);
+            return atMost(name, value, def, max);
+        }
+
+        /**
+         * Il valore gia' corretto dai controlli inferiori, o il default se supera {@code max}. Il default non supera
+         * mai il limite, quindi un valore tornato al default per un altro motivo passa senza un secondo messaggio.
+         */
+        int atMost(String name, int v, int def, int max) {
+            if (v > max) {
+                problems.add(name + ": " + v + " is invalid (must be <= " + max + "), using default " + def);
+                return def;
+            }
+            return v;
+        }
+
+        /** Come {@link #atMost(String, int, int, int)} per i valori decimali. */
+        double atMost(String name, double v, double def, double max) {
+            if (v > max) {
+                problems.add(name + ": " + v + " is invalid (must be <= " + max + "), using default " + def);
+                return def;
             }
             return v;
         }

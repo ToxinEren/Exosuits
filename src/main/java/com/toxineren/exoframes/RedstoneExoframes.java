@@ -2,6 +2,7 @@ package com.toxineren.exoframes;
 
 import com.toxineren.exoframes.command.ExoframeCommand;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.configfile.ConfigFile;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
@@ -16,6 +17,7 @@ import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.TickEvent;
+import java.nio.file.Path;
 import java.util.Objects;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -32,6 +34,14 @@ public final class RedstoneExoframes {
     }
 
     public static void init() {
+        // Config dal file, prima di ogni registrazione (design §12.9): il registro dei telai la prende quando si
+        // carica, con il mondo. Letta una volta sola: nessun ricaricamento, ne' comando ne' /reload.
+        Path configFile = Compat.platform().configDir().resolve(ConfigFile.FILE_NAME);
+        ConfigFile.Result loaded = ConfigFile.load(configFile);
+        for (String problem : loaded.problems()) {
+            LOGGER.warn("Config file {}: {}", configFile, problem);
+        }
+        setConfig(loaded.config());
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
         Compat.armorMaterials().register(); // prima degli item: su 1.21.1 i pezzi usano il materiale registrato
         ModEntities.register(); // prima degli item: l'oggetto che piazza il telaio usa il tipo dell'entita'
@@ -61,8 +71,9 @@ public final class RedstoneExoframes {
     }
 
     /**
-     * Sostituisce la configurazione in uso. La chiamera' il caricatore del file di configurazione di una milestone
-     * successiva; gli stati del telaio gia' creati conservano la configurazione con cui sono nati.
+     * Sostituisce la configurazione in uso. La chiama {@link #init()} una volta all'avvio, con la config letta da
+     * {@code config/redstone_exoframes.json} ({@code configfile/ConfigFile}), prima di ogni registrazione. Gli
+     * stati del telaio gia' creati conservano la configurazione con cui sono nati.
      */
     public static void setConfig(ExoframesConfig newConfig) {
         config = Objects.requireNonNull(newConfig, "config");

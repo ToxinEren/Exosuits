@@ -19,7 +19,7 @@ Tutto è verificato da [`tools/check_sources.sh`](../tools/check_sources.sh) (ve
 - **A cosa serve:** lato fisico (`isClient()`, `isDedicatedServer()`), ambiente di sviluppo (`isDevelopment()`), cartella di configurazione (`configDir()`), mod caricate (`isModLoaded(id)`), nome del loader (`loaderName()`: `"fabric"`, `"forge"` o `"neoforge"`).
 - **Differenze chiuse:** le API di ambiente dei tre loader, tramite `dev.architectury.platform.Platform` (uguale sulle due versioni di Architectury). Il nome del loader è una costante scelta per variante.
 - **Condizione:** `PlatformImpl` (`//? if fabric` / `forge` / altrimenti `neoforge`).
-- **Uso:** `Compat.platform().configDir()`.
+- **Uso:** `Compat.platform().configDir()` in `RedstoneExoframes.init()`, prima di ogni registrazione, per `config/redstone_exoframes.json` (letto una volta all'avvio; nessun ricaricamento, né comando né `/reload`).
 
 ### `ItemDataAccess` — dati tipizzati sugli item
 
