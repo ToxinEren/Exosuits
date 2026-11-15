@@ -14,7 +14,9 @@ import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
+import com.toxineren.exoframes.frame.SuitTick;
 import com.toxineren.exoframes.gametest.CarryOverGameTests;
+import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
@@ -58,6 +60,9 @@ public final class RedstoneExoframes {
         TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati
         SafeSpots.register(); // ultima posizione sicura di chi indossa un telaio, ogni secondo, solo sul server
         SlotGuard.register(); // segnaposto allineati al registro a ogni tick, lancio dei segnaposto annullato
+        // tick dell'energia su PLAYER_PRE, solo sul server: li' la posizione e' l'ultima accettata dal client; i
+        // giocatori finti non ricevono l'evento, e i test chiamano SuitTick.tick a mano
+        SuitTick.register();
         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
         EntityEvent.LIVING_DEATH.register((entity, source) -> {
             if (entity instanceof ServerPlayer player) {
@@ -67,6 +72,7 @@ public final class RedstoneExoframes {
         });
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
         Compat.gameTests().register(CarryOverGameTests.class);
+        Compat.gameTests().register(EnergyGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */
