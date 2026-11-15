@@ -1,0 +1,437 @@
+diff --git a/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java b/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
+index 5b35e7e..9a8f265 100644
+--- a/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
++++ b/src/main/java/com/toxineren/exoframes/RedstoneExoframes.java
+@@ -41,6 +41,7 @@ public final class RedstoneExoframes {
+         FrameRealign.register(); // registro ed entita' dei telai piazzati allineati, ogni 5 secondi per livello
+         ExoframeCommand.register();
+         TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati
++        TickEvent.PLAYER_PRE.register(com.toxineren.exoframes.frame.SuitMovement::tick); // RICOGNIZIONE 3c
+         SafeSpots.register(); // ultima posizione sicura di chi indossa un telaio, ogni secondo, solo sul server
+         SlotGuard.register(); // segnaposto allineati al registro a ogni tick, lancio dei segnaposto annullato
+         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
+diff --git a/src/main/java/com/toxineren/exoframes/compat/FrameAttributes.java b/src/main/java/com/toxineren/exoframes/compat/FrameAttributes.java
+index a94271b..9f60225 100644
+--- a/src/main/java/com/toxineren/exoframes/compat/FrameAttributes.java
++++ b/src/main/java/com/toxineren/exoframes/compat/FrameAttributes.java
+@@ -27,4 +27,11 @@ public interface FrameAttributes {
+ 
+     /** Rimuove i quattro modificatori del telaio, se presenti. */
+     void clear(LivingEntity e);
++
++    /**
++     * RICOGNIZIONE 3c: passo di un blocco per chi indossa la tuta. 1.21.1: modificatore di {@code generic.step_height}
++     * sul server (sincronizzato); 1.20.1: {@code setMaxUpStep} sul solo giocatore locale (server e giocatori remoti
++     * hanno gia' 1,0 nel gioco base). Chiamato a ogni tick sui due lati.
++     */
++    void stepUp(net.minecraft.world.entity.player.Player p, boolean on);
+ }
+diff --git a/src/main/java/com/toxineren/exoframes/compat/impl/FrameAttributesImpl.java b/src/main/java/com/toxineren/exoframes/compat/impl/FrameAttributesImpl.java
+index 3023ddf..81b617e 100644
+--- a/src/main/java/com/toxineren/exoframes/compat/impl/FrameAttributesImpl.java
++++ b/src/main/java/com/toxineren/exoframes/compat/impl/FrameAttributesImpl.java
+@@ -50,6 +50,35 @@ public final class FrameAttributesImpl implements FrameAttributes {
+         remove(e.getAttribute(Attributes.ARMOR_TOUGHNESS), TOUGHNESS);
+     }
+ 
++    private static final ResourceLocation STEP = Ids.of("frame_step");
++
++    @Override
++    public void stepUp(net.minecraft.world.entity.player.Player p, boolean on) {
++        //? if >=1.21 {
++        if (p.level().isClientSide) {
++            return;
++        }
++        AttributeInstance inst = p.getAttribute(Attributes.STEP_HEIGHT);
++        if (inst == null) {
++            return;
++        }
++        boolean has = inst.hasModifier(STEP);
++        if (on && !has) {
++            inst.addTransientModifier(new AttributeModifier(STEP, 0.4, AttributeModifier.Operation.ADD_VALUE));
++        } else if (!on && has) {
++            inst.removeModifier(STEP);
++        }
++        //?} else {
++        /*if (!p.isLocalPlayer()) {
++            return;
++        }
++        float want = on ? 1.0f : 0.6f;
++        if (p.maxUpStep() != want) {
++            p.setMaxUpStep(want);
++        }
++        *///?}
++    }
++
+     /** Sostituisce il modificatore con id dato: prima lo rimuove, poi aggiunge quello nuovo. Istanza null: niente. */
+     private static void set(AttributeInstance inst, ResourceLocation id, boolean multiplyTotal, double amount) {
+         if (inst == null) {
+diff --git a/src/main/java/com/toxineren/exoframes/frame/SuitMovement.java b/src/main/java/com/toxineren/exoframes/frame/SuitMovement.java
+new file mode 100644
+index 0000000..a5cf530
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/frame/SuitMovement.java
+@@ -0,0 +1,54 @@
++package com.toxineren.exoframes.frame;
++
++import com.toxineren.exoframes.compat.Compat;
++import net.minecraft.world.entity.player.Player;
++import net.minecraft.world.item.Items;
++
++/**
++ * RICOGNIZIONE 3c (esperimento, non per main): movimento di chi indossa la tuta.
++ * <ul>
++ * <li>(a) in acqua niente fisica dei fluidi: si cade, si cammina e non si salta, niente nuoto, niente corrente;</li>
++ * <li>(b) passo di un blocco;</li>
++ * <li>(c) scatto spento con "energia bassa" (qui simulata: polvere di redstone nella mano secondaria).</li>
++ * </ul>
++ * Codice comune, chiamato dai mixin (una chiamata per aggancio) e dal tick del giocatore sui due lati.
++ */
++public final class SuitMovement {
++    private SuitMovement() {
++    }
++
++    /** {@code Player.isAffectedByFluids()}: falso per la tuta che tocca l'acqua (non la lava). */
++    public static boolean affectedByFluids(Player player, boolean vanilla) {
++        return vanilla && !(SuitSize.wearsSuit(player) && player.isInWater() && !player.isInLava());
++    }
++
++    /** {@code Player.isPushedByFluid()}: la corrente non sposta la tuta. */
++    public static boolean pushedByFluid(Player player, boolean vanilla) {
++        return vanilla && !SuitSize.wearsSuit(player);
++    }
++
++    /** In coda a {@code Player.updateSwimming()}: la tuta non nuota mai. */
++    public static void afterUpdateSwimming(Player player) {
++        if (player.isSwimming() && SuitSize.wearsSuit(player)) {
++            player.setSwimming(false);
++        }
++    }
++
++    /** {@code LocalPlayer.hasEnoughFoodToStartSprinting()} (client): niente scatto con l'energia bassa. */
++    public static boolean sprintAllowed(Player player, boolean vanilla) {
++        return vanilla && !lowEnergy(player);
++    }
++
++    /** Segnaposto dell'energia sotto il 10 %: tuta indossata e polvere di redstone nella mano secondaria. */
++    static boolean lowEnergy(Player player) {
++        return SuitSize.wearsSuit(player) && player.getOffhandItem().is(Items.REDSTONE);
++    }
++
++    /** {@code TickEvent.PLAYER_PRE}, sui due lati. */
++    public static void tick(Player player) {
++        Compat.attributes().stepUp(player, SuitSize.wearsSuit(player));
++        if (!player.level().isClientSide && player.isSprinting() && lowEnergy(player)) {
++            player.setSprinting(false);
++        }
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/mixin/PlayerMovementMixin.java b/src/main/java/com/toxineren/exoframes/mixin/PlayerMovementMixin.java
+new file mode 100644
+index 0000000..f0d2c62
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/mixin/PlayerMovementMixin.java
+@@ -0,0 +1,31 @@
++package com.toxineren.exoframes.mixin;
++
++import com.toxineren.exoframes.frame.SuitMovement;
++import net.minecraft.world.entity.player.Player;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
++
++/**
++ * RICOGNIZIONE 3c: la tuta in acqua (design 5.6). Tre metodi di {@code Player} con la stessa firma sulle due versioni e
++ * sui tre loader (javap): nessuna direttiva, elencato nella sezione {@code mixins} delle due configurazioni.
++ */
++@Mixin(Player.class)
++abstract class PlayerMovementMixin {
++    @Inject(method = "isAffectedByFluids()Z", at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitIgnoresWater(CallbackInfoReturnable<Boolean> cir) {
++        cir.setReturnValue(SuitMovement.affectedByFluids((Player) (Object) this, cir.getReturnValueZ()));
++    }
++
++    @Inject(method = "isPushedByFluid()Z", at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitNotPushed(CallbackInfoReturnable<Boolean> cir) {
++        cir.setReturnValue(SuitMovement.pushedByFluid((Player) (Object) this, cir.getReturnValueZ()));
++    }
++
++    @Inject(method = "updateSwimming()V", at = @At("TAIL"))
++    private void exoframes$suitNeverSwims(CallbackInfo ci) {
++        SuitMovement.afterUpdateSwimming((Player) (Object) this);
++    }
++}
+diff --git a/src/main/java/com/toxineren/exoframes/mixin/client/LocalPlayerSprintMixin.java b/src/main/java/com/toxineren/exoframes/mixin/client/LocalPlayerSprintMixin.java
+new file mode 100644
+index 0000000..0a7d986
+--- /dev/null
++++ b/src/main/java/com/toxineren/exoframes/mixin/client/LocalPlayerSprintMixin.java
+@@ -0,0 +1,20 @@
++package com.toxineren.exoframes.mixin.client;
++
++import com.toxineren.exoframes.frame.SuitMovement;
++import net.minecraft.client.player.LocalPlayer;
++import org.spongepowered.asm.mixin.Mixin;
++import org.spongepowered.asm.mixin.injection.At;
++import org.spongepowered.asm.mixin.injection.Inject;
++import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
++
++/**
++ * RICOGNIZIONE 3c: scatto spento con l'energia bassa. {@code LocalPlayer.hasEnoughFoodToStartSprinting()} (privato,
++ * stessa firma sulle quattro varianti) decide sia l'avvio sia la fine dello scatto in {@code aiStep}.
++ */
++@Mixin(LocalPlayer.class)
++abstract class LocalPlayerSprintMixin {
++    @Inject(method = "hasEnoughFoodToStartSprinting()Z", at = @At("RETURN"), cancellable = true)
++    private void exoframes$suitSprintEnergy(CallbackInfoReturnable<Boolean> cir) {
++        cir.setReturnValue(SuitMovement.sprintAllowed((LocalPlayer) (Object) this, cir.getReturnValueZ()));
++    }
++}
+diff --git a/src/main/resources-mc1.20.1/data/redstone_exoframes/loot_tables/blocks/ricognizione_segnaposto.json b/src/main/resources-mc1.20.1/data/redstone_exoframes/loot_tables/blocks/ricognizione_segnaposto.json
+new file mode 100644
+index 0000000..b549b13
+--- /dev/null
++++ b/src/main/resources-mc1.20.1/data/redstone_exoframes/loot_tables/blocks/ricognizione_segnaposto.json
+@@ -0,0 +1,14 @@
++{
++  "type": "minecraft:block",
++  "pools": [
++    {
++      "rolls": 1,
++      "entries": [
++        {"type": "minecraft:item", "name": "redstone_exoframes:redstone_cell"}
++      ],
++      "conditions": [
++        {"condition": "minecraft:survives_explosion"}
++      ]
++    }
++  ]
++}
+diff --git a/src/main/resources-mc1.20.1/data/redstone_exoframes/recipes/ricognizione_cella.json b/src/main/resources-mc1.20.1/data/redstone_exoframes/recipes/ricognizione_cella.json
+new file mode 100644
+index 0000000..a19adf8
+--- /dev/null
++++ b/src/main/resources-mc1.20.1/data/redstone_exoframes/recipes/ricognizione_cella.json
+@@ -0,0 +1,18 @@
++{
++  "type": "minecraft:crafting_shaped",
++  "category": "misc",
++  "pattern": [
++    "RCR",
++    "CQC",
++    "RCR"
++  ],
++  "key": {
++    "R": {"item": "minecraft:redstone"},
++    "C": {"item": "minecraft:copper_ingot"},
++    "Q": {"item": "minecraft:quartz"}
++  },
++  "result": {
++    "item": "redstone_exoframes:redstone_cell",
++    "count": 1
++  }
++}
+diff --git a/src/main/resources-mc1.20.1/data/redstone_exoframes/tags/blocks/ricognizione_terra.json b/src/main/resources-mc1.20.1/data/redstone_exoframes/tags/blocks/ricognizione_terra.json
+new file mode 100644
+index 0000000..c1506e7
+--- /dev/null
++++ b/src/main/resources-mc1.20.1/data/redstone_exoframes/tags/blocks/ricognizione_terra.json
+@@ -0,0 +1,7 @@
++{
++  "replace": false,
++  "values": [
++    "minecraft:grass_block",
++    "minecraft:dirt"
++  ]
++}
+diff --git a/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json b/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
+index 254cfe4..9fd3869 100644
+--- a/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
++++ b/src/main/resources-mc1.20.1/redstone_exoframes.mixins.json
+@@ -4,12 +4,14 @@
+   "package": "com.toxineren.exoframes.mixin",
+   "compatibilityLevel": "JAVA_17",
+   "mixins": [
+-    "PlayerSize120Mixin"
++    "PlayerSize120Mixin",
++    "PlayerMovementMixin"
+   ],
+   "client": [
+     "client.ItemInHandLayerMixin",
+     "client.LivingEntityCullingMixin",
+-    "client.PlayerRendererMixin"
++    "client.PlayerRendererMixin",
++    "client.LocalPlayerSprintMixin"
+   ],
+   "injectors": {
+     "defaultRequire": 1
+diff --git a/src/main/resources-mc1.21.1/data/redstone_exoframes/loot_table/blocks/ricognizione_segnaposto.json b/src/main/resources-mc1.21.1/data/redstone_exoframes/loot_table/blocks/ricognizione_segnaposto.json
+new file mode 100644
+index 0000000..b549b13
+--- /dev/null
++++ b/src/main/resources-mc1.21.1/data/redstone_exoframes/loot_table/blocks/ricognizione_segnaposto.json
+@@ -0,0 +1,14 @@
++{
++  "type": "minecraft:block",
++  "pools": [
++    {
++      "rolls": 1,
++      "entries": [
++        {"type": "minecraft:item", "name": "redstone_exoframes:redstone_cell"}
++      ],
++      "conditions": [
++        {"condition": "minecraft:survives_explosion"}
++      ]
++    }
++  ]
++}
+diff --git a/src/main/resources-mc1.21.1/data/redstone_exoframes/recipe/ricognizione_cella.json b/src/main/resources-mc1.21.1/data/redstone_exoframes/recipe/ricognizione_cella.json
+new file mode 100644
+index 0000000..f7b7bcb
+--- /dev/null
++++ b/src/main/resources-mc1.21.1/data/redstone_exoframes/recipe/ricognizione_cella.json
+@@ -0,0 +1,18 @@
++{
++  "type": "minecraft:crafting_shaped",
++  "category": "misc",
++  "pattern": [
++    "RCR",
++    "CQC",
++    "RCR"
++  ],
++  "key": {
++    "R": {"item": "minecraft:redstone"},
++    "C": {"item": "minecraft:copper_ingot"},
++    "Q": {"item": "minecraft:quartz"}
++  },
++  "result": {
++    "id": "redstone_exoframes:redstone_cell",
++    "count": 1
++  }
++}
+diff --git a/src/main/resources-mc1.21.1/data/redstone_exoframes/tags/block/ricognizione_terra.json b/src/main/resources-mc1.21.1/data/redstone_exoframes/tags/block/ricognizione_terra.json
+new file mode 100644
+index 0000000..c1506e7
+--- /dev/null
++++ b/src/main/resources-mc1.21.1/data/redstone_exoframes/tags/block/ricognizione_terra.json
+@@ -0,0 +1,7 @@
++{
++  "replace": false,
++  "values": [
++    "minecraft:grass_block",
++    "minecraft:dirt"
++  ]
++}
+diff --git a/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json b/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
+index 9968eaa..f0aac0f 100644
+--- a/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
++++ b/src/main/resources-mc1.21.1/redstone_exoframes.mixins.json
+@@ -4,12 +4,14 @@
+   "package": "com.toxineren.exoframes.mixin",
+   "compatibilityLevel": "JAVA_21",
+   "mixins": [
+-    "PlayerSize121Mixin"
++    "PlayerSize121Mixin",
++    "PlayerMovementMixin"
+   ],
+   "client": [
+     "client.ItemInHandLayerMixin",
+     "client.LivingEntityCullingMixin",
+-    "client.PlayerRendererMixin"
++    "client.PlayerRendererMixin",
++    "client.LocalPlayerSprintMixin"
+   ],
+   "injectors": {
+     "defaultRequire": 1
+diff --git a/tools/client/client_shot.sh b/tools/client/client_shot.sh
+index 3718e72..bbcb423 100755
+--- a/tools/client/client_shot.sh
++++ b/tools/client/client_shot.sh
+@@ -100,7 +100,7 @@ for c in "$@"; do
+         @tieni)
+             { [ "${#w[@]}" -eq 3 ] || [ "${#w[@]}" -eq 5 ]; } \
+                 || fatal "passo \"$c\": si scrive @tieni <tasto> <secondi> [<nome> <dopo>]"
+-            [[ "${w[1]}" =~ ^[A-Za-z0-9_]+$ ]] || fatal "passo \"$c\": tasto non valido '${w[1]}'"
++            [[ "${w[1]}" =~ ^[A-Za-z0-9_+]+$ ]] || fatal "passo \"$c\": tasto non valido '${w[1]}'"
+             is_seconds "${w[2]}" || fatal "passo \"$c\": secondi non validi '${w[2]}' (numero maggiore di 0)"
+             if [ "${#w[@]}" -eq 5 ]; then
+                 add_shot_name "${w[3]}" "$c"
+@@ -221,6 +221,7 @@ guiScale:2
+ fov:0.0
+ soundCategory_master:0.0
+ rawMouseInput:false
++autoJump:false
+ EOF
+ 
+ # --- chiusura -------------------------------------------------------------------------------------------------------
+diff --git a/tools/client/ricognizione-3c/prova.sh b/tools/client/ricognizione-3c/prova.sh
+new file mode 100755
+index 0000000..5dd3ecc
+--- /dev/null
++++ b/tools/client/ricognizione-3c/prova.sh
+@@ -0,0 +1,30 @@
++#!/usr/bin/env bash
++# uso: prova.sh <variante> <cartella>
++v=$1; out=$2
++P="data get entity Exo Pos"
++pool=(
++ "tp Exo 12.5 -58 0.5 0 0" "@attendi 1.5" "$P"
++ "tp Exo 12.5 -60 0.5 0 0" "@attendi 1" "$P" "@tieni space 3" "$P"
++ "tp Exo 12.5 -60 0.5 0 0" "@attendi 1" "$P" "@tieni w 2" "$P"
++ "tp Exo -4.5 -60 0.5 0 0" "@attendi 1" "$P" "@tieni w 1.5" "$P"
++ "tp Exo 0.5 -60 -5.5 180 0" "@attendi 1" "$P" "@tieni ctrl+w 2" "$P"
++)
++cd /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m3c-ricognizione/repo
++EXO_ACCEPT_EULA=true EXO_SHOT_PORT=25880 EXO_SHOT_SETTLE=2 bash tools/client/client_shot.sh "$v" "$out" \
++ "gamemode survival Exo" \
++ "fill 9 -60 -3 15 -57 13 glass" "fill 10 -60 -2 14 -57 12 air" "fill 10 -60 -2 14 -58 12 water" \
++ "fill -6 -60 3 -3 -60 10 stone" \
++ "execute as Exo run exoframe debug wear rottame" \
++ "say TUTA" "${pool[@]}" \
++ "say TUTA-ENERGIA-BASSA" "item replace entity Exo weapon.offhand with redstone" \
++ "tp Exo 0.5 -60 -5.5 180 0" "@attendi 1" "$P" "@tieni ctrl+w 2" "$P" \
++ "tp Exo 12.5 -60 0.5 0 0" "@attendi 1" "@tieni space 3 salto-tuta 2" \
++ "execute as Exo run exoframe debug wear via" \
++ "say SENZA-TUTA" "${pool[@]}" \
++ "say SENZA-TUTA-REDSTONE" "tp Exo 0.5 -60 -5.5 180 0" "@attendi 1" "$P" "@tieni ctrl+w 2" "$P" \
++ "tp Exo 12.5 -60 0.5 0 0" "@attendi 1" "@tieni space 3 salto-nudo 2" \
++ "item replace entity Exo weapon.offhand with air" \
++ "say DATI" "recipe give Exo redstone_exoframes:ricognizione_cella" \
++ "loot give Exo loot redstone_exoframes:blocks/ricognizione_segnaposto" \
++ "execute if block 0 -61 0 #redstone_exoframes:ricognizione_terra" \
++ "tp Exo 0.5 -60 0.5 0 15"
+diff --git a/tools/client/ricognizione-3c/prova_b.sh b/tools/client/ricognizione-3c/prova_b.sh
+new file mode 100755
+index 0000000..c7c8971
+--- /dev/null
++++ b/tools/client/ricognizione-3c/prova_b.sh
+@@ -0,0 +1,27 @@
++#!/usr/bin/env bash
++# casi limite dell'acqua: uso prova_b.sh <variante> <cartella assoluta>
++v=$1; out=$2
++P="data get entity Exo Pos"
++casi=(
++ "tp Exo 22.5 -61 0.5 0 0" "@attendi 1" "$P" "@tieni space 2" "$P"
++ "tp Exo 22.5 -61 0.5 -90 0" "@attendi 1" "$P" "@tieni w 1.5" "$P"
++ "tp Exo 42.5 -60 -19.5 0 0" "@attendi 0.2" "$P" "@attendi 3" "$P"
++ "tp Exo 50.5 -60 0.5 0 0" "@attendi 0.2" "$P" "@attendi 2" "$P"
++ "tp Exo 12.5 -60 6.5 0 0" "data get entity Exo Air" "@attendi 5" "data get entity Exo Air"
++ "tp Exo 12.5 -60 0.5 0 0" "@attendi 1" "$P" "@tieni ctrl+w 1.5" "$P"
++ "tp Exo 61.5 -62 1.5 0 0" "@attendi 1" "$P" "@tieni space 2" "$P"
++ "tp Exo 0.5 -60 0.5 0 0" "@attendi 1"
++)
++cd /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m3c-ricognizione/repo
++EXO_ACCEPT_EULA=true EXO_SHOT_PORT=25880 EXO_SHOT_SETTLE=2 bash tools/client/client_shot.sh "$v" "$out" \
++ "gamemode survival Exo" "effect give Exo minecraft:fire_resistance 600 0 true" \
++ "fill 9 -60 -3 15 -57 13 glass" "fill 10 -60 -2 14 -57 12 air" "fill 10 -60 -2 14 -58 12 water" \
++ "fill 20 -61 -2 24 -61 12 water" \
++ "setblock 40 -60 -20 water" \
++ "fill 49 -60 -1 51 -53 1 glass" "fill 50 -60 0 50 -54 0 water" "setblock 50 -61 0 soul_sand" \
++ "fill 60 -62 0 62 -61 2 lava" \
++ "@attendi 3" \
++ "execute as Exo run exoframe debug wear rottame" \
++ "say TUTA" "${casi[@]}" \
++ "execute as Exo run exoframe debug wear via" \
++ "say SENZA-TUTA" "${casi[@]}"
