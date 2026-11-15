@@ -9,7 +9,9 @@ import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.armor.DamageRouter;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameRules;
+import com.toxineren.exoframes.frame.CellSwap;
 import com.toxineren.exoframes.frame.ClientRules;
+import com.toxineren.exoframes.frame.EntryHints;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
@@ -62,6 +64,8 @@ public final class RedstoneExoframes {
         Compat.frameState().registerCommon();
         FrameEntry.registerNet(); // pacchetto C2S dell'uscita dal telaio, su entrambi i lati
         ClientRules.register(); // pacchetto S2C con i valori del server che il client conta, mandato a chi entra
+        CellSwap.registerNet(); // pacchetto C2S del cambio cella, su entrambi i lati
+        EntryHints.register(); // la riga dei tasti torna a mostrarsi dopo l'uscita dal server
         FrameRealign.register(); // registro ed entita' dei telai piazzati allineati, ogni 5 secondi per livello
         ExoframeCommand.register();
         TickEvent.PLAYER_PRE.register(SuitSize::tick); // grandezza reale: ricalcolo quando cambia la tuta, sui due lati

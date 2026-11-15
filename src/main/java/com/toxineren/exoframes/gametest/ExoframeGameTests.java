@@ -1364,8 +1364,8 @@ public final class ExoframeGameTests {
     /**
      * Montare a mano (design §5.4) su un telaio con yaw 0, che guarda a sud (+Z) e ha la destra verso -X: l'elmo va
      * nel suo slot, il braccio cliccato a -X va sul braccio destro, la cella entra; ogni oggetto lascia la mano (in
-     * sopravvivenza), lo stato del record li ha e il riassunto dell'entita' pure. Una seconda cella trova lo slot
-     * occupato e resta in mano; la mano secondaria e un oggetto qualsiasi passano senza effetto.
+     * sopravvivenza), lo stato del record li ha e il riassunto dell'entita' pure. Una seconda cella si scambia con
+     * quella montata, che torna nell'inventario; la mano secondaria e un oggetto qualsiasi passano senza effetto.
      */
     private static void mountPieceAndCellByHand(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -1399,10 +1399,12 @@ public final class ExoframeGameTests {
         helper.assertTrue(player.getMainHandItem().isEmpty(), "inserted cell left in hand");
 
         player.setItemInHand(InteractionHand.MAIN_HAND, CellItem.fromCell(new EnergyCell(capacity, 1_000)));
-        click(frame, player, 0.0, 1.6, 0.0);
-        helper.assertTrue(state.cell().stored() == 4_000, "second cell replaced the first: " + state.cell());
-        helper.assertTrue(player.getMainHandItem().is(ModItems.REDSTONE_CELL.get())
-                && player.getMainHandItem().getCount() == 1, "second cell taken from the hand");
+        helper.assertTrue(click(frame, player, 0.0, 1.6, 0.0).consumesAction(), "second cell click not consumed");
+        helper.assertTrue(state.cell().stored() == 1_000, "second cell not swapped in: " + state.cell());
+        helper.assertTrue(player.getMainHandItem().isEmpty(), "swapped cell left in hand");
+        helper.assertTrue(countInMainInventory(player, ModItems.REDSTONE_CELL.get()) == 1
+                && Compat.itemData().cellEnergy(findInMainInventory(player, ModItems.REDSTONE_CELL.get())) == 4_000,
+                "old cell not handed back");
 
         helper.assertTrue(frame.summary().equals(SuitSummary.of(state))
                 && frame.summary().pieces().keySet().equals(EnumSet.of(PieceSlot.HELMET, PieceSlot.RIGHT_ARM)),

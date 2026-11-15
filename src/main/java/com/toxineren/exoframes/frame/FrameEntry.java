@@ -99,8 +99,9 @@ public final class FrameEntry {
      * gli slot; {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del
      * telaio con il suo yaw (il pitch resta il suo); l'entita' si elimina; il punto del telaio diventa la prima
      * posizione sicura del giocatore ({@link SafeSpots}); infine {@link WornState#changed} (evento "entered"), dopo il
-     * teletrasporto, cosi' l'ingombro si calcola nel punto del telaio; per ultimo il suono dell'ingresso
-     * ({@link FrameSounds.Sound#ENTER}, design §12.13). Gli slot armatura cambiano in silenzio
+     * teletrasporto, cosi' l'ingombro si calcola nel punto del telaio; il suono dell'ingresso
+     * ({@link FrameSounds.Sound#ENTER}, design §12.13); per ultima, al primo ingresso della sessione, la riga dei tasti
+     * in chat ({@link EntryHints#onEntered}). Gli slot armatura cambiano in silenzio
      * ({@link Placeholders#setArmorSlot}).
      *
      * @return true se il giocatore e' entrato
@@ -155,6 +156,7 @@ public final class FrameEntry {
         SafeSpots.remember(player, level.dimension(), spot);
         WornState.changed(player, "entered", record.frameId(), level, spot);
         FrameSounds.play(level, spot, FrameSounds.Sound.ENTER);
+        EntryHints.onEntered(player);
         return true;
     }
 

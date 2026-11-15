@@ -46,6 +46,11 @@ public final class ExitKey {
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> HOLD.reset());
     }
 
+    /** Vero se il tasto di uscita e' giu': {@link CellSwapKey} non conta mentre lo e' (vince l'uscita). */
+    static boolean keyDown() {
+        return KEY.isDown();
+    }
+
     private static void tick(Minecraft minecraft) {
         LocalPlayer player = minecraft.player;
         if (player == null) {

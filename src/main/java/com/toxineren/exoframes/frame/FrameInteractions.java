@@ -33,12 +33,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Le mani su un telaio piazzato (design §5.4): montare pezzi e cella, smontarli, raccogliere il telaio vuoto. Nessuna
- * interfaccia grafica: decide la mano principale e il punto cliccato. Il registro e' la verita' (§4.5): ogni cambio
- * passa da {@link FrameStateAccess#updatePlaced} o {@link FrameStateAccess#removePlaced}, e cio' che lascia la mano o
- * arriva al giocatore dipende dal loro esito; tutto quello che lo stato potrebbe rifiutare si controlla prima, cosi'
- * nessuna eccezione lascia il record cambiato a meta'. Solo un cambio riuscito suona (design §12.13): montare un
- * pezzo o la cella {@link FrameSounds.Sound#MOUNT}, smontarli o ritirare l'armatura stivata
+ * Le mani su un telaio piazzato (design §5.4): montare pezzi e cella (o scambiare la cella, §12.10), smontarli,
+ * raccogliere il telaio vuoto. Nessuna interfaccia grafica: decide la mano principale e il punto cliccato. Il registro
+ * e' la verita' (§4.5): ogni cambio passa da {@link FrameStateAccess#updatePlaced} o
+ * {@link FrameStateAccess#removePlaced}, e cio' che lascia la mano o arriva al giocatore dipende dal loro esito; tutto
+ * quello che lo stato potrebbe rifiutare si controlla prima, cosi' nessuna eccezione lascia il record cambiato a meta'.
+ * Solo un cambio riuscito suona (design §12.13): montare un pezzo o la cella, o scambiare la cella,
+ * {@link FrameSounds.Sound#MOUNT}, smontarli o ritirare l'armatura stivata
  * {@link FrameSounds.Sound#UNMOUNT}; un rifiuto e la raccolta del telaio vuoto non suonano.
  * <p>
  * Lati e zone sono quelli del telaio ({@link ClickZones}): con yaw 0 guarda a sud (+Z) e ha la destra verso -X, come
@@ -49,7 +50,7 @@ import net.minecraft.world.phys.Vec3;
 public final class FrameInteractions {
     /** Messaggio sulla barra delle azioni a chi non puo' toccare il telaio. */
     public static final String LOCKED = "message." + RedstoneExoframes.MOD_ID + ".locked";
-    /** Messaggio sulla barra delle azioni quando lo slot del pezzo o della cella e' gia' occupato. */
+    /** Messaggio sulla barra delle azioni quando lo slot del pezzo e' gia' occupato. */
     public static final String SLOT_TAKEN = "message." + RedstoneExoframes.MOD_ID + ".slot_taken";
 
     /** Che cosa chiede la mano principale. */
@@ -70,10 +71,10 @@ public final class FrameInteractions {
     /**
      * Il clic destro di un giocatore sul telaio, sul server; {@code hit} e' relativo ai piedi dell'entita'. Regole, in
      * ordine: senza permesso ({@link FramePermissions#canUse}) solo il messaggio {@link #LOCKED}; un pezzo in mano si
-     * monta; una cella in mano si inserisce; mano vuota in piedi: si entra ({@link FrameEntry#enter}); mano vuota
-     * accovacciati: si smonta. La mano secondaria, uno spettatore, un giocatore morto (un pacchetto arrivato dopo la
-     * morte: cio' che si smonta finirebbe in un inventario che il gioco butta), un altro oggetto in mano o un telaio
-     * senza record passano senza effetto.
+     * monta; una cella in mano si inserisce, o si scambia con quella montata (design §12.10); mano vuota in piedi: si
+     * entra ({@link FrameEntry#enter}); mano vuota accovacciati: si smonta. La mano secondaria, uno spettatore, un
+     * giocatore morto (un pacchetto arrivato dopo la morte: cio' che si smonta finirebbe in un inventario che il gioco
+     * butta), un altro oggetto in mano o un telaio senza record passano senza effetto.
      */
     public static InteractionResult onInteract(ServerPlayer player, ExoframeEntity frame, Vec3 hit,
             InteractionHand hand) {
@@ -188,19 +189,28 @@ public final class FrameInteractions {
         };
     }
 
-    /** Inserisce la cella in mano se il telaio non ne ha una; altrimenti {@link #SLOT_TAKEN}. */
+    /**
+     * Inserisce la cella in mano; se il telaio ne ha gia' una, le due si scambiano (design §12.10). Prima il registro
+     * (vecchia fuori, nuova dentro), poi la mano e il giocatore, solo se il registro ha preso la cella: la cella in
+     * mano si consuma (non in creativa, convenzione della 3b) e la vecchia, se c'era, va al giocatore
+     * ({@link Handouts#give}, anche in creativa).
+     */
     private static InteractionResult insertCell(ServerPlayer player, ExoframeEntity frame, PlacedFrame record) {
-        if (record.state().cell() != null) {
-            tell(player, SLOT_TAKEN);
-            return InteractionResult.CONSUME;
-        }
         ItemStack held = player.getMainHandItem();
-        EnergyCell cell = ((CellItem) held.getItem()).toCell(held);
-        if (!Compat.frameState().updatePlaced(player.getServer(), record.frameId(), s -> s.insertCell(cell))) {
+        EnergyCell incoming = ((CellItem) held.getItem()).toCell(held);
+        EnergyCell[] old = new EnergyCell[1];
+        boolean changed = Compat.frameState().updatePlaced(player.getServer(), record.frameId(), s -> {
+            old[0] = s.removeCell();
+            s.insertCell(incoming);
+        });
+        if (!changed) {
             return InteractionResult.CONSUME;
         }
         if (!player.getAbilities().instabuild) {
             held.shrink(1);
+        }
+        if (old[0] != null) {
+            Handouts.give(player, CellItem.fromCell(old[0]));
         }
         refreshSummary(player.getServer(), frame);
         play(player, frame, FrameSounds.Sound.MOUNT);
