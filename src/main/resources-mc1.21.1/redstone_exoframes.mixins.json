@@ -4,12 +4,14 @@
   "package": "com.toxineren.exoframes.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
-    "PlayerSize121Mixin"
+    "PlayerSize121Mixin",
+    "PlayerSuitMixin"
   ],
   "client": [
     "client.ItemInHandLayerMixin",
     "client.LivingEntityCullingMixin",
-    "client.PlayerRendererMixin"
+    "client.PlayerRendererMixin",
+    "client.LocalPlayerSprintMixin"
   ],
   "injectors": {
     "defaultRequire": 1
