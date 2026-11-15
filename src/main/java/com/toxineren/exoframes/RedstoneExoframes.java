@@ -69,7 +69,7 @@ public final class RedstoneExoframes {
         // giocatori finti non ricevono l'evento, e i test chiamano SuitTick.tick a mano
         SuitTick.register();
         SuitRestrictions.register(); // con la tuta il letto si rifiuta, sui due lati e per le due mani
-        SuitDamage.register(); // usura dei pezzi: pulizia del segno della riga ERROR all'uscita dal server
+        SuitDamage.register(); // usura dei pezzi: segno della riga ERROR all'uscita; caduta annullata, consuma le gambe
         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
         EntityEvent.LIVING_DEATH.register((entity, source) -> {
             if (entity instanceof ServerPlayer player) {

@@ -2,10 +2,13 @@ package com.toxineren.exoframes.gametest;
 
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
+import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.core.armor.DamageKind;
 import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
+import com.toxineren.exoframes.core.energy.EnergyCell;
+import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.frame.FrameSounds;
 import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitDamage;
@@ -14,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.OptionalDouble;
+import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
@@ -21,6 +25,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -54,6 +59,10 @@ public final class DamageGameTests {
         add(tests, "anvilHitsTheHelmet", DamageGameTests::anvilHitsTheHelmet);
         add(tests, "aBreakingPieceLowersTheArmorAndTells", DamageGameTests::aBreakingPieceLowersTheArmorAndTells);
         add(tests, "wearAtEmptyStillReachesTheOwner", DamageGameTests::wearAtEmptyStillReachesTheOwner);
+        add(tests, "fallWearsTheLegsAndNeverHurts", DamageGameTests::fallWearsTheLegsAndNeverHurts);
+        add(tests, "pearlLandingWearsTheLegs", DamageGameTests::pearlLandingWearsTheLegs);
+        add(tests, "fallOnABareFrameWearsNothing", DamageGameTests::fallOnABareFrameWearsNothing);
+        add(tests, "brokenLegsPassTheFallToOtherPieces", DamageGameTests::brokenLegsPassTheFallToOtherPieces);
         return tests;
     }
 
@@ -253,6 +262,89 @@ public final class DamageGameTests {
         helper.succeed();
     }
 
+    /**
+     * Una caduta di 10 blocchi ({@code ceil((10 - 3) x 1) = 7}, 7 000 millesimi, sulle due versioni): il pilota non
+     * perde salute; le gambe sono i primari (60 %: 2 100 ciascuna, 2 punti e riporto 100), gli altri 2 800 secondo le
+     * quote (elmo 600, torso 1 200, braccia 500). Il controllo: un giocatore senza telaio, nella stessa struttura,
+     * perde esattamente 7,0 (senza, un giocatore protetto per un'altra ragione farebbe passare il test). Il giocatore
+     * finto non cade da se' ({@code checkFallDamage} di {@code ServerPlayer} e' vuoto): {@code causeFallDamage} si
+     * chiama a mano, e il suo valore non si guarda (e' vero anche quando l'evento annulla).
+     */
+    private static void fallWearsTheLegsAndNeverHurts(GameTestHelper helper) {
+        ServerPlayer p = suited(helper);
+        p.causeFallDamage(10.0F, 1.0F, p.damageSources().fall());
+        assertHealth(helper, p, 20.0F, "suited pilot after the fall");
+        assertWear(helper, p, "after the fall", 180, 600, 179, 200, 180, 500, 178, 100);
+        ServerPlayer bare = Compat.gameTests().survivalPlayer(helper);
+        helper.setBlock(new BlockPos(5, 1, 5), Blocks.STONE);
+        Vec3 spot = helper.absoluteVec(new Vec3(5.5, 2.0, 5.5));
+        bare.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+        bare.causeFallDamage(10.0F, 1.0F, bare.damageSources().fall());
+        assertHealth(helper, bare, 13.0F, "player without a frame after the fall");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * L'atterraggio della perla dell'Ender e' una caduta ({@code hurt(fall(), 5.0F)} nel gioco): annullato, e le gambe
+     * prendono 1 500 millesimi ciascuna (1 punto, riporto 500); il torso, con 857 millesimi, non perde punti.
+     */
+    private static void pearlLandingWearsTheLegs(GameTestHelper helper) {
+        ServerPlayer p = suited(helper);
+        helper.assertTrue(!p.hurt(p.damageSources().fall(), 5.0F), "pearl landing not cancelled");
+        assertHealth(helper, p, 20.0F, "suited pilot after the pearl landing");
+        assertPiece(helper, p, "after the pearl landing", PieceSlot.LEFT_LEG, 179, 500);
+        assertPiece(helper, p, "after the pearl landing", PieceSlot.RIGHT_LEG, 179, 500);
+        int torso = worn(p, PieceSlot.TORSO).durability();
+        helper.assertTrue(torso == NEW, "torso " + torso + " after the pearl landing, expected " + NEW);
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Un telaio senza pezzi protegge comunque il pilota dalla caduta (effetto di base del telaio) e non consuma
+     * nulla: nessun pezzo, nessun riporto.
+     */
+    private static void fallOnABareFrameWearsNothing(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        FrameState state = ownedBy(p);
+        state.insertCell(new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, 5_000));
+        wearFrameAt(helper, p, state, FEET);
+        p.causeFallDamage(10.0F, 1.0F, p.damageSources().fall());
+        assertHealth(helper, p, 20.0F, "pilot of a bare frame after the fall");
+        FrameState after = Compat.frameState().get(p).orElseThrow();
+        helper.assertTrue(after.pieces().isEmpty(), "pieces " + after.pieces().keySet() + ", expected none");
+        helper.assertTrue(after.damageCarryMilli().isEmpty(),
+                "carry " + after.damageCarryMilli() + ", expected none");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Con le due gambe rotte la caduta passa tutta agli altri pezzi integri, con le quote su 0,70: elmo 1 500, torso
+     * 3 000, braccia 1 250 ciascuna; il pilota non perde salute.
+     */
+    private static void brokenLegsPassTheFallToOtherPieces(GameTestHelper helper) {
+        ServerPlayer p = suited(helper);
+        boolean changed = Compat.frameState().changeWorn(p, s -> {
+            s.pieces().get(PieceSlot.LEFT_LEG).damage(180);
+            s.pieces().get(PieceSlot.RIGHT_LEG).damage(180);
+        });
+        helper.assertTrue(changed, "changeWorn refused");
+        p.causeFallDamage(10.0F, 1.0F, p.damageSources().fall());
+        assertHealth(helper, p, 20.0F, "pilot with broken legs after the fall");
+        assertPiece(helper, p, "after the fall", PieceSlot.HELMET, 179, 500);
+        assertPiece(helper, p, "after the fall", PieceSlot.TORSO, 177, 0);
+        assertPiece(helper, p, "after the fall", PieceSlot.LEFT_ARM, 179, 250);
+        assertPiece(helper, p, "after the fall", PieceSlot.RIGHT_ARM, 179, 250);
+        for (PieceSlot leg : List.of(PieceSlot.LEFT_LEG, PieceSlot.RIGHT_LEG)) {
+            int durability = worn(p, leg).durability();
+            helper.assertTrue(durability == 0, leg + " " + durability + " after the fall, expected 0");
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
     /** Un giocatore in sopravvivenza dentro sei pezzi Rottame nuovi, con 5 000 RE, in {@link #FEET}. */
     private static ServerPlayer suited(GameTestHelper helper) {
         ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
@@ -276,6 +368,12 @@ public final class DamageGameTests {
         assertPiece(helper, p, when, PieceSlot.RIGHT_ARM, arm, armCarry);
         assertPiece(helper, p, when, PieceSlot.LEFT_LEG, leg, legCarry);
         assertPiece(helper, p, when, PieceSlot.RIGHT_LEG, leg, legCarry);
+    }
+
+    /** La salute del giocatore, esatta. */
+    private static void assertHealth(GameTestHelper helper, ServerPlayer p, float expected, String who) {
+        float health = p.getHealth();
+        helper.assertTrue(health == expected, who + ": health " + health + ", expected " + expected);
     }
 
     private static void assertPiece(GameTestHelper helper, ServerPlayer p, String when, PieceSlot slot,

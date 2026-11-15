@@ -6,6 +6,8 @@ import com.toxineren.exoframes.core.armor.DamageKind;
 import com.toxineren.exoframes.core.armor.DamageRouter;
 import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
+import dev.architectury.event.EventResult;
+import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.PlayerEvent;
 import java.util.EnumMap;
 import java.util.Locale;
@@ -16,6 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 
 /**
@@ -44,6 +47,17 @@ import net.minecraft.world.entity.player.Player;
  * <b>Che cosa non fa.</b> Non annulla mai il colpo, non tocca gli attributi e non riduce il danno (la protezione viene
  * dagli attributi), non lancia mai nel codice del danno del gioco: ogni {@code RuntimeException} si cattura, con una
  * riga ERROR alla prima per giocatore e sessione, poi silenzio.
+ * <p>
+ * <b>La caduta</b> (design §12.8) e' l'unica eccezione, ed e' una deroga dichiarata a §5.7: la caduta aggira
+ * l'armatura e non arriva all'aggancio, quindi si prende in {@code EntityEvent.LIVING_HURT} (lato server; su Fabric e
+ * Forge prima della finestra di invulnerabilita' e del controllo della creativa, su NeoForge dentro
+ * {@code LivingEntity.hurt}). Per chi ha un record indossato il colpo si annulla sempre (il pilota non prende mai
+ * danno da caduta: effetto di base del telaio, anche nudo, scarico o con le gambe rotte) e l'importo annullato consuma
+ * i pezzi come {@link DamageKind#FALL} ({@link #onFall}), nello stesso percorso dell'usura. Senza record indossato
+ * nessun annullamento: con il registro in sola lettura {@code wornFrameId} e' vuoto, e la caduta e' quella del gioco
+ * base. Nessun conto della finestra di invulnerabilita' per le cadute. Restano i suoni della caduta (suonano prima del
+ * danno) e la statistica; su NeoForge ogni annullamento lascia un {@code DamageContainer} sulla pila dell'entita'
+ * (comportamento del loader, accettato).
  */
 public final class SuitDamage {
     /** Chiave del messaggio "pezzo in stato critico", con il nome del pezzo. */
@@ -59,11 +73,50 @@ public final class SuitDamage {
     }
 
     /**
-     * Registra la pulizia del segno della riga ERROR all'uscita dal server ({@code PlayerEvent.PLAYER_QUIT}). Una
-     * volta, nell'init comune.
+     * Registra la pulizia del segno della riga ERROR all'uscita dal server ({@code PlayerEvent.PLAYER_QUIT}) e
+     * l'ascoltatore della caduta ({@code EntityEvent.LIVING_HURT}). Una volta, nell'init comune.
      */
     public static void register() {
         PlayerEvent.PLAYER_QUIT.register(player -> FAILURES_LOGGED.remove(player.getUUID()));
+        EntityEvent.LIVING_HURT.register(SuitDamage::onLivingHurt);
+    }
+
+    /**
+     * Ascoltatore di {@code LIVING_HURT}: annulla la caduta di un giocatore con un telaio indossato e la fa consumare
+     * ai pezzi; per tutto il resto passa. Le guardie, nell'ordine: un {@code ServerPlayer} (su Fabric e Forge l'evento
+     * arriva anche per i giocatori del client), vivo, non invulnerabile, un importo maggiore di zero, non in creativa
+     * ({@code instabuild}) ne' spettatore, un sorgente nel tag {@code is_fall}, un record indossato. Come l'usura non
+     * lancia mai: un errore nelle ultime due guardie lascia passare la caduta, con la stessa riga ERROR.
+     */
+    private static EventResult onLivingHurt(LivingEntity entity, DamageSource source, float amount) {
+        if (!(entity instanceof ServerPlayer player) || player.isDeadOrDying() || player.getAbilities().invulnerable
+                || !(amount > 0F) || player.getAbilities().instabuild || player.isSpectator()) {
+            return EventResult.pass();
+        }
+        try {
+            if (!Compat.damage().isFall(source) || Compat.frameState().wornFrameId(player).isEmpty()) {
+                return EventResult.pass();
+            }
+        } catch (RuntimeException e) {
+            logFailure(player, e);
+            return EventResult.pass();
+        }
+        onFall(player, amount);
+        return EventResult.interruptFalse();
+    }
+
+    /**
+     * La caduta di {@code amount} punti di {@code player}, gia' annullata dall'ascoltatore, consuma i pezzi del telaio
+     * indossato come {@link DamageKind#FALL}: le gambe integre sono i primari (la quota primaria divisa fra loro), il
+     * resto agli altri pezzi integri secondo le quote; senza altri pezzi integri tutto alle gambe, con le gambe rotte o
+     * assenti tutto agli altri, su un telaio nudo nulla. Non lancia mai.
+     */
+    public static void onFall(ServerPlayer player, float amount) {
+        try {
+            wear(player, DamageKind.FALL, amount);
+        } catch (RuntimeException e) {
+            logFailure(player, e);
+        }
     }
 
     /**
@@ -80,9 +133,14 @@ public final class SuitDamage {
                 wear(sp, Compat.damage().classify(sp, source), amount);
             }
         } catch (RuntimeException e) {
-            if (FAILURES_LOGGED.add(sp.getUUID())) {
-                RedstoneExoframes.LOGGER.error("Exoframe wear failed for {}", sp.getScoreboardName(), e);
-            }
+            logFailure(sp, e);
+        }
+    }
+
+    /** La riga ERROR dell'usura fallita, alla prima per giocatore e sessione; poi silenzio. */
+    private static void logFailure(ServerPlayer player, RuntimeException e) {
+        if (FAILURES_LOGGED.add(player.getUUID())) {
+            RedstoneExoframes.LOGGER.error("Exoframe wear failed for {}", player.getScoreboardName(), e);
         }
     }
 
