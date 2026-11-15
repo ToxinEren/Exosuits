@@ -19,6 +19,7 @@ public final class RedstoneExoframesClient {
         Compat.frameState().registerClient();
         ClientPlayerEvent.CLIENT_PLAYER_QUIT.register(player -> ClientRules.reset()); // valori del server dimenticati
         ClientCompat.renderHooks().addPlayerLayer(SuitLayer::new);
+        ClientCompat.renderHooks().addHudRenderer(EnergyHud::render);
         EntityRendererRegistry.register(ModEntities.EXOFRAME, ExoframeEntityRenderer::new);
         ExitKey.register();
         CellSwapKey.register();

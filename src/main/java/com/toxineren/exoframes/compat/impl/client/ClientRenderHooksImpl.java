@@ -1,8 +1,11 @@
 package com.toxineren.exoframes.compat.impl.client;
 
 import com.toxineren.exoframes.compat.client.ClientRenderHooks;
+import dev.architectury.event.events.client.ClientGuiEvent;
 import java.util.Objects;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
@@ -40,6 +43,9 @@ import net.neoforged.neoforge.client.event.EntityRenderersEvent;
  * </ul>
  * Su Forge e NeoForge {@code LivingEntityRenderer.addLayer} e' pubblico (su vanilla e' protetto). Il bus del mod si
  * prende da Architectury, gia' disponibile quando l'entrypoint chiama questo metodo dal costruttore della mod.
+ * <p>
+ * Il disegno sopra l'interfaccia passa da {@code ClientGuiEvent.RENDER_HUD} di Architectury, uguale sui quattro target
+ * salvo il secondo argomento della richiamata.
  */
 public final class ClientRenderHooksImpl implements ClientRenderHooks {
 
@@ -70,6 +76,14 @@ public final class ClientRenderHooksImpl implements ClientRenderHooks {
                     }
                 });
         //?}
+    }
+
+    @Override
+    public void addHudRenderer(Consumer<GuiGraphics> renderer) {
+        Objects.requireNonNull(renderer, "renderer must not be null");
+        // Architectury 9.2.14 passa (GuiGraphics, float tickDelta), 13.0.11 (GuiGraphics, DeltaTracker): la lambda
+        // ignora il secondo argomento, l'unica cosa che cambia, quindi la stessa riga vale per le quattro varianti.
+        ClientGuiEvent.RENDER_HUD.register((graphics, partial) -> renderer.accept(graphics));
     }
 
     //? if !fabric {

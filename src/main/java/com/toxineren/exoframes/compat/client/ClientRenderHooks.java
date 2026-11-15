@@ -1,14 +1,17 @@
 package com.toxineren.exoframes.compat.client;
 
+import java.util.function.Consumer;
 import java.util.function.Function;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.entity.RenderLayerParent;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 
 /**
- * Agganci ai renderer vanilla che ogni loader espone in modo diverso. Solo client, da chiamare una volta dall'init
- * client ({@code RedstoneExoframesClient.init()}), prima che il gioco costruisca i renderer delle entita'.
+ * Agganci ai renderer vanilla che ogni loader espone in modo diverso, e al disegno sopra l'interfaccia del gioco, la
+ * cui richiamata cambia fra le due versioni. Solo client, da chiamare una volta dall'init client
+ * ({@code RedstoneExoframesClient.init()}), prima che il gioco costruisca i renderer delle entita'.
  */
 public interface ClientRenderHooks {
     /**
@@ -18,4 +21,10 @@ public interface ClientRenderHooks {
      */
     void addPlayerLayer(Function<RenderLayerParent<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>>,
             RenderLayer<AbstractClientPlayer, PlayerModel<AbstractClientPlayer>>> factory);
+
+    /**
+     * Aggiunge un disegno sopra l'interfaccia del gioco, chiamato a ogni fotogramma con la {@link GuiGraphics} del
+     * fotogramma. Solo client, una volta dall'init client.
+     */
+    void addHudRenderer(Consumer<GuiGraphics> renderer);
 }
