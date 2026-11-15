@@ -2,6 +2,7 @@ package com.toxineren.exoframes.client;
 
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.frame.ClientRules;
 import com.toxineren.exoframes.frame.FrameExitPacket;
 import dev.architectury.event.events.client.ClientPlayerEvent;
 import dev.architectury.event.events.client.ClientTickEvent;
@@ -13,13 +14,14 @@ import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Il tasto di uscita dal telaio (design, par. 5.5), predefinito {@code V}: tenuto premuto per
- * {@code frame.exitHoldSeconds} secondi, senza schermate aperte e con la tuta del giocatore locale disegnata
- * ({@link SuitLayer#wearsSuit}), manda al server una volta {@link FrameExitPacket}; intanto la barra delle azioni mostra
- * l'avanzamento. Lasciare il tasto azzera il conteggio e permette un nuovo invio; una schermata aperta o la tuta che
- * non si disegna piu' azzerano il conteggio, non l'invio; uscire dal mondo azzera tutto. Tutta la decisione sta in
- * {@link ExitHold}: qui si leggono il tasto e le condizioni e si fa quello che dice. Il server decide da solo, sul suo
- * registro, se il giocatore e' davvero in un telaio. Solo client.
+ * Il tasto di uscita dal telaio (design, par. 5.5), predefinito {@code V}: tenuto premuto per i secondi del server
+ * ({@code frame.exitHoldSeconds} ricevuto con {@code client_rules}, {@link ClientRules#exitHoldSeconds()}; prima del
+ * pacchetto quelli della config locale), senza schermate aperte e con la tuta del giocatore locale disegnata
+ * ({@link SuitLayer#wearsSuit}), manda al server una volta {@link FrameExitPacket}; intanto la barra delle azioni
+ * mostra l'avanzamento. Lasciare il tasto azzera il conteggio e permette un nuovo invio; una schermata aperta o la
+ * tuta che non si disegna piu' azzerano il conteggio, non l'invio; uscire dal mondo azzera tutto. Tutta la decisione
+ * sta in {@link ExitHold}: qui si leggono il tasto e le condizioni e si fa quello che dice. Il server decide da solo,
+ * sul suo registro, se il giocatore e' davvero in un telaio. Solo client.
  */
 public final class ExitKey {
     /** Il nome del tasto nelle impostazioni dei controlli. */
@@ -51,7 +53,7 @@ public final class ExitKey {
         }
         boolean keyDown = KEY.isDown();
         boolean canCount = keyDown && minecraft.screen == null && SuitLayer.wearsSuit(player);
-        int needed = ExitHold.ticksNeeded(RedstoneExoframes.config().frame.exitHoldSeconds);
+        int needed = ExitHold.ticksNeeded(ClientRules.exitHoldSeconds());
         switch (HOLD.tick(keyDown, canCount, needed)) {
             case SHOW_PROGRESS -> player.displayClientMessage(Component.translatable(HOLD_MESSAGE, HOLD.percent()),
                     true);
