@@ -11,6 +11,7 @@ import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
+import com.toxineren.exoframes.gametest.CarryOverGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
@@ -51,6 +52,7 @@ public final class RedstoneExoframes {
             return EventResult.pass();
         });
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
+        Compat.gameTests().register(CarryOverGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

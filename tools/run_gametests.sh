@@ -2,7 +2,7 @@
 # Test in gioco (GameTest) senza client, dalla radice del repository: bash tools/run_gametests.sh [variante...]
 # Senza argomenti prova le quattro varianti, una chiamata Gradle per variante, e continua anche se una fallisce.
 # Una variante passa solo se Gradle esce con 0 E il log contiene "All N required tests passed" con N > 0 e N uguale al
-# numero di righe "add(tests," in ExoframeGameTests.generate(): su Forge e NeoForge un server partito senza test esce
+# numero di righe "add(tests," di tutti i file di gametest/: su Forge e NeoForge un server partito senza test esce
 # comunque con 0, e un test perso nella registrazione non deve passare inosservato. Passa inoltre solo se nel log non
 # c'e' nessun avviso o errore del mod (o di vanilla che nomina il telaio) fuori dall'elenco di quelli voluti,
 # tools/log_allowlist.txt, letto da tools/check_log.py. Il log di ogni variante resta in
@@ -17,10 +17,10 @@ else
     variants=(1.20.1-forge 1.20.1-fabric 1.21.1-fabric 1.21.1-neoforge)
 fi
 
-tests=src/main/java/com/toxineren/exoframes/gametest/ExoframeGameTests.java
-expected=$(grep -cE '^[[:space:]]*add\(tests,' "$tests" || true)
+tests_dir=src/main/java/com/toxineren/exoframes/gametest
+expected=$(cat "$tests_dir"/*.java | grep -cE '^[[:space:]]*add\(tests,' || true)
 if [ "$expected" -eq 0 ]; then
-    echo "FAIL: nessuna riga 'add(tests,' in $tests" >&2
+    echo "FAIL: nessuna riga 'add(tests,' in $tests_dir/*.java" >&2
     exit 1
 fi
 
@@ -38,7 +38,7 @@ for v in "${variants[@]}"; do
         echo "FAIL $v: uscita 0 ma nessuna riga 'All N required tests passed' con N > 0 (i test non sono girati)" >&2
         fail=1
     elif [ "$passed" -ne "$expected" ]; then
-        echo "FAIL $v: passati $passed test obbligatori, attesi $expected (righe 'add(tests,' in $tests)" >&2
+        echo "FAIL $v: passati $passed test obbligatori, attesi $expected (righe 'add(tests,' in $tests_dir/*.java)" >&2
         fail=1
     elif ! problems=$(python3 -I tools/check_log.py gametest "$log"); then
         echo "FAIL $v: avvisi o errori del mod non previsti in tools/log_allowlist.txt:" >&2

@@ -23,6 +23,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.gameevent.BlockPositionSource;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gameevent.GameEventListener;
@@ -67,6 +68,13 @@ import net.neoforged.neoforge.gametest.GameTestHooks;
  * falso, e i test dello spettatore non si potrebbero fare.
  */
 public final class GameTestsImpl implements GameTests {
+    /**
+     * I tick di protezione d'ingresso di un giocatore nuovo: il costruttore di {@code ServerPlayer} mette il campo
+     * {@code spawnInvulnerableTime} a 60 e {@code ServerPlayer.tick()} lo scala di uno; finche' e' positivo i colpi non
+     * contano.
+     */
+    private static final int SPAWN_PROTECTION_TICKS = 60;
+
     @Override
     public void register(Class<?> testClass) {
         //? if fabric {
@@ -106,6 +114,16 @@ public final class GameTestsImpl implements GameTests {
         //?} else {
         /*helper.getLevel().getServer().getPlayerList().placeNewPlayer(connection, player);*/
         //?}
+        return player;
+    }
+
+    @Override
+    public ServerPlayer survivalPlayer(GameTestHelper helper) {
+        ServerPlayer player = mockServerPlayer(helper);
+        player.setGameMode(GameType.SURVIVAL);
+        for (int i = 0; i < SPAWN_PROTECTION_TICKS; i++) {
+            player.tick();
+        }
         return player;
     }
 
