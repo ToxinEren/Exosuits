@@ -13,6 +13,7 @@ import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
+import com.toxineren.exoframes.frame.SuitRestrictions;
 import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.frame.SuitTick;
 import com.toxineren.exoframes.gametest.CarryOverGameTests;
@@ -63,6 +64,7 @@ public final class RedstoneExoframes {
         // tick dell'energia su PLAYER_PRE, solo sul server: li' la posizione e' l'ultima accettata dal client; i
         // giocatori finti non ricevono l'evento, e i test chiamano SuitTick.tick a mano
         SuitTick.register();
+        SuitRestrictions.register(); // con la tuta il letto si rifiuta, sui due lati e per le due mani
         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
         EntityEvent.LIVING_DEATH.register((entity, source) -> {
             if (entity instanceof ServerPlayer player) {

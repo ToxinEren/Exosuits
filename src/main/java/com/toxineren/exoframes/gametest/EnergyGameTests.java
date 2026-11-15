@@ -3,27 +3,35 @@ package com.toxineren.exoframes.gametest;
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameSounds;
 import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import com.toxineren.exoframes.frame.SuitTick;
+import dev.architectury.event.EventResult;
+import dev.architectury.event.events.common.InteractionEvent;
 import dev.architectury.event.events.common.TickEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.vehicle.Boat;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /**
  * Test in gioco del tick dell'energia (design §12.3): consumo da fermi, camminando e correndo, salti, teletrasporti,
- * cambio di dimensione, cavalcature, creativa e spettatore. Tutto nello stesso tick del server: i tempi dati a
+ * cambio di dimensione, cavalcature, letti, creativa e spettatore. Tutto nello stesso tick del server: i tempi dati a
  * {@link SuitTick#tick} sono {@code now(helper)} piu' k, sempre in avanti; i numeri vengono dai valori predefiniti
  * della config (fermo 100, cammino 400, corsa 1000 millesimi di RE per tick, salto 15 RE). Le regole comuni e gli
  * aiuti stanno in {@link GameTestKit}.
@@ -58,6 +66,7 @@ public final class EnergyGameTests {
         add(tests, "idleTickWithoutAWholeReDoesNotSync", EnergyGameTests::idleTickWithoutAWholeReDoesNotSync);
         add(tests, "walkingSyncsEveryFiveTicks", EnergyGameTests::walkingSyncsEveryFiveTicks);
         add(tests, "clockGoingBackwardsRestartsTheLimits", EnergyGameTests::clockGoingBackwardsRestartsTheLimits);
+        add(tests, "bedIsRefusedInASuit", EnergyGameTests::bedIsRefusedInASuit);
         return tests;
     }
 
@@ -439,6 +448,37 @@ public final class EnergyGameTests {
         count = Compat.gameTests().syncCount(p);
         helper.assertTrue(count == synced + 1, (count - synced) + " syncs after the clock went back, expected 1");
         leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Con la tuta il letto si rifiuta (design §12.3): le chiamate passano dall'evento, cosi' il test prova anche la
+     * registrazione. Le due mani annullano il clic, il messaggio arriva una volta sola, dalla mano principale; un
+     * blocco qualunque con la tuta e il letto senza tuta passano. {@code Blocks.RED_BED} da solo e' la meta' dei
+     * piedi: basta per {@code instanceof BedBlock}, e il letto non viene mai usato.
+     */
+    private static void bedIsRefusedInASuit(GameTestHelper helper) {
+        ServerPlayer wearer = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer plain = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(wearer, SuitSummary.BARE);
+        BlockPos bed = helper.absolutePos(new BlockPos(1, 1, 1));
+        BlockPos stone = helper.absolutePos(new BlockPos(3, 1, 1));
+        helper.setBlock(new BlockPos(1, 1, 1), Blocks.RED_BED);
+        helper.setBlock(new BlockPos(3, 1, 1), Blocks.STONE);
+        EventResult main = InteractionEvent.RIGHT_CLICK_BLOCK.invoker().click(wearer, InteractionHand.MAIN_HAND, bed,
+                Direction.UP);
+        helper.assertTrue(main.interruptsFurtherEvaluation() && main.isFalse(), "bed accepted in a suit: " + main);
+        helper.assertTrue(messages(wearer, SuitTick.LEAVE_FRAME_FIRST) == 1, "no message for the main hand");
+        EventResult off = InteractionEvent.RIGHT_CLICK_BLOCK.invoker().click(wearer, InteractionHand.OFF_HAND, bed,
+                Direction.UP);
+        helper.assertTrue(off.interruptsFurtherEvaluation() && off.isFalse(), "bed accepted with the off hand");
+        helper.assertTrue(messages(wearer, SuitTick.LEAVE_FRAME_FIRST) == 1, "a second message for the off hand");
+        helper.assertTrue(!InteractionEvent.RIGHT_CLICK_BLOCK.invoker().click(wearer, InteractionHand.MAIN_HAND, stone,
+                Direction.UP).interruptsFurtherEvaluation(), "a stone block refused in a suit");
+        helper.assertTrue(!InteractionEvent.RIGHT_CLICK_BLOCK.invoker().click(plain, InteractionHand.MAIN_HAND, bed,
+                Direction.UP).interruptsFurtherEvaluation(), "bed refused without a suit");
+        helper.assertTrue(messages(plain, SuitTick.LEAVE_FRAME_FIRST) == 0, "message without a suit");
+        leaveTestFrame(wearer);
         helper.succeed();
     }
 
