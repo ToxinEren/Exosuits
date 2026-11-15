@@ -9,6 +9,7 @@ import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.FrameSight;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -41,6 +43,10 @@ import net.minecraft.world.entity.raid.Raids;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoublePlantBlock;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -64,6 +70,8 @@ public final class CarryOverGameTests {
                 CarryOverGameTests::placeholderOfANonWearerGoesWhenAMenuCloses);
         add(tests, "quitSaveIgnoresSaveOff", CarryOverGameTests::quitSaveIgnoresSaveOff);
         add(tests, "registryFileWithoutSectionsIsReadOnly", CarryOverGameTests::registryFileWithoutSectionsIsReadOnly);
+        add(tests, "tallGrassHidesTheFrameFromTheCommand", CarryOverGameTests::tallGrassHidesTheFrameFromTheCommand);
+        add(tests, "eyesInsideAFrameBoxPickThatFrame", CarryOverGameTests::eyesInsideAFrameBoxPickThatFrame);
         return tests;
     }
 
@@ -221,5 +229,78 @@ public final class CarryOverGameTests {
             deleteTree(copy);
         }
         helper.succeed();
+    }
+    /**
+     * L'erba alta fra il giocatore e il telaio lo nasconde al comando come al clic (design §12.14: la linea di vista
+     * dei comandi si ferma ai contorni dei blocchi, non alle forme di collisione): ne' {@code unlock} ne'
+     * {@code remove} lo trovano; tolta l'erba, {@code unlock} lo trova. Premessa: le due meta' dell'erba non hanno
+     * forma di collisione e hanno un contorno, altrimenti il test passerebbe anche per un blocco solido.
+     */
+    private static void tallGrassHidesTheFrameFromTheCommand(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity frame = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 2.5), 0f);
+        standFacingNorth(helper, owner, new Vec3(2.5, 1.0, 5.5)); // occhi a y relativa 2,62
+        BlockPos lower = new BlockPos(2, 1, 4);
+        BlockPos upper = new BlockPos(2, 2, 4);
+        BlockState grass = Blocks.TALL_GRASS.defaultBlockState();
+        helper.setBlock(new BlockPos(2, 0, 4), Blocks.DIRT);
+        helper.setBlock(lower, grass);
+        helper.setBlock(upper, grass.setValue(DoublePlantBlock.HALF, DoubleBlockHalf.UPPER));
+        for (BlockPos pos : List.of(lower, upper)) {
+            BlockPos at = helper.absolutePos(pos);
+            BlockState state = helper.getLevel().getBlockState(at);
+            helper.assertTrue(state.is(Blocks.TALL_GRASS), "no tall grass at " + pos);
+            helper.assertTrue(state.getCollisionShape(helper.getLevel(), at).isEmpty()
+                    && !state.getShape(helper.getLevel(), at).isEmpty(),
+                    "tall grass at " + pos + " has a collision shape or no outline");
+        }
+
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 0, "unlocked a frame behind tall grass");
+        helper.assertTrue(exoframeCommand(helper, owner, 2, "remove") == 0, "removed a frame behind tall grass");
+        helper.assertTrue(!recordState(helper, frame).unlocked() && !frame.isRemoved(),
+                "frame behind tall grass changed");
+
+        // tolta l'erba (prima la meta' alta, poi la bassa) il telaio si trova: e' stata l'erba a nasconderlo
+        helper.setBlock(upper, Blocks.AIR);
+        helper.setBlock(lower, Blocks.AIR);
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 1 && recordState(helper, frame).unlocked(),
+                "frame not unlocked without the tall grass");
+        removeFrame(server, frame);
+        helper.succeed();
+    }
+
+    /**
+     * Con gli occhi dentro il riquadro di un telaio il comando prende quel telaio, come il clic (design §12.14), e non
+     * uno piu' lontano sulla stessa linea. Due coppie con l'ordine di creazione invertito: oggi il risultato dipende
+     * dall'ordine in cui il gioco restituisce le entita' ({@code getEntityHitResult} mette a zero la distanza di
+     * un'entita' che contiene il punto di partenza e la fa sostituire da qualunque entita' colpita dopo).
+     */
+    private static void eyesInsideAFrameBoxPickThatFrame(GameTestHelper helper) {
+        ServerPlayer owner = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        ExoframeEntity a1 = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 5.5), 0f);
+        ExoframeEntity b1 = placeFrame(helper, ownedBy(owner), new Vec3(2.5, 1.0, 2.5), 0f);
+        ExoframeEntity b2 = placeFrame(helper, ownedBy(owner), new Vec3(5.5, 1.0, 2.5), 0f);
+        ExoframeEntity a2 = placeFrame(helper, ownedBy(owner), new Vec3(5.5, 1.0, 5.5), 0f);
+        assertEyesInsidePick(helper, owner, a1, b1, new Vec3(2.5, 1.0, 5.5));
+        assertEyesInsidePick(helper, owner, a2, b2, new Vec3(5.5, 1.0, 5.5));
+        for (ExoframeEntity frame : List.of(a1, b1, a2, b2)) {
+            removeFrame(server, frame);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Il giocatore in piedi nel telaio {@code a} guarda verso {@code b}: la mira e {@code unlock} prendono {@code a}.
+     */
+    private static void assertEyesInsidePick(GameTestHelper helper, ServerPlayer owner, ExoframeEntity a,
+            ExoframeEntity b, Vec3 relativeFeet) {
+        standFacingNorth(helper, owner, relativeFeet);
+        helper.assertTrue(a.getBoundingBox().contains(owner.getEyePosition()), "eyes not inside the frame box");
+        helper.assertTrue(FrameSight.inSight(owner).map(ExoframeEntity::frameId).equals(Optional.of(a.frameId())),
+                "the sight did not pick the frame around the eyes");
+        helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 1 && recordState(helper, a).unlocked()
+                && !recordState(helper, b).unlocked(), "the command unlocked the wrong frame");
     }
 }
