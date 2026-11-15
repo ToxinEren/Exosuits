@@ -85,10 +85,10 @@ public final class FrameEntry {
      * entrare non consegna nulla e nulla cade a terra; l'armatura indossata che non e' un segnaposto si stiva nel
      * record con il suo slot (accanto a quella gia' stivata: due voci per lo stesso slot vanno bene) e solo dopo lascia
      * gli slot; {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del
-     * telaio con il suo yaw (il pitch resta il suo); l'entita' si elimina; le dimensioni del giocatore si ricalcolano
-     * subito. Gli slot armatura cambiano in silenzio ({@link Placeholders#setArmorSlot}). Il punto del telaio diventa
-     * la prima posizione sicura del giocatore ({@link SafeSpots}); una riga nel log dice chi e' entrato in quale
-     * telaio.
+     * telaio con il suo yaw (il pitch resta il suo); l'entita' si elimina; il punto del telaio diventa la prima
+     * posizione sicura del giocatore ({@link SafeSpots}); infine {@link WornState#changed} (evento "entered"), dopo il
+     * teletrasporto, cosi' l'ingombro si calcola nel punto del telaio. Gli slot armatura cambiano in silenzio
+     * ({@link Placeholders#setArmorSlot}).
      *
      * @return true se il giocatore e' entrato
      */
@@ -140,8 +140,7 @@ public final class FrameEntry {
         player.teleportTo(level, spot.x, spot.y, spot.z, record.yaw(), player.getXRot());
         frame.discard();
         SafeSpots.remember(player, level.dimension(), spot);
-        player.refreshDimensions();
-        FrameLog.event(record.frameId(), "entered", player, level, spot);
+        WornState.changed(player, "entered", record.frameId(), level, spot);
         return true;
     }
 
@@ -157,8 +156,7 @@ public final class FrameEntry {
      * <li>il record diventa piazzato nel punto di riposo del telaio (vedi {@link #restingSpot}), con il yaw del
      * giocatore riportato a [-180, 180) come per l'oggetto telaio ({@link FrameStateAccess#exit});</li>
      * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}), se il chunk del punto ha le entita'
-     * caricate (altrimenti la crea il riallineamento quando si carica), e le dimensioni del giocatore ricalcolate
-     * subito;</li>
+     * caricate (altrimenti la crea il riallineamento quando si carica), poi {@link WornState#changed};</li>
      * <li>se gli occhi del giocatore stanno nel riquadro del telaio appena lasciato, il giocatore fa un passo fuori
      * ({@link #stepOut}); altrimenti, e se non c'e' un posto libero accanto, resta dov'e'.</li>
      * </ol>
@@ -273,10 +271,11 @@ public final class FrameEntry {
 
     /**
      * La parte comune dell'uscita e della morte: il record indossato diventa piazzato nel punto di riposo, con il yaw
-     * del giocatore; l'entita' nasce se il chunk del punto ha le entita' caricate; le dimensioni si ricalcolano. Una
-     * riga nel log dice dove e' andato il telaio ({@code event}: lasciato, lasciato alla morte), e se non e' rimasto
-     * sotto il giocatore un messaggio glielo dice: {@link #ELSEWHERE} se sotto non c'era suolo,
-     * {@link #ELSEWHERE_BORDER} se il suolo c'era ma fuori dal bordo del mondo; la riga del log dice lo stesso.
+     * del giocatore; l'entita' nasce se il chunk del punto ha le entita' caricate; poi {@link WornState#changed}, con
+     * l'identita' del telaio appena lasciato e il punto di riposo ({@code event}: lasciato, lasciato alla morte, con la
+     * nota del punto di riposo). Se il telaio non e' rimasto sotto il giocatore un messaggio glielo dice, dopo:
+     * {@link #ELSEWHERE} se sotto non c'era suolo, {@link #ELSEWHERE_BORDER} se il suolo c'era ma fuori dal bordo del
+     * mondo; la riga del log dice lo stesso.
      *
      * @return il punto di riposo, o vuoto se il registro ha rifiutato l'uscita
      */
@@ -295,8 +294,7 @@ public final class FrameEntry {
         if (level.areEntitiesLoaded(chunk.toLong()) && level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
             FramePlacement.spawnView(level, record);
         }
-        player.refreshDimensions();
-        FrameLog.event(frameId.get(), event + spot.logNote(), player, level, spot.position());
+        WornState.changed(player, event + spot.logNote(), frameId.get(), level, spot.position());
         if (spot.where() != Where.BELOW) {
             Vec3 at = spot.position();
             player.sendSystemMessage(Component.translatable(spot.why().message, Mth.floor(at.x), Mth.floor(at.y),

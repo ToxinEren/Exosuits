@@ -3,14 +3,25 @@ package com.toxineren.exoframes.gametest;
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.frame.DebugWear;
 import dev.architectury.event.events.common.TickEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import net.minecraft.core.NonNullList;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.SimpleContainer;
+import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.inventory.ChestMenu;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -28,6 +39,10 @@ public final class CarryOverGameTests {
         List<TestFunction> tests = new ArrayList<>();
         add(tests, "probeLevelTicksTheMockWithoutPlayerTickEvents",
                 CarryOverGameTests::probeLevelTicksTheMockWithoutPlayerTickEvents);
+        add(tests, "strayPlaceholderInAChestGoesWhenTheMenuCloses",
+                CarryOverGameTests::strayPlaceholderInAChestGoesWhenTheMenuCloses);
+        add(tests, "placeholderOfANonWearerGoesWhenAMenuCloses",
+                CarryOverGameTests::placeholderOfANonWearerGoesWhenAMenuCloses);
         return tests;
     }
 
@@ -64,5 +79,54 @@ public final class CarryOverGameTests {
             }
             helper.succeed();
         });
+    }
+
+    /**
+     * Una copia del segnaposto del torso finita in una cassa (piu' clic in un solo pacchetto, prima del tick della
+     * guardia) se ne va quando il menu della cassa si chiude ({@code PlayerEvent.CLOSE_MENU}, design §12.14): per chi
+     * indossa la tuta si tolgono solo le copie fuori posto, gli slot armatura restano gli stessi stack, e l'oggetto
+     * vero accanto nella cassa non si tocca. Senza la pulizia alla chiusura il test non passerebbe: il tick della
+     * guardia ({@code SlotGuard.tick}, su {@code PLAYER_POST}) per il giocatore finto non scatta mai, e comunque,
+     * chiuso il menu, la cassa non e' piu' raggiungibile da nessun tick.
+     */
+    private static void strayPlaceholderInAChestGoesWhenTheMenuCloses(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        DebugWear.wear(player, SuitSummary.BARE);
+        List<ItemStack> worn = List.copyOf(player.getInventory().armor);
+        SimpleContainer chest = new SimpleContainer(27);
+        player.openMenu(new SimpleMenuProvider((id, inventory, p) -> ChestMenu.threeRows(id, inventory, chest),
+                Component.literal("chest")));
+        helper.assertTrue(player.containerMenu instanceof ChestMenu, "chest menu not open");
+        chest.setItem(4, player.getItemBySlot(EquipmentSlot.CHEST).copy());
+        chest.setItem(5, new ItemStack(Items.DIRT, 3));
+        player.closeContainer();
+        helper.assertTrue(chest.getItem(4).isEmpty(), "stray torso placeholder left in the chest");
+        helper.assertTrue(chest.getItem(5).is(Items.DIRT) && chest.getItem(5).getCount() == 3, "real item touched");
+        helper.assertTrue(player.containerMenu == player.inventoryMenu, "menu still open");
+        for (int i = 0; i < worn.size(); i++) {
+            helper.assertTrue(player.getInventory().armor.get(i) == worn.get(i), "armor slot " + i + " changed");
+        }
+        helper.assertTrue(countPlaceholders(player) == 4, countPlaceholders(player) + " placeholders, expected 4");
+        DebugWear.remove(player);
+        helper.succeed();
+    }
+
+    /**
+     * Un segnaposto nell'inventario di chi non indossa un telaio se ne va quando un menu si chiude, anche quello
+     * dell'inventario (che e' il menu aperto: {@code CLOSE_MENU} arriva lo stesso); l'oggetto vero accanto resta. Senza
+     * la pulizia alla chiusura il test non passerebbe: {@code SlotGuard.tick} e' su {@code PLAYER_POST}, che per il
+     * giocatore finto non scatta mai, quindi solo {@code CLOSE_MENU} puo' togliere quel segnaposto.
+     */
+    private static void placeholderOfANonWearerGoesWhenAMenuCloses(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        NonNullList<ItemStack> items = player.getInventory().items;
+        items.set(5, new ItemStack(ModItems.EXOFRAME_HELMET.get()));
+        items.set(6, new ItemStack(Items.DIRT, 2));
+        player.closeContainer();
+        helper.assertTrue(items.get(5).isEmpty(), "helmet placeholder left in the inventory");
+        helper.assertTrue(countPlaceholders(player) == 0, countPlaceholders(player) + " placeholders, expected 0");
+        helper.assertTrue(countInMainInventory(player, Items.DIRT) == 2,
+                countInMainInventory(player, Items.DIRT) + " dirt, expected 2");
+        helper.succeed();
     }
 }

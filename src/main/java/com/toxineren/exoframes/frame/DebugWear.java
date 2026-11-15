@@ -13,13 +13,16 @@ import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Il telaio di prova del comando di debug (design, par. 5.5): un telaio vero, con il suo record indossato nel registro
  * ({@link Compat#frameState()}), cosi' l'autoriparazione degli slot ({@link SlotGuard}) non scambia i suoi segnaposto
- * per segnaposto rimasti senza stato. Dopo aver vestito o svestito il giocatore ne ricalcola subito le dimensioni
- * ({@link SuitSize}).
+ * per segnaposto rimasti senza stato. Dopo aver vestito o svestito il giocatore passa da {@link WornState#changed}:
+ * le dimensioni si ricalcolano subito ({@link SuitSize}) e una riga nel log dice quale telaio il comando ha creato o
+ * cancellato, come per gli altri eventi del telaio.
  */
 public final class DebugWear {
     private DebugWear() {
@@ -30,8 +33,9 @@ public final class DebugWear {
      * e cella, cosi' che il riassunto dello stato sia esattamente {@code summary}: per ogni slot del riassunto un
      * pezzo nuovo del suo livello, con la durabilita' piu' alta che da' la sua condizione e con il suo aspetto; gli
      * altri slot vuoti (i pezzi che c'erano si eliminano); una cella carica. L'armatura stivata nel record non si
-     * tocca. Poi lo veste ({@link FrameEntry#dress}) e ricalcola subito le dimensioni: cio' che occupava gli slot
-     * armatura va nell'inventario, o a terra ai piedi del giocatore se non entra ({@link Handouts#give}).
+     * tocca. Poi lo veste ({@link FrameEntry#dress}): cio' che occupava gli slot armatura va nell'inventario, o a
+     * terra ai piedi del giocatore se non entra ({@link Handouts#give}). Infine {@link WornState#changed} (evento
+     * "worn by debug command", nel punto del giocatore).
      */
     public static void wear(ServerPlayer player, SuitSummary summary) {
         Objects.requireNonNull(player, "player must not be null");
@@ -40,15 +44,20 @@ public final class DebugWear {
         frames.update(player, state -> rebuild(state, player, summary));
         FrameState state = frames.get(player).orElseThrow(
                 () -> new IllegalStateException("no worn frame for " + player.getUUID() + " after update"));
+        UUID frameId = frames.wornFrameId(player).orElseThrow(
+                () -> new IllegalStateException("no worn frame id for " + player.getUUID() + " after update"));
         FrameEntry.dress(player, SuitSummary.of(state));
-        player.refreshDimensions(); // grandezza reale nello stesso tick, senza aspettare SuitSize.tick
+        // grandezza reale nello stesso tick, senza aspettare SuitSize.tick
+        WornState.changed(player, "worn by debug command", frameId, player.serverLevel(), player.position());
     }
 
     /**
      * Elimina il telaio che il giocatore indossa, comunque ci sia entrato: i segnaposto lo lasciano da ogni posto in
      * cui possono stare ({@link Placeholders#removeAll}), l'armatura stivata nel record gli torna come all'uscita (nel
-     * suo slot, o con {@link Handouts#give}), poi il record indossato si toglie dal registro; le dimensioni si
-     * ricalcolano subito. Senza un record indossato toglie solo i segnaposto.
+     * suo slot, o con {@link Handouts#give}), poi il record indossato si toglie dal registro e infine
+     * {@link WornState#changed} (evento "deleted by debug command", con l'identita' letta prima di toglierlo, nel punto
+     * del giocatore). Senza un record indossato toglie solo i segnaposto e ricalcola le dimensioni, senza riga nel
+     * log.
      *
      * @return quanti segnaposto ha tolto
      */
@@ -56,11 +65,16 @@ public final class DebugWear {
         Objects.requireNonNull(player, "player must not be null");
         FrameStateAccess frames = Compat.frameState();
         int removed = Placeholders.removeAll(player);
-        if (frames.wornFrameId(player).isPresent()) {
+        Optional<UUID> frameId = frames.wornFrameId(player);
+        // grandezza vanilla nello stesso tick, senza aspettare SuitSize.tick
+        if (frameId.isPresent()) {
             FrameEntry.returnStowed(player, frames);
             frames.clear(player);
+            WornState.changed(player, "deleted by debug command", frameId.get(), player.serverLevel(),
+                    player.position());
+        } else {
+            player.refreshDimensions();
         }
-        player.refreshDimensions(); // grandezza vanilla nello stesso tick, senza aspettare SuitSize.tick
         return removed;
     }
 

@@ -33,6 +33,11 @@ import net.minecraft.world.item.ItemStack;
  * il resto (inventario, cursore, griglia, menu aperto) una volta ogni {@link #FULL_SCAN_TICKS} tick del giocatore: un
  * segnaposto finito li' senza telaio (da {@code /give}, dopo un rientro) se ne va entro un secondo. Solo sul thread
  * del server.
+ * <p>
+ * La pulizia gira anche alla chiusura di ogni menu ({@link #onMenuClosed}): piu' clic in un solo pacchetto possono
+ * lasciare una copia di un segnaposto in una cassa prima del tick, e chiuso il menu nessun tick la raggiungerebbe piu'
+ * (design §11 e §12.14). La guardia non scrive mai il registro: i suoi cambi degli slot sono viste del registro, per
+ * questo non passa da {@link WornState#changed}.
  */
 public final class SlotGuard {
     /** Ogni quanti tick del giocatore, senza un telaio indossato, si guarda tutto l'inventario: un secondo. */
@@ -48,8 +53,10 @@ public final class SlotGuard {
     }
 
     /**
-     * Registra il tick dei giocatori sul server ({@code TickEvent.PLAYER_POST}) e il lancio di un oggetto
-     * ({@code PlayerEvent.DROP_ITEM}), che per un segnaposto si annulla ({@link #onDrop}). Una volta, nell'init comune.
+     * Registra il tick dei giocatori sul server ({@code TickEvent.PLAYER_POST}), il lancio di un oggetto
+     * ({@code PlayerEvent.DROP_ITEM}), che per un segnaposto si annulla ({@link #onDrop}), e la chiusura di un menu
+     * ({@code PlayerEvent.CLOSE_MENU}, solo sul server), a cui gira la pulizia ({@link #onMenuClosed}): piu' clic in un
+     * solo pacchetto possono lasciare una copia in una cassa prima del tick. Una volta, nell'init comune.
      */
     public static void register() {
         TickEvent.PLAYER_POST.register(player -> {
@@ -58,6 +65,11 @@ public final class SlotGuard {
             }
         });
         PlayerEvent.DROP_ITEM.register(SlotGuard::onDrop);
+        PlayerEvent.CLOSE_MENU.register((player, menu) -> {
+            if (player instanceof ServerPlayer serverPlayer) {
+                onMenuClosed(serverPlayer);
+            }
+        });
     }
 
     /**
@@ -118,6 +130,22 @@ public final class SlotGuard {
             Handouts.give(player, stack);
         }
         if (changed) {
+            player.refreshDimensions();
+        }
+    }
+
+    /**
+     * La pulizia alla chiusura di un menu (design §12.14), su {@code PlayerEvent.CLOSE_MENU}: l'evento arriva dopo che
+     * il menu ha rimesso nell'inventario l'oggetto sul cursore e prima che il menu aperto torni quello dell'inventario,
+     * quindi il menu che si chiude (una cassa) e' ancora raggiungibile. Con un record indossato si tolgono solo le copie
+     * fuori posto ({@link Placeholders#removeStrays}), mai gli slot armatura: toglierli farebbe rimpicciolire e
+     * ricrescere chi indossa la tuta. Senza record si tolgono tutti i segnaposto ({@link Placeholders#removeAll}), e
+     * se ce n'erano le dimensioni si ricalcolano subito.
+     */
+    static void onMenuClosed(ServerPlayer player) {
+        if (Compat.frameState().get(player).isPresent()) {
+            Placeholders.removeStrays(player);
+        } else if (Placeholders.removeAll(player) > 0) {
             player.refreshDimensions();
         }
     }
