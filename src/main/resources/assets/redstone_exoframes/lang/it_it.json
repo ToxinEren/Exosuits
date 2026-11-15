@@ -39,6 +39,16 @@
   "message.redstone_exoframes.exit_hold": "Tieni premuto per uscire dal telaio… %s%%",
   "message.redstone_exoframes.energy_low": "Energia bassa: niente scatto",
   "message.redstone_exoframes.energy_empty": "Energia esaurita: la tuta si muove appena",
+  "message.redstone_exoframes.piece_critical": "Pezzo in stato critico: %s",
+  "message.redstone_exoframes.piece_broken": "Pezzo fuori uso: %s",
   "message.redstone_exoframes.leave_frame_first": "Esci prima dall'esoscheletro",
-  "message.redstone_exoframes.frame_taken": "Qui c'è già un altro telaio: spostati prima di uscire"
+  "message.redstone_exoframes.frame_taken": "Qui c'è già un altro telaio: spostati prima di uscire",
+  "piece.redstone_exoframes.helmet": "Elmo",
+  "piece.redstone_exoframes.torso": "Torso",
+  "piece.redstone_exoframes.left_arm": "Braccio sinistro",
+  "piece.redstone_exoframes.right_arm": "Braccio destro",
+  "piece.redstone_exoframes.left_leg": "Gamba sinistra",
+  "piece.redstone_exoframes.right_leg": "Gamba destra",
+  "condition.redstone_exoframes.critical": "in stato critico",
+  "condition.redstone_exoframes.broken": "fuori uso"
 }

@@ -2,6 +2,7 @@ package com.toxineren.exoframes.core.armor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.core.config.ExoframesConfig;
@@ -264,5 +265,96 @@ class DamageRouterTest {
             assertTrue(split.perPiece().isEmpty(), kind.name());
             assertEquals(37, split.unabsorbed(), kind.name());
         }
+    }
+
+    /**
+     * La variante con riporto delega a {@code routeMilli}: sugli importi interi le due danno lo stesso esito e lo
+     * stesso riporto, per ogni tipo di danno e ogni insieme non vuoto di pezzi montati, anche dopo 1200 colpi.
+     */
+    @Test
+    void routeMilliMatchesRouteOnWholePoints() {
+        Map<PieceSlot, Piece> all = fullSet();
+        PieceSlot[] slots = PieceSlot.values();
+        for (DamageKind kind : DamageKind.values()) {
+            for (int mask = 1; mask < 64; mask++) {
+                Map<PieceSlot, Piece> mounted = new EnumMap<>(PieceSlot.class);
+                for (int i = 0; i < slots.length; i++) {
+                    if ((mask & (1 << i)) != 0) {
+                        mounted.put(slots[i], all.get(slots[i]));
+                    }
+                }
+                Map<PieceSlot, Integer> carryA = new EnumMap<>(PieceSlot.class);
+                Map<PieceSlot, Integer> carryB = new EnumMap<>(PieceSlot.class);
+                for (int n = 0; n <= 1200; n++) {
+                    String where = kind + " " + mask + " " + n;
+                    assertEquals(router.route(kind, n, mounted, carryA),
+                            router.routeMilli(kind, n * 1000L, mounted, carryB), where);
+                    assertEquals(carryA, carryB, where);
+                }
+            }
+        }
+    }
+
+    /**
+     * Mezzo punto GENERIC finisce tutto nel riporto, con i resti maggiori in millesimi (a parita' di resto vince lo
+     * slot che viene prima); tre punti dopo, il torso supera i 1000 millesimi e perde un punto.
+     */
+    @Test
+    void fractionsGoToTheCarry() {
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        DamageRouter.Split half = router.routeMilli(DamageKind.GENERIC, 500, fullSet(), carry);
+        assertTrue(half.perPiece().isEmpty(), half.toString());
+        assertEquals(0, half.unabsorbed());
+        assertEquals(75, carry.get(PieceSlot.HELMET));
+        assertEquals(150, carry.get(PieceSlot.TORSO));
+        assertEquals(63, carry.get(PieceSlot.LEFT_ARM));
+        assertEquals(62, carry.get(PieceSlot.RIGHT_ARM));
+        assertEquals(75, carry.get(PieceSlot.LEFT_LEG));
+        assertEquals(75, carry.get(PieceSlot.RIGHT_LEG));
+
+        DamageRouter.Split three = router.routeMilli(DamageKind.GENERIC, 3000, fullSet(), carry);
+        assertEquals(Map.of(PieceSlot.TORSO, 1), three.perPiece());
+        assertEquals(0, three.unabsorbed());
+        assertEquals(50, carry.get(PieceSlot.TORSO));
+        assertEquals(525, carry.get(PieceSlot.HELMET));
+        assertEquals(438, carry.get(PieceSlot.LEFT_ARM));
+        assertEquals(437, carry.get(PieceSlot.RIGHT_ARM));
+        assertEquals(525, carry.get(PieceSlot.LEFT_LEG));
+        assertEquals(525, carry.get(PieceSlot.RIGHT_LEG));
+    }
+
+    /** Senza pezzi che assorbono, {@code unabsorbed} e' in punti, per difetto, e il riporto non cambia. */
+    @Test
+    void unabsorbedIsInPoints() {
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        DamageRouter.Split split = router.routeMilli(DamageKind.GENERIC, 2500, Map.of(), carry);
+        assertTrue(split.perPiece().isEmpty(), split.toString());
+        assertEquals(2, split.unabsorbed());
+        assertTrue(carry.isEmpty(), carry.toString());
+        assertEquals(0, router.routeMilli(DamageKind.GENERIC, 999, Map.of(), carry).unabsorbed());
+    }
+
+    /**
+     * L'importo piu' grande ammesso ({@code Integer.MAX_VALUE} punti in millesimi) non trabocca e si conserva tutto
+     * fra usura e riporto, dalle due entrate; fuori da [0, massimo] {@code IllegalArgumentException}.
+     */
+    @Test
+    void largeAmountsDoNotOverflow() {
+        long max = (long) Integer.MAX_VALUE * 1000;
+        Map<PieceSlot, Integer> carry = new EnumMap<>(PieceSlot.class);
+        DamageRouter.Split milli = router.routeMilli(DamageKind.GENERIC, max, fullSet(), carry);
+        assertEquals(max, sum(milli.perPiece()) * 1000L + sumCarry(carry));
+        assertCarryInRange(carry, "routeMilli");
+
+        Map<PieceSlot, Integer> carry2 = new EnumMap<>(PieceSlot.class);
+        DamageRouter.Split points = router.route(DamageKind.GENERIC, Integer.MAX_VALUE, fullSet(), carry2);
+        assertEquals(max, sum(points.perPiece()) * 1000L + sumCarry(carry2));
+        assertCarryInRange(carry2, "route");
+
+        Map<PieceSlot, Integer> carry3 = new EnumMap<>(PieceSlot.class);
+        assertThrows(IllegalArgumentException.class,
+                () -> router.routeMilli(DamageKind.GENERIC, max + 1, fullSet(), carry3));
+        assertThrows(IllegalArgumentException.class,
+                () -> router.routeMilli(DamageKind.GENERIC, -1, fullSet(), carry3));
     }
 }

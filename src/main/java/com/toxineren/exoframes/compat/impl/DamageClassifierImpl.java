@@ -11,8 +11,10 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Implementazione di {@link DamageClassifier}.
  * <p>
- * Ordine e soglie: caduta per prima; poi FROM_ABOVE, che e' il caso piu' specifico tra i proiettili, prima di HEAD,
- * le cui condizioni altrimenti lo coprirebbero; poi HEAD; infine GENERIC.
+ * Ordine e soglie: caduta per prima; poi HEAD per i sorgenti del tag vanilla {@code damages_helmet} (incudine,
+ * blocco che cade, stalattite: il sorgente e' ai piedi della vittima, e per posizione risulterebbero GENERIC); poi
+ * FROM_ABOVE, che e' il caso piu' specifico tra i proiettili, prima di HEAD per posizione, le cui condizioni
+ * altrimenti lo coprirebbero; poi HEAD per posizione; infine GENERIC.
  * <ul>
  * <li>FROM_ABOVE: proiettile e quota di chi lo ha causato ({@code source.getEntity()}) oltre
  * {@code victim.getEyeY() + 1.0}. Si usa di proposito la posizione del tiratore, e precisamente {@code getY()},
@@ -32,6 +34,9 @@ public final class DamageClassifierImpl implements DamageClassifier {
     public DamageKind classify(LivingEntity victim, DamageSource source) {
         if (isFall(source)) {
             return DamageKind.FALL;
+        }
+        if (source.is(DamageTypeTags.DAMAGES_HELMET)) {
+            return DamageKind.HEAD;
         }
         double eyeY = victim.getEyeY();
         Vec3 sourcePos = source.getSourcePosition();

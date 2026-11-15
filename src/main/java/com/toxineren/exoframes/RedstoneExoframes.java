@@ -6,6 +6,7 @@ import com.toxineren.exoframes.configfile.ConfigFile;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.armor.DamageRouter;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameRules;
 import com.toxineren.exoframes.frame.ClientRules;
@@ -13,10 +14,12 @@ import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SlotGuard;
+import com.toxineren.exoframes.frame.SuitDamage;
 import com.toxineren.exoframes.frame.SuitRestrictions;
 import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.frame.SuitTick;
 import com.toxineren.exoframes.gametest.CarryOverGameTests;
+import com.toxineren.exoframes.gametest.DamageGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import dev.architectury.event.EventResult;
@@ -35,6 +38,7 @@ public final class RedstoneExoframes {
 
     private static volatile ExoframesConfig config = ExoframesConfig.defaults();
     private static volatile FrameRules rules = new FrameRules(config);
+    private static volatile DamageRouter damageRouter = new DamageRouter(config.damage, config.pieces);
 
     private RedstoneExoframes() {
     }
@@ -65,6 +69,7 @@ public final class RedstoneExoframes {
         // giocatori finti non ricevono l'evento, e i test chiamano SuitTick.tick a mano
         SuitTick.register();
         SuitRestrictions.register(); // con la tuta il letto si rifiuta, sui due lati e per le due mani
+        SuitDamage.register(); // usura dei pezzi: pulizia del segno della riga ERROR all'uscita dal server
         // la morte nel telaio: in testa a ServerPlayer.die, prima delle cadute; non annulla mai la morte
         EntityEvent.LIVING_DEATH.register((entity, source) -> {
             if (entity instanceof ServerPlayer player) {
@@ -75,6 +80,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(ExoframeGameTests.class); // solo sul server di test (proprieta' del loader), mai in produzione
         Compat.gameTests().register(CarryOverGameTests.class);
         Compat.gameTests().register(EnergyGameTests.class);
+        Compat.gameTests().register(DamageGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */
@@ -93,13 +99,23 @@ public final class RedstoneExoframes {
     }
 
     /**
-     * Sostituisce la configurazione in uso e ricostruisce con essa le regole di {@link #rules()}. La chiama
-     * {@link #init()} una volta all'avvio, con la config letta da {@code config/redstone_exoframes.json}
-     * ({@code configfile/ConfigFile}), prima di ogni registrazione. Gli stati del telaio gia' creati conservano la
-     * configurazione con cui sono nati.
+     * Il ripartitore del danno fra i pezzi costruito con la configurazione in uso: un'istanza sola, che
+     * {@code SuitDamage} usa e non costruisce mai. {@link #setConfig} lo ricostruisce con la config nuova, accanto a
+     * {@link #rules()}.
+     */
+    public static DamageRouter damageRouter() {
+        return damageRouter;
+    }
+
+    /**
+     * Sostituisce la configurazione in uso e ricostruisce con essa le regole di {@link #rules()} e il ripartitore di
+     * {@link #damageRouter()}. La chiama {@link #init()} una volta all'avvio, con la config letta da
+     * {@code config/redstone_exoframes.json} ({@code configfile/ConfigFile}), prima di ogni registrazione. Gli stati
+     * del telaio gia' creati conservano la configurazione con cui sono nati.
      */
     public static void setConfig(ExoframesConfig newConfig) {
         config = Objects.requireNonNull(newConfig, "config");
         rules = new FrameRules(newConfig);
+        damageRouter = new DamageRouter(newConfig.damage, newConfig.pieces);
     }
 }

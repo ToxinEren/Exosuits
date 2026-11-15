@@ -22,8 +22,9 @@ import java.util.Set;
  * ricevono nulla. Gli interi si ottengono con il metodo dei resti maggiori (a parita' di resto vince il
  * pezzo che viene prima in {@link PieceSlot}), cosi' la somma e' esattamente {@code amount}.
  *
- * <p>La variante con riporto ({@link #route(DamageKind, int, Map, Map)}), quella usata in gioco, conserva per slot
- * le frazioni di punto in millesimi. Invarianti:
+ * <p>La variante con riporto conserva per slot le frazioni di punto in millesimi. In gioco si usa
+ * {@link #routeMilli(DamageKind, long, Map, Map)}, con l'importo gia' in millesimi; {@link #route(DamageKind, int, Map,
+ * Map)} la chiama con i punti interi moltiplicati per 1000. Invarianti:
  * <ul>
  *   <li>l'usura non e' mai negativa e i riporti restano in [0, 999]; un colpo da 0 non cambia nulla;</li>
  *   <li>per ogni slot l'usura cumulata e' floor(somma delle quote in millesimi di ogni colpo / 1000), dove la
@@ -43,6 +44,9 @@ public final class DamageRouter {
 
     /** Millesimi di punto per punto di danno: l'unita' del riporto. */
     private static final int MILLI = 1000;
+
+    /** Importo piu' grande ammesso da {@link #routeMilli}: {@code Integer.MAX_VALUE} punti, in millesimi. */
+    private static final long MAX_MILLI = (long) Integer.MAX_VALUE * MILLI;
 
     /**
      * Esito della ripartizione. {@code perPiece} contiene solo i pezzi che ricevono un danno &gt; 0;
@@ -85,7 +89,7 @@ public final class DamageRouter {
     /**
      * Ripartizione senza memoria di un singolo colpo: resti maggiori sulle quote esatte, con somma esattamente
      * {@code amount} (se qualche pezzo puo' assorbire). Il codice di gioco usa
-     * {@link #route(DamageKind, int, Map, Map)}, che conserva le frazioni tra un colpo e l'altro.
+     * {@link #routeMilli(DamageKind, long, Map, Map)}, che conserva le frazioni tra un colpo e l'altro.
      */
     public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted) {
         requireNonNegative(amount);
@@ -104,27 +108,40 @@ public final class DamageRouter {
     }
 
     /**
-     * Ripartisce il danno conservando per slot il riporto frazionario, in millesimi di punto, e lo aggiorna.
-     * Le quote esatte dei destinatari in millesimi (resti maggiori, somma {@code amount x 1000}) si sommano al
-     * riporto: {@code v = riporto + quota}; l'usura e' {@code v / 1000} e il nuovo riporto {@code v % 1000}.
-     * Gli slot che non ricevono danno (assenti o rotti) restano invariati. Vedi gli invarianti nella
-     * descrizione della classe.
+     * Ripartisce un danno di punti interi conservando per slot il riporto frazionario: e' {@link #routeMilli} con
+     * {@code amount x 1000} millesimi, quindi le due danno per costruzione lo stesso esito e lo stesso riporto.
+     */
+    public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted, Map<PieceSlot, Integer> carry) {
+        requireNonNegative(amount);
+        return routeMilli(kind, (long) amount * MILLI, mounted, carry);
+    }
+
+    /**
+     * Ripartisce un danno in millesimi di punto conservando per slot il riporto frazionario, in millesimi, e lo
+     * aggiorna. Le quote dei destinatari si calcolano direttamente sull'importo in millesimi e si rendono intere con i
+     * resti maggiori (somma esattamente {@code amountMilli}); ciascuna si somma al riporto dello slot:
+     * {@code v = riporto + quota}, l'usura e' {@code v / 1000} e il nuovo riporto {@code v % 1000}. Gli slot che non
+     * ricevono danno (assenti o rotti) restano invariati. Senza pezzi che possano assorbire, {@code perPiece} e' vuota,
+     * {@code unabsorbed} e' {@code amountMilli / 1000} in punti, per difetto, e il riporto non cambia. Vedi gli
+     * invarianti nella descrizione della classe.
      *
      * <p>Precondizione: ogni valore del riporto e' in [0, 999]; uno slot assente dalla mappa, o con valore
      * {@code null}, vale 0.
+     *
+     * @param amountMilli il danno in millesimi di punto, in [0, {@code Integer.MAX_VALUE x 1000}]
+     * @throws IllegalArgumentException se {@code amountMilli} e' fuori da quell'intervallo
      */
-    public Split route(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted, Map<PieceSlot, Integer> carry) {
+    public Split routeMilli(DamageKind kind, long amountMilli, Map<PieceSlot, Piece> mounted,
+            Map<PieceSlot, Integer> carry) {
         Objects.requireNonNull(carry, "carry");
-        requireNonNegative(amount);
-        Quotas q = quotas(kind, amount, mounted);
+        if (amountMilli < 0 || amountMilli > MAX_MILLI) {
+            throw new IllegalArgumentException("amountMilli must be in [0, " + MAX_MILLI + "]: " + amountMilli);
+        }
+        Quotas q = quotas(kind, amountMilli, mounted);
         if (q == null) {
-            return new Split(new EnumMap<>(PieceSlot.class), amount);
+            return new Split(new EnumMap<>(PieceSlot.class), (int) (amountMilli / MILLI));
         }
-        double[] milliQuotas = new double[q.values.length];
-        for (int i = 0; i < milliQuotas.length; i++) {
-            milliQuotas[i] = q.values[i] * MILLI;
-        }
-        long[] milli = largestRemainder(milliQuotas, (long) amount * MILLI);
+        long[] milli = largestRemainder(q.values, amountMilli);
         Map<PieceSlot, Integer> perPiece = new EnumMap<>(PieceSlot.class);
         for (int i = 0; i < q.slots.size(); i++) {
             PieceSlot slot = q.slots.get(i);
@@ -138,11 +155,14 @@ public final class DamageRouter {
         return new Split(perPiece, 0);
     }
 
-    /** Slot destinatari, nell'ordine di {@link PieceSlot}, con le loro quote esatte in punti. */
+    /** Slot destinatari, nell'ordine di {@link PieceSlot}, con le loro quote esatte nell'unita' dell'importo. */
     private record Quotas(List<PieceSlot> slots, double[] values) {}
 
-    /** Quote esatte dei pezzi montati e non rotti; null se nessun pezzo puo' assorbire. */
-    private Quotas quotas(DamageKind kind, int amount, Map<PieceSlot, Piece> mounted) {
+    /**
+     * Quote esatte dei pezzi montati e non rotti, nell'unita' di {@code amount} (punti o millesimi); null se nessun
+     * pezzo puo' assorbire.
+     */
+    private Quotas quotas(DamageKind kind, long amount, Map<PieceSlot, Piece> mounted) {
         Set<PieceSlot> primaries = primariesOf(kind);
         List<PieceSlot> primary = new ArrayList<>();
         List<PieceSlot> others = new ArrayList<>();
