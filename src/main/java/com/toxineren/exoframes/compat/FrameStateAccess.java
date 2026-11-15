@@ -21,11 +21,15 @@ import net.minecraft.world.phys.Vec3;
  * morte e al cambio di dimensione perche' non sta sull'entita'.
  * <p>
  * Sincronizzazione: il server e' l'unica autorita'. Ogni giocatore riceve solo il proprio stato, intero, con un
- * pacchetto S2C: all'ingresso nel mondo, al respawn, dopo ogni {@link #update} e dopo {@link #clear} (stato
- * assente). Il client conserva l'ultima copia ricevuta finche' non esce dal mondo. Le modifiche avvengono solo sul
- * server con i metodi di scrittura ({@link #update}, {@link #mutate}, {@link #clear}). I pacchetti C2S non portano
- * stato: chiedono un'azione (l'uscita dal telaio, {@code frame_exit}, senza contenuto), e il server decide solo in base
- * a chi li manda e a questo registro.
+ * pacchetto S2C: all'ingresso nel mondo, al respawn, dopo ogni {@link #update}, {@link #changeWorn}, {@link #enter},
+ * {@link #exit} e dopo {@link #clear} (stato assente). Con lo stato il pacchetto porta i tre indicatori
+ * ({@link FrameIndicators}), calcolati dal server con le sue regole al momento del pacchetto e funzione del solo stato,
+ * perche' la sincronizzazione dell'ingresso parte prima che il giocatore sia vestito; il client li legge con
+ * {@link #clientIndicators} e non confronta mai l'energia con una soglia propria. Il client conserva l'ultima copia
+ * ricevuta finche' non esce dal mondo. Le modifiche avvengono solo sul server con i metodi di scrittura
+ * ({@link #update}, {@link #mutate}, {@link #changeWorn}, {@link #clear}). Chi deve sapere di ogni sincronizzazione
+ * si registra con {@link #onSynced}. I pacchetti C2S non portano stato: chiedono un'azione (l'uscita dal telaio,
+ * {@code frame_exit}, senza contenuto), e il server decide solo in base a chi li manda e a questo registro.
  * <p>
  * Modifiche ad alta frequenza (per esempio il consumo di energia a ogni tick): {@link #mutate} segna il dato come da
  * salvare senza sincronizzare, e il chiamante invia lo stato con {@link #syncTo} al proprio ritmo (al massimo 4-5
@@ -90,8 +94,35 @@ public interface FrameStateAccess {
      */
     Optional<FrameState> clientView(Player clientPlayer);
 
-    /** Invia al giocatore il suo stato attuale (o l'assenza di stato). */
+    /**
+     * Gli indicatori ricevuti con l'ultimo stato del giocatore locale; vuoto prima del primo pacchetto con uno stato e
+     * dopo uno stato assente. Solo sul client: il client non confronta mai l'energia con una soglia propria, li usa
+     * cosi' come li ha calcolati il server.
+     */
+    Optional<FrameIndicators> clientIndicators(Player clientPlayer);
+
+    /**
+     * Applica la modifica solo a un record indossato che esiste, segna il dato come da salvare con un cambio
+     * strutturale (anche se la modifica lancia) e sincronizza il giocatore. Non crea mai un record: e' la scrittura
+     * della 3c (cambio cella, {@code /exoframe debug energy}) al posto di {@link #update}, che lo crea, cosi' una
+     * richiesta arrivata dopo un'uscita non fa nascere un telaio dal nulla. Solo sul server, sul thread di gioco.
+     *
+     * @return true se il giocatore indossava un telaio e la modifica e' stata applicata; false, senza far girare la
+     *         modifica e senza sincronizzare, se non ne indossa uno o se il dato salvato e' in sola lettura (con
+     *         l'ERROR una volta)
+     */
+    boolean changeWorn(ServerPlayer p, Consumer<FrameState> change);
+
+    /** Invia al giocatore il suo stato attuale (o l'assenza di stato), con gli indicatori calcolati dal server. */
     void syncTo(ServerPlayer p);
+
+    /**
+     * Registra un ascoltatore chiamato in coda a ogni {@link #syncTo}, anche a quelle dei cambi strutturali
+     * ({@link #update}, {@link #enter}, {@link #exit}, {@link #clear}, {@link #changeWorn}), dopo l'invio, con il
+     * giocatore sincronizzato; gli ascoltatori sono chiamati nell'ordine di registrazione. Da registrare una volta
+     * nell'init comune.
+     */
+    void onSynced(Consumer<ServerPlayer> listener);
 
     /**
      * Mette nel registro un telaio piazzato nuovo con lo stato dato (che da qui appartiene al registro: chi lo

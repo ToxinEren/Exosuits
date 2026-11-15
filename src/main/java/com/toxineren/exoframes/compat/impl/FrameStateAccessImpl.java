@@ -2,6 +2,7 @@ package com.toxineren.exoframes.compat.impl;
 
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.FrameIndicators;
 import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
@@ -14,6 +15,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -31,13 +33,17 @@ import net.minecraft.world.phys.Vec3;
  * Implementazione di {@link FrameStateAccess}: il server tiene gli stati in {@link FrameStateSavedData}, il client
  * la copia ricevuta in {@link FrameStateClientCache}; il pacchetto e' {@link FrameStateSyncPacket}.
  * <p>
- * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #clear}) segna il dato come da salvare (lo fa il dato
- * stesso, a ogni sua operazione; {@link #mutate} non come cambio strutturale, vedi
- * {@link FrameStateSavedData#structuralUnsaved()}); {@link #update} e
+ * Ogni scrittura ({@link #update}, {@link #mutate}, {@link #changeWorn}, {@link #clear}) segna il dato come da
+ * salvare (lo fa il dato stesso, a ogni sua operazione; {@link #mutate} non come cambio strutturale, vedi
+ * {@link FrameStateSavedData#structuralUnsaved()}); {@link #update}, {@link #changeWorn} (solo se il record c'era) e
  * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. Nessuna scrittura toglie le voci grezze non
  * lette del giocatore: restano nel file, identiche (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola
- * lettura (schema piu' recente), le tre scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync, un
- * solo ERROR nel log; {@link #get} resta vuoto.
+ * lettura (schema piu' recente), le quattro scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync,
+ * un solo ERROR nel log; {@link #get} resta vuoto.
+ * <p>
+ * {@link #syncTo} conta ogni chiamata per giocatore in {@link SyncCounter} (per i test, anche quando il loader non
+ * spedisce), manda stato e indicatori ({@link FrameIndicators} da {@code RedstoneExoframes.rules()}) o la loro
+ * assenza, poi chiama gli ascoltatori di {@link #onSynced} nell'ordine di registrazione.
  * <p>
  * Le operazioni di registro ({@link #place}, {@link #enter}, {@link #exit}, i piazzati, l'armatura stivata) passano
  * dal record di {@link FrameStateSavedData} e seguono la stessa regola: ogni scrittura segna il dato come da salvare,
@@ -50,6 +56,8 @@ import net.minecraft.world.phys.Vec3;
  * entrypoint client: un server dedicato non carica mai classi del client.
  */
 public final class FrameStateAccessImpl implements FrameStateAccess {
+    private final List<Consumer<ServerPlayer>> syncListeners = new CopyOnWriteArrayList<>();
+
     @Override
     public Optional<FrameState> get(Player p) {
         if (!p.level().isClientSide()) {
@@ -89,6 +97,25 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     }
 
     @Override
+    public boolean changeWorn(ServerPlayer p, Consumer<FrameState> change) {
+        Objects.requireNonNull(change, "change must not be null");
+        FrameStateSavedData data = FrameStateSavedData.get(p.server);
+        if (data.readOnly()) {
+            data.logRefusedChange();
+            return false;
+        }
+        if (data.worn(p.getUUID()) == null) {
+            return false; // non e' cambiato nulla: nessuna sincronizzazione
+        }
+        try {
+            // strutturale anche se la modifica lancia a meta': disco e client allineati alla memoria
+            return data.changeWorn(p.getUUID(), change);
+        } finally {
+            syncTo(p);
+        }
+    }
+
+    @Override
     public void clear(ServerPlayer p) {
         FrameStateSavedData data = FrameStateSavedData.get(p.server);
         if (data.readOnly()) {
@@ -105,10 +132,31 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
     }
 
     @Override
+    public Optional<FrameIndicators> clientIndicators(Player clientPlayer) {
+        return Optional.ofNullable(FrameStateClientCache.indicators(clientPlayer.getUUID()));
+    }
+
+    @Override
     public void syncTo(ServerPlayer p) {
+        // contata anche quando il loader salta l'invio (NeoForge 1.21.1: il giocatore finto non ha il canale)
+        SyncCounter.increment(p.getUUID());
         FrameRecord record = FrameStateSavedData.get(p.server).worn(p.getUUID());
-        Optional<CompoundTag> tag = Optional.ofNullable(record).map(worn -> FrameStateCodec.write(worn.state()));
-        Compat.net().sendToPlayer(p, FrameStateSyncPacket.ID, new FrameStateSyncPacket(p.getUUID(), tag));
+        Optional<CompoundTag> tag = Optional.empty();
+        Optional<FrameIndicators> indicators = Optional.empty();
+        if (record != null) {
+            // funzione del solo stato: la sincronizzazione dell'ingresso parte prima che il giocatore sia vestito
+            tag = Optional.of(FrameStateCodec.write(record.state()));
+            indicators = Optional.of(FrameIndicators.of(RedstoneExoframes.rules().evaluate(record.state())));
+        }
+        Compat.net().sendToPlayer(p, FrameStateSyncPacket.ID, new FrameStateSyncPacket(p.getUUID(), tag, indicators));
+        for (Consumer<ServerPlayer> listener : syncListeners) {
+            listener.accept(p);
+        }
+    }
+
+    @Override
+    public void onSynced(Consumer<ServerPlayer> listener) {
+        syncListeners.add(Objects.requireNonNull(listener, "listener must not be null"));
     }
 
     @Override
@@ -293,8 +341,12 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         Compat.net().registerS2C(FrameStateSyncPacket.ID, FrameStateSyncPacket.class, FrameStateSyncPacket.CODEC,
                 (msg, ctx) -> FrameStateClientCache.accept(msg));
         PlayerEvent.PLAYER_JOIN.register(this::syncTo);
-        // registro e giocatori sul disco insieme quando un giocatore esce (FrameStateSavedData.saveWithPlayersIfNeeded)
-        PlayerEvent.PLAYER_QUIT.register(player -> FrameStateSavedData.saveWithPlayersIfNeeded(player.server));
+        // registro e giocatori sul disco insieme quando un giocatore esce
+        // (FrameStateSavedData.saveWithPlayersIfNeeded), poi il contatore delle sincronizzazioni si dimentica
+        PlayerEvent.PLAYER_QUIT.register(player -> {
+            FrameStateSavedData.saveWithPlayersIfNeeded(player.server);
+            SyncCounter.forget(player.getUUID());
+        });
         //? if >=1.21 {
         PlayerEvent.PLAYER_RESPAWN.register((player, conqueredEnd, reason) -> syncTo(player));
         //?} else {

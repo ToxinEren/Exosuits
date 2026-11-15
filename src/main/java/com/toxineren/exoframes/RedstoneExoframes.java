@@ -7,6 +7,7 @@ import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.core.frame.FrameRules;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameRealign;
 import com.toxineren.exoframes.frame.SafeSpots;
@@ -29,6 +30,7 @@ public final class RedstoneExoframes {
     public static final Logger LOGGER = LoggerFactory.getLogger("Redstone Exoframes");
 
     private static volatile ExoframesConfig config = ExoframesConfig.defaults();
+    private static volatile FrameRules rules = new FrameRules(config);
 
     private RedstoneExoframes() {
     }
@@ -71,11 +73,23 @@ public final class RedstoneExoframes {
     }
 
     /**
-     * Sostituisce la configurazione in uso. La chiama {@link #init()} una volta all'avvio, con la config letta da
-     * {@code config/redstone_exoframes.json} ({@code configfile/ConfigFile}), prima di ogni registrazione. Gli
-     * stati del telaio gia' creati conservano la configurazione con cui sono nati.
+     * Le regole del telaio costruite con la configurazione in uso: l'unica istanza, che {@code syncTo} (indicatori del
+     * pacchetto al proprietario) e {@code SuitTick} usano. Nessun altro fa {@code new FrameRules}: {@link #setConfig}
+     * la ricostruisce con la config nuova, e {@link #init()} chiama {@code setConfig} una volta, dopo la lettura del
+     * file.
+     */
+    public static FrameRules rules() {
+        return rules;
+    }
+
+    /**
+     * Sostituisce la configurazione in uso e ricostruisce con essa le regole di {@link #rules()}. La chiama
+     * {@link #init()} una volta all'avvio, con la config letta da {@code config/redstone_exoframes.json}
+     * ({@code configfile/ConfigFile}), prima di ogni registrazione. Gli stati del telaio gia' creati conservano la
+     * configurazione con cui sono nati.
      */
     public static void setConfig(ExoframesConfig newConfig) {
         config = Objects.requireNonNull(newConfig, "config");
+        rules = new FrameRules(newConfig);
     }
 }

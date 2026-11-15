@@ -147,6 +147,27 @@ final class FrameRegistry {
     }
 
     /**
+     * Applica la modifica allo stato del record indossato dal giocatore, solo se esiste, e segna il dato come da
+     * salvare con un cambio strutturale (anche se la modifica lancia: disco e client allineati alla memoria): e' la
+     * scrittura rara della 3c (cambio cella, comando dell'energia) al posto di {@link #updateWorn}, perche' non crea
+     * mai un record. Falso, senza far girare la modifica e senza cambiare nulla, se il giocatore non indossa un telaio
+     * o in sola lettura.
+     */
+    boolean changeWorn(UUID player, Consumer<FrameState> change) {
+        Objects.requireNonNull(change, "change must not be null");
+        FrameRecord record = readOnly.getAsBoolean() ? null : worn.get(player);
+        if (record == null) {
+            return false;
+        }
+        try {
+            change.accept(record.state());
+        } finally {
+            markStructural();
+        }
+        return true;
+    }
+
+    /**
      * Applica la modifica allo stato del record indossato dal giocatore e segna il dato come da salvare (anche se la
      * modifica lancia), ma non come cambio strutturale: e' la scrittura ad alta frequenza (l'energia a ogni tick, in
      * una parte successiva), e un salvataggio a ogni uscita di un giocatore per questo sarebbe troppo. Falso, senza

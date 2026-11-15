@@ -100,6 +100,8 @@ public final class CarryOverGameTests {
         add(tests, "mountAndUnmountPlayTrapdoorSounds", CarryOverGameTests::mountAndUnmountPlayTrapdoorSounds);
         add(tests, "enterAndExitPlayPistonSoundsAndArmorStaysSilent",
                 CarryOverGameTests::enterAndExitPlayPistonSoundsAndArmorStaysSilent);
+        add(tests, "changeWornNeverCreatesARecord", CarryOverGameTests::changeWornNeverCreatesARecord);
+        add(tests, "changeWornChangesAndSyncsOnce", CarryOverGameTests::changeWornChangesAndSyncsOnce);
         return tests;
     }
 
@@ -690,6 +692,52 @@ public final class CarryOverGameTests {
         helper.assertTrue(Compat.frameState().takeStowedOfPlaced(server, frameId).size() == 1,
                 "helmet not kept in the frame at death");
         removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * {@code changeWorn} senza un telaio indossato da' falso, non fa girare la modifica, non crea un record e non
+     * sincronizza (design §12.10: un cambio cella arrivato dopo un'uscita non fa nascere un telaio dal nulla).
+     */
+    private static void changeWornNeverCreatesARecord(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        int before = Compat.gameTests().syncCount(player);
+        boolean[] ran = {false};
+        helper.assertTrue(!Compat.frameState().changeWorn(player, s -> ran[0] = true),
+                "changeWorn without a frame said true");
+        helper.assertTrue(!ran[0], "the change ran without a worn record");
+        helper.assertTrue(Compat.frameState().get(player).isEmpty()
+                && Compat.frameState().wornFrameId(player).isEmpty(), "changeWorn created a worn record");
+        helper.assertTrue(Compat.gameTests().syncCount(player) == before, "changeWorn without a frame synced");
+        helper.succeed();
+    }
+
+    /**
+     * {@code changeWorn} su un telaio indossato cambia lo stato, sincronizza una volta e lascia un cambio strutturale
+     * da salvare; {@code setStored} passa da li'. Il registro si salva prima, cosi' il cambio non salvato alla fine
+     * viene da {@code changeWorn} e non dall'ingresso; tutto nello stesso tick.
+     */
+    private static void changeWornChangesAndSyncsOnce(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        GameTests tests = Compat.gameTests();
+        wearScrap(helper, player, new Vec3(2.5, 1.0, 2.5), 5_000);
+        tests.saveRegistry(server);
+        helper.assertTrue(!tests.registryChangeUnsaved(server), "registry still unsaved after saving it");
+        int before = tests.syncCount(player);
+        helper.assertTrue(Compat.frameState().changeWorn(player,
+                s -> s.insertCell(new EnergyCell(s.cell().capacity(), 3_000))),
+                "changeWorn on a worn frame said false");
+        helper.assertTrue(stored(player) == 3_000, "cell holds " + stored(player) + " RE, expected 3000");
+        helper.assertTrue(tests.syncCount(player) == before + 1,
+                "changeWorn synced " + (tests.syncCount(player) - before) + " times, expected once");
+        helper.assertTrue(tests.registryChangeUnsaved(server), "changeWorn left no structural change to save");
+        setStored(player, 4_000);
+        helper.assertTrue(stored(player) == 4_000,
+                "cell holds " + stored(player) + " RE after setStored, expected 4000");
+        helper.assertTrue(tests.syncCount(player) == before + 2,
+                "setStored synced " + (tests.syncCount(player) - before - 1) + " times, expected once");
+        leaveTestFrame(player);
         helper.succeed();
     }
 }

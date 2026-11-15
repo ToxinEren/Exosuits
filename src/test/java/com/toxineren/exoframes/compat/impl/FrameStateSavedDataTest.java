@@ -632,6 +632,7 @@ class FrameStateSavedDataTest {
         assertFalse(data.enter(OTHER, FRAME_A));
         assertEquals(Optional.empty(), data.exit(GOOD, OVERWORLD_SPOT));
         assertFalse(data.updatePlaced(FRAME_A, s -> s.setReinforced(true)));
+        assertFalse(data.changeWorn(GOOD, s -> s.setReinforced(true)));
         assertFalse(data.addStowed(GOOD, List.of(stowedEntry("head", "minecraft:iron_helmet"))));
         assertFalse(data.addStowed(OTHER, List.of(stowedEntry("head", "minecraft:iron_helmet"))));
         assertEquals(List.of(), data.takeStowedOfWorn(GOOD, (frameId, tag) -> Optional.of(tag)));
@@ -772,6 +773,65 @@ class FrameStateSavedDataTest {
                 OVERWORLD_SPOT)));
         assertMarks(data, true, "remove placed", () -> assertTrue(data.removePlaced(FRAME_A)));
         assertMarks(data, false, "refused remove", () -> assertFalse(data.removePlaced(FRAME_A)));
+    }
+
+    /**
+     * {@code changeWorn} cambia solo un record indossato che esiste, come cambio strutturale; senza record la modifica
+     * non gira, nulla si crea e nulla si segna.
+     */
+    @Test
+    void changeWornChangesOnlyAnExistingRecord() {
+        FrameStateSavedData data = FrameStateSavedData.createEmpty();
+        boolean[] ran = {false};
+        assertFalse(data.changeWorn(GOOD, s -> ran[0] = true));
+        assertFalse(ran[0]);
+        assertNull(data.worn(GOOD));
+        assertFalse(data.isDirty());
+        assertFalse(data.structuralUnsaved());
+        FrameRecord record = data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        data.markSaved();
+        assertTrue(data.changeWorn(GOOD, s -> s.setReinforced(true)));
+        assertSame(record, data.worn(GOOD));
+        assertTrue(record.state().reinforced());
+        assertTrue(data.structuralUnsaved());
+        assertTrue(data.isDirty());
+    }
+
+    /**
+     * In sola lettura {@code changeWorn} da' falso senza far girare la modifica, senza segnare nulla e senza cambiare
+     * cio' che si scrive: per un file senza sezioni e per uno schema piu' recente con un record indossato non letto.
+     */
+    @Test
+    void changeWornRefusedWhenReadOnly() {
+        CompoundTag withoutSections = new CompoundTag();
+        withoutSections.putInt("foo", 1);
+        CompoundTag newer = mixedRoot();
+        newer.putInt(NbtKeys.SCHEMA, 3);
+        for (CompoundTag root : List.of(withoutSections, newer)) {
+            boolean[] ran = {false};
+            CompoundTag original = root.copy();
+            FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+            assertTrue(data.readOnly());
+            assertFalse(data.changeWorn(GOOD, s -> ran[0] = true));
+            assertFalse(ran[0]);
+            assertFalse(data.isDirty());
+            assertFalse(data.structuralUnsaved());
+            assertEquals(original, data.write(new CompoundTag()));
+        }
+    }
+
+    /** Una modifica che lancia lascia comunque il dato da salvare come cambio strutturale, e il record al suo posto. */
+    @Test
+    void changeWornMarksStructuralEvenWhenTheChangeThrows() {
+        FrameStateSavedData data = FrameStateSavedData.createEmpty();
+        data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state);
+        data.markSaved();
+        assertThrows(IllegalStateException.class, () -> data.changeWorn(GOOD, s -> {
+            throw new IllegalStateException("boom");
+        }));
+        assertTrue(data.structuralUnsaved());
+        assertTrue(data.isDirty());
+        assertNotNull(data.worn(GOOD));
     }
 
     /** Dopo {@code markSaved}, l'operazione segna il dato come da salvare e strutturale se {@code marks}, o nulla. */

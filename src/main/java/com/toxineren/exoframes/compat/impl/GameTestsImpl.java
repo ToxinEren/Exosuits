@@ -238,6 +238,11 @@ public final class GameTestsImpl implements GameTests {
     }
 
     @Override
+    public int syncCount(ServerPlayer player) {
+        return SyncCounter.count(player.getUUID());
+    }
+
+    @Override
     public boolean portalsAccept(Entity entity, ServerLevel destination) {
         //? if >=1.21 {
         return entity.canUsePortal(false) || entity.canChangeDimensions(entity.level(), destination);

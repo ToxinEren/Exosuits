@@ -119,6 +119,13 @@ public interface GameTests {
     boolean registryChangeUnsaved(MinecraftServer server);
 
     /**
+     * Quante volte {@code FrameStateAccess.syncTo} e' stato chiamato per questo giocatore da quando e' entrato nel
+     * server, anche quando il loader non ha spedito il pacchetto (su NeoForge 1.21.1 il giocatore finto non ha il
+     * canale). Esiste solo per i test.
+     */
+    int syncCount(ServerPlayer player);
+
+    /**
      * True se almeno uno dei controlli che i portali fanno su un'entita' prima di portarla via la accetta, come li fa
      * la versione del gioco: su 1.20.1 {@code canChangeDimensions()} (portali del Nether e dell'End) e
      * {@code TheEndGatewayBlockEntity.canEntityTeleport} (passaggio dell'End); su 1.21.1 {@code canUsePortal(false)}

@@ -737,6 +737,23 @@ final class GameTestKit {
         return cell.stored();
     }
 
+    /**
+     * Porta a {@code stored} RE la cella del telaio indossato con {@code changeWorn} (cambio strutturale, sincronizza):
+     * {@link IllegalStateException} senza telaio o senza cella.
+     */
+    static void setStored(ServerPlayer player, int stored) {
+        boolean changed = Compat.frameState().changeWorn(player, s -> {
+            EnergyCell cell = s.cell();
+            if (cell == null) {
+                throw new IllegalStateException("no cell in the worn frame");
+            }
+            s.insertCell(new EnergyCell(cell.capacity(), stored));
+        });
+        if (!changed) {
+            throw new IllegalStateException("no worn frame");
+        }
+    }
+
     /** Il pezzo dello slot nel telaio indossato, null se vuoto; {@link IllegalStateException} senza telaio. */
     static Piece worn(ServerPlayer player, PieceSlot slot) {
         return Compat.frameState().get(player).orElseThrow(() -> new IllegalStateException("no worn frame"))

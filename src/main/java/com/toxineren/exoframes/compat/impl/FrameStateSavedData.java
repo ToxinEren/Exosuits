@@ -279,6 +279,10 @@ final class FrameStateSavedData extends SavedData {
         return registry.updateWorn(player, factory, change);
     }
 
+    boolean changeWorn(UUID player, Consumer<FrameState> change) {
+        return registry.changeWorn(player, change);
+    }
+
     boolean mutateWorn(UUID player, Consumer<FrameState> change) {
         return registry.mutateWorn(player, change);
     }
