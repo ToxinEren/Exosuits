@@ -179,8 +179,11 @@ public final class SuitDamage {
         }
     }
 
-    /** Il nome tradotto del pezzo dello slot. */
-    private static Component pieceName(PieceSlot slot) {
+    /**
+     * Il nome tradotto del pezzo dello slot ({@code piece.redstone_exoframes.<slot>}): l'unico posto che costruisce la
+     * chiave, usato anche dalla riga dell'energia del client.
+     */
+    public static Component pieceName(PieceSlot slot) {
         return Component.translatable("piece." + RedstoneExoframes.MOD_ID + "." + slot.name().toLowerCase(Locale.ROOT));
     }
 }

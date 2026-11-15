@@ -3,7 +3,9 @@ package com.toxineren.exoframes.client;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.FrameIndicators;
+import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.frame.FrameState;
+import com.toxineren.exoframes.frame.SuitDamage;
 import com.toxineren.exoframes.frame.SuitSize;
 import java.util.Locale;
 import java.util.Optional;
@@ -14,18 +16,20 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
 /**
- * La riga dell'energia (design §12.13): l'unica eccezione al "niente HUD" di §2, una riga di testo con ombra in basso a
- * destra per chi indossa la tuta, con i RE della cella indossata, la percentuale e il pezzo messo peggio
- * ({@link EnergyLine}). Il colore viene dagli indicatori calcolati dal server ({@code clientIndicators}), mai da una
- * soglia del client; senza indicatori la riga e' bianca. La riga sta sopra i sottotitoli, che in quell'angolo la
- * possono coprire (accettato); si nasconde con l'interfaccia nascosta (F1). L'HUD vero arriva in M4. Solo client,
- * disegnata a ogni fotogramma tramite {@code ClientRenderHooks.addHudRenderer}.
+ * La riga dell'energia (design §12.13): l'unica eccezione al "niente HUD" di §2, testo con ombra nell'angolo in alto a
+ * sinistra per chi indossa la tuta. La prima riga ha i RE della cella indossata, la capacita' e la percentuale; il suo
+ * colore viene dagli indicatori calcolati dal server ({@code clientIndicators}), mai da una soglia del client, e senza
+ * indicatori e' bianca. Sotto, solo quando un pezzo e' {@code CRITICAL} o {@code BROKEN}, una seconda riga con il pezzo
+ * messo peggio ({@link EnergyLine}) e la sua condizione, gialla se critico e rossa se rotto. In alto a sinistra la riga
+ * non tocca la barra degli oggetti, l'indicatore del salvataggio ne' i sottotitoli, che stanno in basso; la copre la
+ * schermata di F3. Si nasconde con l'interfaccia nascosta (F1). L'HUD vero arriva in M4. Solo client, disegnata a ogni
+ * fotogramma tramite {@code ClientRenderHooks.addHudRenderer}.
  */
 public final class EnergyHud {
     /** La riga con RE immagazzinati, capacita' e percentuale. */
     static final String ENERGY = "hud." + RedstoneExoframes.MOD_ID + ".energy";
-    /** La riga dell'energia seguita dal nome del pezzo messo peggio e dalla sua condizione. */
-    static final String ENERGY_WORST = "hud." + RedstoneExoframes.MOD_ID + ".energy_worst";
+    /** La seconda riga: il nome del pezzo messo peggio e la sua condizione. */
+    static final String WORST = "hud." + RedstoneExoframes.MOD_ID + ".worst";
     /** La riga di un telaio indossato senza cella. */
     static final String NO_CELL = "hud." + RedstoneExoframes.MOD_ID + ".no_cell";
 
@@ -33,16 +37,18 @@ public final class EnergyHud {
     static final int LOW_COLOR = 0xFFFF55;
     static final int EMPTY_COLOR = 0xFF5555;
     static final int NO_INDICATORS_COLOR = 0xFFFFFF;
-    /** Distanza dal bordo destro, in pixel dell'interfaccia. */
-    static final int MARGIN = 4;
-    /** Distanza della riga dal bordo inferiore, in pixel dell'interfaccia. */
-    static final int BOTTOM = 12;
+    /** Distanza delle righe dal bordo sinistro, in pixel dell'interfaccia. */
+    static final int LEFT_MARGIN = 4;
+    /** Distanza della prima riga dal bordo superiore, in pixel dell'interfaccia. */
+    static final int TOP = 4;
+    /** Distanza fra la prima e la seconda riga, in pixel dell'interfaccia. */
+    static final int LINE_HEIGHT = 10;
 
     private EnergyHud() {
     }
 
     /**
-     * Disegna la riga del giocatore locale; nulla se non c'e' un giocatore, l'interfaccia e' nascosta, il giocatore non
+     * Disegna le righe del giocatore locale; nulla se non c'e' un giocatore, l'interfaccia e' nascosta, il giocatore non
      * indossa la tuta o il client non ha ancora una copia del suo stato.
      */
     static void render(GuiGraphics graphics) {
@@ -55,24 +61,26 @@ public final class EnergyHud {
         if (view.isEmpty()) {
             return;
         }
-        Component text = EnergyLine.of(view.get()).map(EnergyHud::text)
+        Optional<EnergyLine> line = EnergyLine.of(view.get());
+        Component energy = line.map(l -> Component.translatable(ENERGY, l.stored(), l.capacity(), l.percent()))
                 .orElseGet(() -> Component.translatable(NO_CELL));
         int color = Compat.frameState().clientIndicators(player).map(EnergyHud::color).orElse(NO_INDICATORS_COLOR);
         Font font = minecraft.font;
-        graphics.drawString(font, text, graphics.guiWidth() - font.width(text) - MARGIN, graphics.guiHeight() - BOTTOM,
-                color, true);
+        graphics.drawString(font, energy, LEFT_MARGIN, TOP, color, true);
+        line.ifPresent(l -> drawWorst(graphics, font, l));
     }
 
-    private static Component text(EnergyLine line) {
-        Component energy = Component.translatable(ENERGY, line.stored(), line.capacity(), line.percent());
+    /** La seconda riga, solo se un pezzo e' critico o rotto: gialla per un pezzo critico, rossa per uno rotto. */
+    private static void drawWorst(GuiGraphics graphics, Font font, EnergyLine line) {
         if (line.worst().isEmpty() || line.worstCondition().isEmpty()) {
-            return energy;
+            return;
         }
-        return Component.translatable(ENERGY_WORST, energy,
-                Component.translatable("piece." + RedstoneExoframes.MOD_ID + "."
-                        + line.worst().get().name().toLowerCase(Locale.ROOT)),
+        PieceCondition condition = line.worstCondition().get();
+        Component worst = Component.translatable(WORST, SuitDamage.pieceName(line.worst().get()),
                 Component.translatable("condition." + RedstoneExoframes.MOD_ID + "."
-                        + line.worstCondition().get().name().toLowerCase(Locale.ROOT)));
+                        + condition.name().toLowerCase(Locale.ROOT)));
+        graphics.drawString(font, worst, LEFT_MARGIN, TOP + LINE_HEIGHT,
+                condition == PieceCondition.BROKEN ? EMPTY_COLOR : LOW_COLOR, true);
     }
 
     private static int color(FrameIndicators indicators) {
