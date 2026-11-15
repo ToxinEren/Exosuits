@@ -2,9 +2,14 @@ package com.toxineren.exoframes.gametest;
 
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
+import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.core.frame.FrameEffects;
+import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameSounds;
 import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import com.toxineren.exoframes.frame.SuitTick;
@@ -13,12 +18,17 @@ import dev.architectury.event.events.common.InteractionEvent;
 import dev.architectury.event.events.common.TickEvent;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalDouble;
+import java.util.Set;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -38,6 +48,14 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class EnergyGameTests {
     private static final Vec3 FEET = new Vec3(2.5, 1.0, 2.5);
+
+    /** I piedi dei test degli attributi, sopra la pietra che {@code wearFrameAt} posa in (3, 1, 3). */
+    private static final Vec3 ATTRIBUTE_FEET = new Vec3(3.5, 2.0, 3.5);
+
+    /** Gli attributi del gioco che la mod tocca, con gli id di registro delle due versioni (step_height solo su 1.21.1). */
+    private static final Set<ResourceLocation> MOD_ATTRIBUTES = Set.of(Ids.of("minecraft", "generic.movement_speed"),
+            Ids.of("minecraft", "generic.knockback_resistance"), Ids.of("minecraft", "generic.armor"),
+            Ids.of("minecraft", "generic.armor_toughness"), Ids.of("minecraft", "generic.step_height"));
 
     /** Costruttore pubblico senza argomenti: GameTestRegistry vanilla istanzia la classe per chiamare il generatore. */
     public EnergyGameTests() {
@@ -67,6 +85,10 @@ public final class EnergyGameTests {
         add(tests, "walkingSyncsEveryFiveTicks", EnergyGameTests::walkingSyncsEveryFiveTicks);
         add(tests, "clockGoingBackwardsRestartsTheLimits", EnergyGameTests::clockGoingBackwardsRestartsTheLimits);
         add(tests, "bedIsRefusedInASuit", EnergyGameTests::bedIsRefusedInASuit);
+        add(tests, "attributesAppliedOnceAndNotResent", EnergyGameTests::attributesAppliedOnceAndNotResent);
+        add(tests, "attributesComeBackOnANewPlayerObject", EnergyGameTests::attributesComeBackOnANewPlayerObject);
+        add(tests, "stepModifierFollowsTheVersion", EnergyGameTests::stepModifierFollowsTheVersion);
+        add(tests, "leavingClearsTheAttributes", EnergyGameTests::leavingClearsTheAttributes);
         return tests;
     }
 
@@ -480,6 +502,135 @@ public final class EnergyGameTests {
         helper.assertTrue(messages(plain, SuitTick.LEAVE_FRAME_FIRST) == 0, "message without a suit");
         leaveTestFrame(wearer);
         helper.succeed();
+    }
+
+    /**
+     * Gli attributi si applicano una volta e non si reinviano finche' i valori non cambiano (design §12.5): la stessa
+     * applicazione di nuovo e il passaggio a {@code LOW} (effetti diversi, valori uguali) non sporcano nulla; a
+     * {@code EMPTY} tornano da mandare solo velocita' e armatura, che cambiano davvero (robustezza 0 e gradino 0,4
+     * restano). Si guardano solo gli attributi della mod: su 1.21.1 ogni {@code tick()} del giocatore finto rimette
+     * nell'insieme le portate d'interazione della creativa.
+     */
+    private static void attributesAppliedOnceAndNotResent(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, ATTRIBUTE_FEET, 5_000);
+        long t0 = now(helper);
+        SuitTick.tick(p, t0);
+        OptionalDouble armor = Compat.gameTests().frameModifier(p, "frame_armor");
+        helper.assertTrue(armor.equals(OptionalDouble.of(15.0)), "frame_armor " + armor + ", expected 15");
+        Compat.gameTests().attributesToSync(p); // svuota
+        FrameEffects fx = RedstoneExoframes.rules().evaluate(Compat.frameState().get(p).orElseThrow());
+        Compat.attributes().apply(p, fx);
+        Set<ResourceLocation> dirty = modAttributesToSync(p);
+        helper.assertTrue(dirty.isEmpty(), "same effects re-sent " + dirty);
+        setStored(p, 999);
+        SuitTick.tick(p, t0 + 1);
+        dirty = modAttributesToSync(p);
+        helper.assertTrue(dirty.isEmpty(), "LOW re-sent " + dirty);
+        setStored(p, 0);
+        SuitTick.tick(p, t0 + 2);
+        dirty = modAttributesToSync(p);
+        helper.assertTrue(dirty.equals(Set.of(Ids.of("minecraft", "generic.movement_speed"),
+                Ids.of("minecraft", "generic.armor"))), "EMPTY should re-send speed and armor only: " + dirty);
+        armor = Compat.gameTests().frameModifier(p, "frame_armor");
+        helper.assertTrue(armor.equals(OptionalDouble.of(8.0)), "frame_armor " + armor + " at EMPTY, expected 8");
+        double speed = Compat.gameTests().frameModifier(p, "frame_speed").orElseThrow();
+        helper.assertTrue(Math.abs(speed - (-0.745)) < 1e-9, "frame_speed " + speed + " at EMPTY, expected -0.745");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Un oggetto giocatore nuovo (qui da {@code respawn}, come al ritorno dall'End) ha il telaio, perche' il registro e'
+     * per UUID, ma nessun modificatore e nessun record del tick: il primo tick li applica, il secondo non reinvia
+     * nulla.
+     */
+    private static void attributesComeBackOnANewPlayerObject(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, ATTRIBUTE_FEET, 5_000);
+        long t0 = now(helper);
+        SuitTick.tick(p, t0);
+        OptionalDouble armor = Compat.gameTests().frameModifier(p, "frame_armor");
+        helper.assertTrue(armor.equals(OptionalDouble.of(15.0)), "frame_armor " + armor + ", expected 15");
+        ServerPlayer fresh = Compat.gameTests().respawn(p, true);
+        try {
+            helper.assertTrue(fresh != p, "respawn kept the same player object");
+            helper.assertTrue(Compat.frameState().wornFrameId(fresh).isPresent(), "frame not worn after respawn");
+            armor = Compat.gameTests().frameModifier(fresh, "frame_armor");
+            helper.assertTrue(armor.isEmpty(), "frame_armor " + armor + " on the new player object, expected none");
+            helper.assertTrue(!SuitTick.hasRecord(fresh), "tick record on the new player object");
+            Compat.gameTests().attributesToSync(fresh); // svuota
+            SuitTick.tick(fresh, t0 + 1);
+            armor = Compat.gameTests().frameModifier(fresh, "frame_armor");
+            helper.assertTrue(armor.equals(OptionalDouble.of(15.0)),
+                    "frame_armor " + armor + " after the first tick, expected 15");
+            Set<ResourceLocation> dirty = modAttributesToSync(fresh);
+            helper.assertTrue(dirty.contains(Ids.of("minecraft", "generic.armor")),
+                    "armor not sent after the first tick: " + dirty);
+            SuitTick.tick(fresh, t0 + 2);
+            dirty = modAttributesToSync(fresh);
+            helper.assertTrue(dirty.isEmpty(), "attributes re-sent at the second tick: " + dirty);
+        } finally {
+            leaveTestFrame(fresh);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Il gradino segue la versione: su 1.21.1 il modificatore {@code frame_step} (+0,4) porta il passo a 1,0; su
+     * 1.20.1 non c'e' e il {@code ServerPlayer} ha gia' 1,0. {@code localStep} su un {@code ServerPlayer} non fa nulla;
+     * uscendo il modificatore se ne va.
+     */
+    private static void stepModifierFollowsTheVersion(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, ATTRIBUTE_FEET, 5_000);
+        long t0 = now(helper);
+        SuitTick.tick(p, t0);
+        boolean attribute = Compat.gameTests().stepIsAttribute();
+        OptionalDouble step = Compat.gameTests().frameModifier(p, "frame_step");
+        helper.assertTrue(step.equals(attribute ? OptionalDouble.of(0.4) : OptionalDouble.empty()),
+                "frame_step " + step + ", expected " + (attribute ? "0.4" : "none"));
+        helper.assertTrue(p.maxUpStep() == 1.0F, "step " + p.maxUpStep() + " in the suit, expected 1.0");
+        Compat.attributes().localStep(p, false);
+        helper.assertTrue(p.maxUpStep() == 1.0F, "localStep(false) changed a server player's step: " + p.maxUpStep());
+        Compat.attributes().localStep(p, true);
+        helper.assertTrue(p.maxUpStep() == 1.0F, "localStep(true) changed a server player's step: " + p.maxUpStep());
+        leaveTestFrame(p);
+        step = Compat.gameTests().frameModifier(p, "frame_step");
+        helper.assertTrue(step.isEmpty(), "frame_step " + step + " after leaving, expected none");
+        float expected = attribute ? 0.6F : 1.0F;
+        helper.assertTrue(p.maxUpStep() == expected, "step " + p.maxUpStep() + " after leaving, expected " + expected);
+        helper.succeed();
+    }
+
+    /** Uscendo dal telaio con {@link FrameEntry#exit} se ne vanno tutti i modificatori della mod, gradino compreso. */
+    private static void leavingClearsTheAttributes(GameTestHelper helper) {
+        for (int x = 2; x <= 4; x++) {
+            for (int z = 2; z <= 4; z++) {
+                helper.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
+            }
+        }
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        UUID frameId = wearScrap(helper, p, ATTRIBUTE_FEET, 5_000);
+        long t0 = now(helper);
+        SuitTick.tick(p, t0);
+        helper.assertTrue(Compat.gameTests().frameModifier(p, "frame_armor").isPresent(),
+                "frame_armor missing after the first evaluation");
+        helper.assertTrue(FrameEntry.exit(p), "exit refused");
+        for (String id : List.of("frame_speed", "frame_knockback", "frame_armor", "frame_toughness", "frame_step")) {
+            OptionalDouble left = Compat.gameTests().frameModifier(p, id);
+            helper.assertTrue(left.isEmpty(), id + " " + left + " after the exit, expected none");
+        }
+        ServerLevel level = helper.getLevel();
+        removeFrame(level.getServer(), (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /** Gli attributi della mod che il gioco deve ancora mandare al proprietario; svuota l'insieme del gioco. */
+    private static Set<ResourceLocation> modAttributesToSync(ServerPlayer player) {
+        Set<ResourceLocation> dirty = new HashSet<>(Compat.gameTests().attributesToSync(player));
+        dirty.retainAll(MOD_ATTRIBUTES);
+        return dirty;
     }
 
     /**

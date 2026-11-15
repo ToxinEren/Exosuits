@@ -1,6 +1,7 @@
 package com.toxineren.exoframes.frame;
 
 import com.google.common.collect.MapMaker;
+import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.content.ModItems;
 import java.util.Map;
 import net.minecraft.world.entity.EntityDimensions;
@@ -87,13 +88,17 @@ public final class SuitSize {
      * A ogni tick di ogni giocatore, sui due lati ({@code TickEvent.PLAYER_PRE}): confronta "indossa la tuta" con
      * l'ultimo valore visto e, se e' cambiato, ricalcola le dimensioni. Non c'e' un evento di cambio
      * dell'equipaggiamento sui due lati e su tutti i loader; il confronto con l'ultimo valore, invece che con il
-     * riquadro atteso, non litiga con altre mod che cambiano la grandezza.
+     * riquadro atteso, non litiga con altre mod che cambiano la grandezza. Per il solo giocatore locale passa anche
+     * "indossa la tuta" al gradino ({@code FrameAttributes.localStep}: su 1.20.1 il passo e' un campo del client).
      */
     public static void tick(Player player) {
         boolean now = wearsSuit(player);
         Boolean before = LAST_SEEN.put(player, now);
         if (before == null ? now : before != now) {
             player.refreshDimensions();
+        }
+        if (player.isLocalPlayer()) {
+            Compat.attributes().localStep(player, now);
         }
     }
 

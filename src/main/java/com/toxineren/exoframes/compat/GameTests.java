@@ -3,11 +3,14 @@ package com.toxineren.exoframes.compat;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -124,6 +127,34 @@ public interface GameTests {
      * canale). Esiste solo per i test.
      */
     int syncCount(ServerPlayer player);
+
+    /**
+     * Gli id di registro degli attributi del giocatore che il gioco deve ancora mandare (al proprietario e a chi lo
+     * guarda), letti dalla mappa degli attributi con il metodo della versione; poi svuota l'insieme del gioco, quindi
+     * due letture di fila danno la seconda vuota. Esiste solo per i test: prova che un'applicazione senza cambi non fa
+     * reinviare nulla.
+     */
+    Set<ResourceLocation> attributesToSync(ServerPlayer player);
+
+    /**
+     * Vero se il gradino della tuta e' un modificatore di attributo ({@code frame_step} su {@code generic.step_height},
+     * 1.21.1), falso se e' il campo del passo del solo giocatore locale (1.20.1). Esiste solo per i test.
+     */
+    boolean stepIsAttribute();
+
+    /**
+     * L'importo del modificatore {@code redstone_exoframes:<id>} su qualunque attributo del giocatore, vuoto se non c'e'
+     * su nessuno. Esiste solo per i test.
+     */
+    OptionalDouble frameModifier(ServerPlayer player, String id);
+
+    /**
+     * Fa rinascere il giocatore come la rinascita dopo la morte o il ritorno dall'End ({@code keepEverything}): crea un
+     * oggetto giocatore nuovo, con i soli valori base degli attributi, e lo restituisce. L'oggetto nuovo e' un
+     * {@code ServerPlayer} del gioco, non il giocatore finto: non ricorda i messaggi e {@code isCreative()} segue la
+     * modalita' di gioco. Esiste solo per i test.
+     */
+    ServerPlayer respawn(ServerPlayer player, boolean keepEverything);
 
     /**
      * True se almeno uno dei controlli che i portali fanno su un'entita' prima di portarla via la accetta, come li fa

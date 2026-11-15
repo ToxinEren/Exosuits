@@ -2,15 +2,20 @@ package com.toxineren.exoframes.compat.impl;
 
 import com.mojang.authlib.GameProfile;
 import com.toxineren.exoframes.compat.GameTests;
+import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.NbtKeys;
 import io.netty.channel.embedded.EmbeddedChannel;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -18,10 +23,14 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.PacketFlow;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ai.attributes.Attribute;
+import net.minecraft.world.entity.ai.attributes.AttributeInstance;
+import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.gameevent.BlockPositionSource;
@@ -37,7 +46,8 @@ import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.network.CommonListenerCookie;
 //?}
 //? if <1.21 {
-/*import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
+/*import java.nio.charset.StandardCharsets;
+import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 *///?}
 //? if fabric {
 /*import net.minecraft.gametest.framework.GameTestRegistry;
@@ -240,6 +250,69 @@ public final class GameTestsImpl implements GameTests {
     @Override
     public int syncCount(ServerPlayer player) {
         return SyncCounter.count(player.getUUID());
+    }
+
+    @Override
+    public Set<ResourceLocation> attributesToSync(ServerPlayer player) {
+        //? if >=1.21 {
+        Set<AttributeInstance> pending = player.getAttributes().getAttributesToSync();
+        //?} else {
+        /*Set<AttributeInstance> pending = player.getAttributes().getDirtyAttributes();*/
+        //?}
+        Set<ResourceLocation> ids = new HashSet<>();
+        for (AttributeInstance inst : pending) {
+            //? if >=1.21 {
+            ids.add(inst.getAttribute().unwrapKey().orElseThrow().location());
+            //?} else {
+            /*ids.add(BuiltInRegistries.ATTRIBUTE.getKey(inst.getAttribute()));*/
+            //?}
+        }
+        pending.clear(); // l'insieme vivo del gioco: quello che il prossimo invio manderebbe
+        return ids;
+    }
+
+    @Override
+    public boolean stepIsAttribute() {
+        //? if >=1.21 {
+        return true;
+        //?} else {
+        /*return false;
+        *///?}
+    }
+
+    @Override
+    public OptionalDouble frameModifier(ServerPlayer player, String id) {
+        //? if >=1.21 {
+        ResourceLocation key = Ids.of(id);
+        for (Holder<Attribute> attribute : BuiltInRegistries.ATTRIBUTE.holders().toList()) {
+            AttributeInstance inst = player.getAttribute(attribute);
+            AttributeModifier modifier = inst == null ? null : inst.getModifier(key);
+            if (modifier != null) {
+                return OptionalDouble.of(modifier.amount());
+            }
+        }
+        //?} else {
+        /*// l'UUID come lo deriva FrameAttributesImpl, senza la sua key(): lancerebbe per un id fuori dai quattro
+        UUID key = UUID.nameUUIDFromBytes(Ids.of(id).toString().getBytes(StandardCharsets.UTF_8));
+        for (Attribute attribute : BuiltInRegistries.ATTRIBUTE) {
+            AttributeInstance inst = player.getAttribute(attribute);
+            AttributeModifier modifier = inst == null ? null : inst.getModifier(key);
+            if (modifier != null) {
+                return OptionalDouble.of(modifier.getAmount());
+            }
+        }
+        *///?}
+        return OptionalDouble.empty();
+    }
+
+    @Override
+    public ServerPlayer respawn(ServerPlayer player, boolean keepEverything) {
+        //? if >=1.21 {
+        return player.server.getPlayerList().respawn(player, keepEverything,
+                keepEverything ? Entity.RemovalReason.CHANGED_DIMENSION : Entity.RemovalReason.KILLED);
+        //?} else {
+        /*return player.server.getPlayerList().respawn(player, keepEverything);
+        *///?}
     }
 
     @Override
