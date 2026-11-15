@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.gson.Gson;
 import com.toxineren.exoframes.core.armor.Tier;
@@ -13,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFileAttributeView;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -26,6 +28,8 @@ class ConfigFileTest {
     private static final String UNKNOWN_ENUM_KEY =
             "{\"pieces\": {\"shares\": {\"WING\": 0.1}}, \"energy\": {\"walkPerSecond\": 5}}";
     private static final String OUT_OF_RANGE = "{\"energy\": {\"cellCapacity\": 2000000, \"walkPerSecond\": 5}}";
+    private static final String DECIMAL_IN_INT = "{\"energy\": {\"walkPerSecond\": 0.5}}";
+    private static final String BEYOND_INT = "{\"energy\": {\"cellCapacity\": 4294977296}}";
 
     @TempDir
     Path dir;
@@ -112,6 +116,26 @@ class ConfigFileTest {
     }
 
     @Test
+    void decimalInAnIntFieldFallsBackToDefaults() throws IOException {
+        assertWholeFileRefused(loadText(DECIMAL_IN_INT), "0.5");
+    }
+
+    @Test
+    void integerBeyondIntFallsBackToDefaults() throws IOException {
+        // 2^32 + 10000: troncato a 32 bit diventerebbe 10000, un valore valido.
+        assertWholeFileRefused(loadText(BEYOND_INT), "4294977296");
+    }
+
+    /** Un numero che un campo intero non puo' tenere e' un tipo sbagliato: un problema, tutto ai predefiniti. */
+    private static void assertWholeFileRefused(ConfigFile.Result r, String written) {
+        assertEquals(1, r.problems().size(), r.problems().toString());
+        assertTrue(r.problems().get(0).startsWith("does not match the config format"), r.problems().toString());
+        assertTrue(r.problems().get(0).contains(written), r.problems().toString());
+        assertDefaults(r.config());
+        assertFalse(r.wroteDefaults());
+    }
+
+    @Test
     void nullSectionFallsBackForThatSectionOnly() throws IOException {
         ConfigFile.Result r = loadText("{\"energy\": null, \"frame\": {\"exitHoldSeconds\": 3}}");
         assertEquals(1, r.problems().size(), r.problems().toString());
@@ -165,7 +189,7 @@ class ConfigFileTest {
 
     @Test
     void brokenFileIsNeverRewritten() throws IOException {
-        for (String text : List.of(NOT_JSON, WRONG_TYPE, UNKNOWN_ENUM_KEY, OUT_OF_RANGE)) {
+        for (String text : List.of(NOT_JSON, WRONG_TYPE, UNKNOWN_ENUM_KEY, OUT_OF_RANGE, DECIMAL_IN_INT, BEYOND_INT)) {
             Files.writeString(file(), text, UTF_8);
             // Un'ora indietro: una riscrittura durante load cambierebbe l'ora anche su un file system a grana grossa.
             FileTime before = FileTime.fromMillis(Files.getLastModifiedTime(file()).toMillis() - 3_600_000L);
@@ -178,6 +202,15 @@ class ConfigFileTest {
             assertEquals(before, Files.getLastModifiedTime(file()), text);
             assertEquals(List.of(file()), listDir(), text);
         }
+    }
+
+    @Test
+    void defaultsFileFollowsTheUmask() throws IOException {
+        assumeTrue(Files.getFileAttributeView(dir, PosixFileAttributeView.class) != null, "not a POSIX file system");
+        ConfigFile.load(file());
+        Path reference = dir.resolve("reference.json");
+        Files.writeString(reference, "{}", UTF_8);
+        assertEquals(Files.getPosixFilePermissions(reference), Files.getPosixFilePermissions(file()));
     }
 
     @Test
