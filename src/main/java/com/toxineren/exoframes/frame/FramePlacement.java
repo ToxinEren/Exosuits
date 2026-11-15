@@ -33,7 +33,8 @@ public final class FramePlacement {
      * in piedi li' urta blocchi ({@code level.noCollision}) o il riquadro di un altro telaio (due telai nello stesso
      * punto non si distinguerebbero con un clic), se il punto sta fuori dal bordo del mondo ({@link #insideBorder}: li'
      * il gioco non lascia cliccare il telaio) e se il dato salvato e' in sola lettura. Giocatori e creature nel
-     * riquadro non contano.
+     * riquadro non contano. Un piazzamento riuscito suona {@link FrameSounds.Sound#PLACE} nel punto (design §12.13);
+     * {@link #spawnView} da solo non suona, perche' lo usano anche l'uscita e il riallineamento.
      *
      * @return l'entita' del telaio piazzato, o vuoto se rifiutato
      */
@@ -52,7 +53,9 @@ public final class FramePlacement {
         }
         PlacedFrame frame = Compat.frameState().placed(level.getServer(), frameId)
                 .orElseThrow(() -> new IllegalStateException("placed frame " + frameId + " not found after place"));
-        return Optional.of(spawnView(level, frame));
+        ExoframeEntity entity = spawnView(level, frame);
+        FrameSounds.play(level, feet, FrameSounds.Sound.PLACE);
+        return Optional.of(entity);
     }
 
     /**

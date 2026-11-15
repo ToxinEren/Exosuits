@@ -9,12 +9,16 @@ import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.configfile.ConfigFile;
+import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameSight;
+import com.toxineren.exoframes.frame.FrameSounds;
+import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
@@ -42,6 +46,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -91,6 +96,10 @@ public final class CarryOverGameTests {
         add(tests, "exitAvoidsAMinecartBelowTheSpot", CarryOverGameTests::exitAvoidsAMinecartBelowTheSpot);
         add(tests, "exitRefusedOverAnotherFrame", CarryOverGameTests::exitRefusedOverAnotherFrame);
         add(tests, "configFileExists", CarryOverGameTests::configFileExists);
+        add(tests, "placingPlaysTheMetalSound", CarryOverGameTests::placingPlaysTheMetalSound);
+        add(tests, "mountAndUnmountPlayTrapdoorSounds", CarryOverGameTests::mountAndUnmountPlayTrapdoorSounds);
+        add(tests, "enterAndExitPlayPistonSoundsAndArmorStaysSilent",
+                CarryOverGameTests::enterAndExitPlayPistonSoundsAndArmorStaysSilent);
         return tests;
     }
 
@@ -576,6 +585,111 @@ public final class CarryOverGameTests {
         helper.assertTrue(RedstoneExoframes.config().energy.cellCapacity == 10_000
                         && RedstoneExoframes.config().energy.chargerRePerSecond == 50,
                 "config in use is not the defaults");
+        helper.succeed();
+    }
+
+    /**
+     * Piazzare un telaio con l'oggetto suona {@link Sound#PLACE} una volta (design §12.13); un secondo uso nello
+     * stesso punto, rifiutato perche' il telaio c'e' gia', non suona nulla.
+     */
+    private static void placingPlaysTheMetalSound(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        helper.setBlock(new BlockPos(2, 1, 3), Blocks.STONE);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            ExoframeEntity frame = useExoframeItem(helper, player, new BlockPos(2, 1, 3), true);
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.PLACE)),
+                    "placing played " + sounds.sounds() + ", expected [PLACE]");
+            useExoframeItem(helper, player, new BlockPos(2, 1, 3), false);
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.PLACE)),
+                    "refused placing played a sound: " + sounds.sounds());
+            removeFrame(server, frame);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Montare un pezzo o la cella suona {@link Sound#MOUNT}, smontarli {@link Sound#UNMOUNT}, anche quando tornano
+     * gli stivali stivati (design §12.13); un pezzo rifiutato (slot occupato) e la raccolta del telaio vuoto non
+     * suonano. Piazzare un telaio nel solo registro, senza l'oggetto, non suona.
+     */
+    private static void mountAndUnmountPlayTrapdoorSounds(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(3.5, 1.0, 3.5), 0f);
+            helper.assertTrue(sounds.sounds().isEmpty(), "placing a record played " + sounds.sounds());
+
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+            click(frame, player, 0.0, 2.5, 0.0);
+            player.setItemInHand(InteractionHand.MAIN_HAND, CellItem.fromCell(new EnergyCell(capacity, 4_000)));
+            click(frame, player, 0.0, 1.6, 0.0);
+            player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.SCRAP_HELMET.get()));
+            click(frame, player, 0.0, 2.5, 0.0);
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.MOUNT, Sound.MOUNT)),
+                    "mounting played " + sounds.sounds() + ", expected [MOUNT, MOUNT]");
+
+            player.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            player.setShiftKeyDown(true);
+            click(frame, player, 0.0, 2.5, 0.0);
+            click(frame, player, 0.0, 2.5, 0.0);
+            click(frame, player, 0.0, 2.5, 0.0);
+            helper.assertTrue(frame.isRemoved() && Compat.frameState().placed(server, frame.frameId()).isEmpty(),
+                    "empty frame not picked up");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.MOUNT, Sound.MOUNT, Sound.UNMOUNT, Sound.UNMOUNT)),
+                    "unmounting played " + sounds.sounds() + ", expected [MOUNT, MOUNT, UNMOUNT, UNMOUNT]");
+
+            ExoframeEntity boots = frameWithStowedBoots(helper, player, ownedBy(player), new Vec3(5.5, 1.0, 3.5));
+            click(boots, player, 0.0, 2.5, 0.0);
+            helper.assertTrue(countInMainInventory(player, Items.IRON_BOOTS) == 1, "stowed boots not given back");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.MOUNT, Sound.MOUNT, Sound.UNMOUNT, Sound.UNMOUNT,
+                    Sound.UNMOUNT)), "taking the stowed boots played " + sounds.sounds()
+                    + ", expected [MOUNT, MOUNT, UNMOUNT, UNMOUNT, UNMOUNT]");
+            removeFrame(server, boots);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Entrare suona {@link Sound#ENTER}, uscire {@link Sound#EXIT}; alla morte nessun suono (design §12.13). Gli slot
+     * armatura cambiano in silenzio: l'elmo che entra nel record e ne esce non manda eventi d'equipaggiamento
+     * ({@code countEquipEvents} a zero). Il giocatore fa prima un tick: al primo tick il gioco tace comunque gli slot
+     * armatura ({@code firstTick}), e il conteggio a zero non direbbe nulla. Alla morte l'elmo stivato resta nel record
+     * e il test lo ritira, cosi' {@code removeFrame} non lascia armatura orfana.
+     */
+    private static void enterAndExitPlayPistonSoundsAndArmorStaysSilent(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(3, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 1, 4), Blocks.STONE);
+        player.doTick();
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        ExoframeEntity frame = placeFrame(helper, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5), 0f);
+        UUID frameId = frame.frameId();
+        try (FrameSounds.Recording sounds = FrameSounds.record(level, structureBox(helper));
+                GameTests.EquipEventCounter equips = Compat.gameTests().countEquipEvents(level,
+                        BlockPos.containing(frame.position()))) {
+            helper.assertTrue(FrameEntry.enter(player, frame), "enter refused");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENTER)),
+                    "entering played " + sounds.sounds() + ", expected [ENTER]");
+            player.setYRot(0f);
+            helper.assertTrue(FrameEntry.exit(player), "exit refused");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENTER, Sound.EXIT)),
+                    "leaving played " + sounds.sounds() + ", expected [ENTER, EXIT]");
+            helper.assertTrue(level.getEntity(frameId) instanceof ExoframeEntity, "frame entity not back");
+            helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) level.getEntity(frameId)),
+                    "second enter refused");
+            FrameEntry.onDeath(player);
+            helper.assertTrue(Compat.frameState().placed(server, frameId).isPresent(), "frame not left at death");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENTER, Sound.EXIT, Sound.ENTER)),
+                    "death played " + sounds.sounds() + ", expected [ENTER, EXIT, ENTER]");
+            helper.assertTrue(equips.count() == 0, "armor slots emitted " + equips.count() + " equip events");
+        }
+        helper.assertTrue(Compat.frameState().takeStowedOfPlaced(server, frameId).size() == 1,
+                "helmet not kept in the frame at death");
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
         helper.succeed();
     }
 }

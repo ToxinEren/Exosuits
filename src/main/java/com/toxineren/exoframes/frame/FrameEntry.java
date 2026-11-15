@@ -99,7 +99,8 @@ public final class FrameEntry {
      * gli slot; {@link #dress} con il riassunto dello stato; il giocatore scende da cio' che cavalca e va nel punto del
      * telaio con il suo yaw (il pitch resta il suo); l'entita' si elimina; il punto del telaio diventa la prima
      * posizione sicura del giocatore ({@link SafeSpots}); infine {@link WornState#changed} (evento "entered"), dopo il
-     * teletrasporto, cosi' l'ingombro si calcola nel punto del telaio. Gli slot armatura cambiano in silenzio
+     * teletrasporto, cosi' l'ingombro si calcola nel punto del telaio; per ultimo il suono dell'ingresso
+     * ({@link FrameSounds.Sound#ENTER}, design §12.13). Gli slot armatura cambiano in silenzio
      * ({@link Placeholders#setArmorSlot}).
      *
      * @return true se il giocatore e' entrato
@@ -153,6 +154,7 @@ public final class FrameEntry {
         frame.discard();
         SafeSpots.remember(player, level.dimension(), spot);
         WornState.changed(player, "entered", record.frameId(), level, spot);
+        FrameSounds.play(level, spot, FrameSounds.Sound.ENTER);
         return true;
     }
 
@@ -176,7 +178,8 @@ public final class FrameEntry {
      * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}), se il chunk del punto ha le entita'
      * caricate (altrimenti la crea il riallineamento quando si carica), poi {@link WornState#changed};</li>
      * <li>se gli occhi del giocatore stanno nel riquadro del telaio appena lasciato, il giocatore fa un passo fuori
-     * ({@link #stepOut}); altrimenti, e se non c'e' un posto libero accanto, resta dov'e'.</li>
+     * ({@link #stepOut}); altrimenti, e se non c'e' un posto libero accanto, resta dov'e';</li>
+     * <li>il suono dell'uscita ({@link FrameSounds.Sound#EXIT}, design §12.13) dove il giocatore e' arrivato.</li>
      * </ol>
      * Se {@link FrameStateAccess#exit} rifiuta (non dovrebbe: il giocatore indossa un telaio) non succede altro, il
      * giocatore tiene cio' che ha riavuto, e il risultato e' falso.
@@ -197,8 +200,12 @@ public final class FrameEntry {
         Placeholders.removeAll(player);
         returnStowed(player, frames);
         Optional<RestingSpot> left = leaveFrame(player, frames, "left", spot);
-        left.ifPresent(placed -> stepOut(player, placed));
-        return left.isPresent();
+        if (left.isEmpty()) {
+            return false;
+        }
+        stepOut(player, left.get());
+        FrameSounds.play(player.serverLevel(), player.position(), FrameSounds.Sound.EXIT);
+        return true;
     }
 
     /**
@@ -209,7 +216,7 @@ public final class FrameEntry {
      * morto, e con {@code keepInventory} non passano al giocatore rinato); l'armatura stivata resta nel record; il
      * record diventa piazzato nel punto di riposo del telaio ({@link #restingSpot}) e l'entita' nasce li' se il chunk
      * ha le entita' caricate, anche se li' c'e' gia' un altro telaio (la morte non si rifiuta, e cosi' nulla si perde).
-     * Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
+     * Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue. Alla morte nessun suono.
      */
     public static void onDeath(ServerPlayer player) {
         try {

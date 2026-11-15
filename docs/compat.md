@@ -216,6 +216,7 @@ Ripresa da [`docs/audit/mjolnir-armor-audit.md`](audit/mjolnir-armor-audit.md) �
 | `pack_format` 15 → 34 | Proprietà per variante `mod.pack_format` (`versions/*/gradle.properties`) |
 | `compatibilityLevel` dei mixin JAVA_17 → JAVA_21 | Non codice: `redstone_exoframes.mixins.json` per versione in `src/main/resources-mc<versione>/` |
 | `DropExperienceBlock`, `new AABB(BlockPos)`, `BlockEntityType.Builder.build(null)` e le API stabili elencate nell'audit | Nessuna |
+| Suoni dal server: `Level.playSound(Player, double, double, double, SoundEvent, SoundSource, float, float)`, uguale sulle due versioni, con le sole costanti di `SoundEvents` che sono un `SoundEvent` semplice su tutte e due (non quelle che su 1.21.1 sono un `Holder`, come `ARMOR_EQUIP_*`) | Nessuna cucitura: `frame/FrameSounds` |
 
 ## Schema NBT ([`NbtKeys`](../src/main/java/com/toxineren/exoframes/compat/NbtKeys.java))
 

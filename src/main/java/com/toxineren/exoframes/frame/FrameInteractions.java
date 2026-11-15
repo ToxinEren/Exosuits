@@ -37,7 +37,9 @@ import net.minecraft.world.phys.Vec3;
  * interfaccia grafica: decide la mano principale e il punto cliccato. Il registro e' la verita' (§4.5): ogni cambio
  * passa da {@link FrameStateAccess#updatePlaced} o {@link FrameStateAccess#removePlaced}, e cio' che lascia la mano o
  * arriva al giocatore dipende dal loro esito; tutto quello che lo stato potrebbe rifiutare si controlla prima, cosi'
- * nessuna eccezione lascia il record cambiato a meta'.
+ * nessuna eccezione lascia il record cambiato a meta'. Solo un cambio riuscito suona (design §12.13): montare un
+ * pezzo o la cella {@link FrameSounds.Sound#MOUNT}, smontarli o ritirare l'armatura stivata
+ * {@link FrameSounds.Sound#UNMOUNT}; un rifiuto e la raccolta del telaio vuoto non suonano.
  * <p>
  * Lati e zone sono quelli del telaio ({@link ClickZones}): con yaw 0 guarda a sud (+Z) e ha la destra verso -X, come
  * un giocatore vanilla (il renderer gira il modello come {@code LivingEntityRenderer}, e il pezzo del braccio destro
@@ -171,6 +173,7 @@ public final class FrameInteractions {
             held.shrink(1);
         }
         refreshSummary(player.getServer(), frame);
+        play(player, frame, FrameSounds.Sound.MOUNT);
         return InteractionResult.SUCCESS;
     }
 
@@ -200,6 +203,7 @@ public final class FrameInteractions {
             held.shrink(1);
         }
         refreshSummary(player.getServer(), frame);
+        play(player, frame, FrameSounds.Sound.MOUNT);
         return InteractionResult.SUCCESS;
     }
 
@@ -219,10 +223,14 @@ public final class FrameInteractions {
         FrameStateAccess frames = Compat.frameState();
         if (record.hasStowed()) {
             List<StowedStack> stowed = frames.takeStowedOfPlaced(server, record.frameId());
+            if (stowed.isEmpty()) {
+                return InteractionResult.CONSUME;
+            }
             for (StowedStack entry : stowed) {
                 Handouts.give(player, entry.stack());
             }
-            return stowed.isEmpty() ? InteractionResult.CONSUME : InteractionResult.SUCCESS;
+            play(player, frame, FrameSounds.Sound.UNMOUNT);
+            return InteractionResult.SUCCESS;
         }
         FrameState state = record.state();
         for (PieceSlot slot : ClickZones.bandNearestFirst(height, right)) {
@@ -237,6 +245,7 @@ public final class FrameInteractions {
             }
             Handouts.give(player, cell);
             refreshSummary(server, frame);
+            play(player, frame, FrameSounds.Sound.UNMOUNT);
             return InteractionResult.SUCCESS;
         }
         if (state.pieces().isEmpty()) {
@@ -271,6 +280,7 @@ public final class FrameInteractions {
         }
         Handouts.give(player, stack);
         refreshSummary(player.getServer(), frame);
+        play(player, frame, FrameSounds.Sound.UNMOUNT);
         return InteractionResult.SUCCESS;
     }
 
@@ -293,6 +303,11 @@ public final class FrameInteractions {
     private static void refreshSummary(MinecraftServer server, ExoframeEntity frame) {
         UUID frameId = frame.frameId();
         Compat.frameState().placed(server, frameId).ifPresent(p -> frame.setSummary(SuitSummary.of(p.state())));
+    }
+
+    /** Il suono di un cambio riuscito, nel punto dell'entita' del telaio (design §12.13). */
+    private static void play(ServerPlayer player, ExoframeEntity frame, FrameSounds.Sound sound) {
+        FrameSounds.play(player.serverLevel(), frame.position(), sound);
     }
 
     /** Il messaggio con la chiave data sulla barra delle azioni del giocatore. */
