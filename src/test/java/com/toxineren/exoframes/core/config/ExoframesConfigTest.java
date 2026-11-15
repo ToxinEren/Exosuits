@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.module.ModuleType;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.Test;
 
 class ExoframesConfigTest {
@@ -207,6 +210,58 @@ class ExoframesConfigTest {
         assertEquals(ConfigValidation.MAX_RE_PER_REDSTONE, kept.normalized().energy.chargerRePerRedstone);
         assertEquals(ConfigValidation.MAX_HOLD_SECONDS, kept.normalized().frame.exitHoldSeconds);
         assertEquals(ConfigValidation.MAX_MULTIPLIER, kept.normalized().damage.brokenTorsoConsumptionMultiplier, 1e-12);
+    }
+
+    /** Un campo con limite superiore: come scriverlo nella config e come rileggerlo da quella normalizzata. */
+    private record Bounded(String field, BiConsumer<ExoframesConfig, Double> set, Function<ExoframesConfig, Double> get,
+            double max, double over) {
+    }
+
+    private static Bounded intField(String field, BiConsumer<ExoframesConfig, Integer> set,
+            Function<ExoframesConfig, Integer> get, int max) {
+        return new Bounded(field, (cfg, v) -> set.accept(cfg, v.intValue()), cfg -> get.apply(cfg).doubleValue(),
+                max, max + 1);
+    }
+
+    @Test
+    void otherUpperBoundsFallBackToDefaults() {
+        int rate = ConfigValidation.MAX_RATE;
+        List<Bounded> fields = List.of(
+                intField("energy.idlePerSecond", (c, v) -> c.energy.idlePerSecond = v, c -> c.energy.idlePerSecond,
+                        rate),
+                intField("energy.sprintPerSecond", (c, v) -> c.energy.sprintPerSecond = v,
+                        c -> c.energy.sprintPerSecond, rate),
+                intField("energy.jumpCost", (c, v) -> c.energy.jumpCost = v, c -> c.energy.jumpCost, rate),
+                intField("energy.cellSwapSeconds", (c, v) -> c.energy.cellSwapSeconds = v,
+                        c -> c.energy.cellSwapSeconds, ConfigValidation.MAX_HOLD_SECONDS),
+                intField("modules.costPerSecond.JETPACK", (c, v) -> c.modules.costPerSecond.put(ModuleType.JETPACK, v),
+                        c -> c.modules.costPerSecond.get(ModuleType.JETPACK), rate),
+                intField("modules.costPerUse.SHOCKWAVE", (c, v) -> c.modules.costPerUse.put(ModuleType.SHOCKWAVE, v),
+                        c -> c.modules.costPerUse.get(ModuleType.SHOCKWAVE), rate),
+                new Bounded("tiers.protectionMultiplier.ARMORED",
+                        (c, v) -> c.tiers.protectionMultiplier.put(Tier.ARMORED, v),
+                        c -> c.tiers.protectionMultiplier.get(Tier.ARMORED),
+                        ConfigValidation.MAX_MULTIPLIER, ConfigValidation.MAX_MULTIPLIER + 0.5));
+        for (Bounded f : fields) {
+            double def = f.get().apply(ExoframesConfig.defaults());
+            boolean isInt = !f.field().startsWith("tiers.");
+            String shown = isInt ? String.valueOf((long) f.over()) : String.valueOf(f.over());
+            String max = isInt ? String.valueOf((long) f.max()) : String.valueOf(f.max());
+            String defShown = isInt ? String.valueOf((long) def) : String.valueOf(def);
+
+            ExoframesConfig over = ExoframesConfig.defaults();
+            f.set().accept(over, f.over());
+            ConfigValidation.ValidationResult result = ConfigValidation.validate(over);
+            assertEquals(def, f.get().apply(result.normalized()), 1e-12, f.field());
+            assertEquals(List.of(f.field() + ": " + shown + " is invalid (must be <= " + max + "), using default "
+                    + defShown), result.problems(), f.field());
+
+            ExoframesConfig atLimit = ExoframesConfig.defaults();
+            f.set().accept(atLimit, f.max());
+            ConfigValidation.ValidationResult kept = ConfigValidation.validate(atLimit);
+            assertTrue(kept.problems().isEmpty(), f.field() + " " + kept.problems());
+            assertEquals(f.max(), f.get().apply(kept.normalized()), 1e-12, f.field());
+        }
     }
 
     @Test
