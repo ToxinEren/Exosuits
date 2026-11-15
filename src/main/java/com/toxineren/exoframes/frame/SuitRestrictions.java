@@ -12,9 +12,11 @@ import net.minecraft.world.level.block.BedBlock;
 /**
  * Con la tuta non si dorme (design §12.3, domanda 5 di §8): il risveglio metterebbe un ingombro alto 2,97 in una
  * stanza bassa. Il clic destro su un letto si annulla sui due lati e per le due mani (sul client lo decide
- * {@link SuitSize#wearsSuit}, il segnaposto del torso, che vale senza pacchetti); il messaggio
- * {@link SuitTick#LEAVE_FRAME_FIRST} lo manda solo il server e solo per la mano principale (una volta per clic). Le
- * cavalcature sono nel passo 3 di {@link SuitTick}.
+ * {@link SuitSize#wearsSuit}, il segnaposto del torso, che vale senza pacchetti). Il messaggio
+ * {@link SuitTick#LEAVE_FRAME_FIRST} lo mostrano tutti e due i lati, solo per la mano principale: su Fabric un clic
+ * annullato sul client non arriva mai al server, quindi deve parlare il client; su Forge e NeoForge il pacchetto parte
+ * comunque e la copia del server finisce nella stessa barra delle azioni con lo stesso testo, che il giocatore legge
+ * come un messaggio solo. Le cavalcature sono nel passo 3 di {@link SuitTick}.
  */
 public final class SuitRestrictions {
     private SuitRestrictions() {
@@ -27,13 +29,13 @@ public final class SuitRestrictions {
 
     /**
      * Clic destro di {@code player} con la mano {@code hand} sul blocco in {@code pos}: lo annulla se il giocatore
-     * indossa la tuta e il blocco e' un letto, altrimenti lascia decidere al gioco. Pubblico per i test.
+     * indossa la tuta e il blocco e' un letto, altrimenti lascia decidere al gioco.
      */
     public static EventResult onUseBlock(Player player, InteractionHand hand, BlockPos pos, Direction face) {
         if (!SuitSize.wearsSuit(player) || !(player.level().getBlockState(pos).getBlock() instanceof BedBlock)) {
             return EventResult.pass();
         }
-        if (!player.level().isClientSide() && hand == InteractionHand.MAIN_HAND) {
+        if (hand == InteractionHand.MAIN_HAND) {
             player.displayClientMessage(Component.translatable(SuitTick.LEAVE_FRAME_FIRST), true);
         }
         return EventResult.interruptFalse();
