@@ -42,7 +42,7 @@ class FrameStateCodecTest {
         assertEquals(ModuleInstaller.Reason.OK, state.installModule(PieceSlot.LEFT_LEG, ModuleType.SERVOS));
         state.damageCarryMilli().put(PieceSlot.HELMET, 250);
         state.damageCarryMilli().put(PieceSlot.TORSO, 999);
-        state.insertCell(new EnergyCell(12_000, 4_321));
+        state.insertCell(new EnergyCell(cfg.energy.cellCapacity, 4_321));
         state.activeToggles().add(ModuleType.NIGHT_VISION);
         state.activeToggles().add(ModuleType.ENERGY_SHIELD);
         state.setReinforced(true);
@@ -200,6 +200,41 @@ class FrameStateCodecTest {
         FrameState read = FrameStateCodec.readTrusted(tag, cfg);
         assertEquals(List.of(ModuleType.NIGHT_VISION, ModuleType.SCANNER), read.modules().get(PieceSlot.HELMET));
         assertSameState(populated(), read);
+    }
+
+    /** Lo stato di una cella da 20 000 con 15 000 RE, scritto con {@code write}. */
+    private CompoundTag bigCellTag() {
+        FrameState state = new FrameState(cfg);
+        state.insertCell(new EnergyCell(20_000, 15_000));
+        return FrameStateCodec.write(state);
+    }
+
+    @Test
+    void readCutsTheCellToTheConfigCapacity() {
+        CompoundTag tag = bigCellTag();
+        EnergyCell cell = FrameStateCodec.read(tag, cfg).cell();
+        assertEquals(10_000, cell.capacity());
+        assertEquals(10_000, cell.stored());
+
+        tag.getCompound(NbtKeys.CELL).remove(NbtKeys.CAPACITY);
+        tag.getCompound(NbtKeys.CELL).putInt(NbtKeys.ENERGY, 3_000);
+        EnergyCell withoutCapacity = FrameStateCodec.read(tag, cfg).cell();
+        assertEquals(10_000, withoutCapacity.capacity());
+        assertEquals(3_000, withoutCapacity.stored());
+    }
+
+    @Test
+    void readTrustedKeepsTheSentCapacity() {
+        EnergyCell cell = FrameStateCodec.readTrusted(bigCellTag(), cfg).cell();
+        assertEquals(20_000, cell.capacity());
+        assertEquals(15_000, cell.stored());
+    }
+
+    @Test
+    void writeStillHasTheCapacityKey() {
+        CompoundTag cellTag = bigCellTag().getCompound(NbtKeys.CELL);
+        assertEquals(20_000, cellTag.getInt(NbtKeys.CAPACITY));
+        assertEquals(15_000, cellTag.getInt(NbtKeys.ENERGY));
     }
 
     @Test

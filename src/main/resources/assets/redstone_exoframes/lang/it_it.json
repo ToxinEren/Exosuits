@@ -29,7 +29,7 @@
   "message.redstone_exoframes.no_room": "Qui non c'è abbastanza spazio per il telaio",
   "message.redstone_exoframes.locked": "Questo telaio è bloccato dal suo proprietario",
   "message.redstone_exoframes.slot_taken": "Quello slot è già occupato",
-  "message.redstone_exoframes.no_cell": "Al telaio serve una cella carica",
+  "message.redstone_exoframes.no_cell": "Il telaio ha bisogno di una cella carica (le celle si caricano nel caricatore)",
   "message.redstone_exoframes.already_inside": "Sei già dentro un telaio",
   "message.redstone_exoframes.frame_elsewhere": "Sotto di te non c'era suolo: il telaio è stato lasciato in %s %s %s (%s)",
   "message.redstone_exoframes.frame_elsewhere_border": "Il suolo sotto di te era fuori dal bordo del mondo: il telaio è stato lasciato in %s %s %s (%s)",
@@ -51,5 +51,13 @@
   "piece.redstone_exoframes.left_leg": "Gamba sinistra",
   "piece.redstone_exoframes.right_leg": "Gamba destra",
   "condition.redstone_exoframes.critical": "in stato critico",
-  "condition.redstone_exoframes.broken": "fuori uso"
+  "condition.redstone_exoframes.broken": "fuori uso",
+  "tooltip.redstone_exoframes.exoframe.place": "Clic destro su un blocco per piazzarlo",
+  "tooltip.redstone_exoframes.exoframe.mount": "Clic destro con pezzi e una cella carica per montarli",
+  "tooltip.redstone_exoframes.exoframe.enter": "Clic destro a mano vuota per entrare",
+  "tooltip.redstone_exoframes.exoframe.unmount": "Accovacciato, clic destro a mano vuota per togliere le cose",
+  "tooltip.redstone_exoframes.cell.charge": "%s / %s RE",
+  "tooltip.redstone_exoframes.cell.empty": "Vuota: caricala in un caricatore",
+  "tooltip.redstone_exoframes.piece.durability": "Durata %s / %s",
+  "tooltip.redstone_exoframes.piece.new": "Nuovo"
 }

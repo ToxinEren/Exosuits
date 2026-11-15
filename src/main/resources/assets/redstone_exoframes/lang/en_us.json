@@ -29,7 +29,7 @@
   "message.redstone_exoframes.no_room": "There is not enough room for the exoframe here",
   "message.redstone_exoframes.locked": "This exoframe is locked by its owner",
   "message.redstone_exoframes.slot_taken": "That slot is already taken",
-  "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell",
+  "message.redstone_exoframes.no_cell": "The exoframe needs a charged cell (charge cells in a charger)",
   "message.redstone_exoframes.already_inside": "You are already inside an exoframe",
   "message.redstone_exoframes.frame_elsewhere": "There was no ground below you: your exoframe was left at %s %s %s (%s)",
   "message.redstone_exoframes.frame_elsewhere_border": "The ground below you was outside the world border: your exoframe was left at %s %s %s (%s)",
@@ -51,5 +51,13 @@
   "piece.redstone_exoframes.left_leg": "Left leg",
   "piece.redstone_exoframes.right_leg": "Right leg",
   "condition.redstone_exoframes.critical": "critical",
-  "condition.redstone_exoframes.broken": "broken"
+  "condition.redstone_exoframes.broken": "broken",
+  "tooltip.redstone_exoframes.exoframe.place": "Right-click a block to place it",
+  "tooltip.redstone_exoframes.exoframe.mount": "Right-click it with pieces and a charged cell to mount them",
+  "tooltip.redstone_exoframes.exoframe.enter": "Right-click it with an empty hand to get in",
+  "tooltip.redstone_exoframes.exoframe.unmount": "Sneak and right-click with an empty hand to take things off",
+  "tooltip.redstone_exoframes.cell.charge": "%s / %s RE",
+  "tooltip.redstone_exoframes.cell.empty": "Empty: charge it in a charger",
+  "tooltip.redstone_exoframes.piece.durability": "Durability %s / %s",
+  "tooltip.redstone_exoframes.piece.new": "New"
 }

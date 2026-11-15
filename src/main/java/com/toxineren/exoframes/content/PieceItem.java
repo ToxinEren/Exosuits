@@ -2,24 +2,38 @@ package com.toxineren.exoframes.content;
 
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.CompatItem;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.energy.CellBar;
 import com.toxineren.exoframes.core.module.ModuleType;
 import dev.architectury.registry.registries.RegistrySupplier;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
 /**
  * Oggetto di un pezzo d'armatura di un livello e di un tipo, da montare a mano sul telaio. Durabilita', moduli e
  * aspetto stanno nei dati dello stack ({@link Compat#itemData()}).
+ * <p>
+ * Barra e suggerimento (design §12.10) vengono dalla durata nei dati dello stack, con la regola di {@link CellBar} e il
+ * colore del gioco base; uno stack senza dati (un pezzo appena fabbricato) non ha barra e il suggerimento dice
+ * {@link #TOOLTIP_NEW}, senza numeri.
  */
-public final class PieceItem extends Item {
+public final class PieceItem extends CompatItem {
+    /** Riga del suggerimento di un pezzo con dati: durata e durata massima. */
+    public static final String TOOLTIP_DURABILITY = "tooltip." + RedstoneExoframes.MOD_ID + ".piece.durability";
+    /** Riga del suggerimento di un pezzo senza dati: nuovo. */
+    public static final String TOOLTIP_NEW = "tooltip." + RedstoneExoframes.MOD_ID + ".piece.new";
+
     private final Tier tier;
     private final PieceKind kind;
 
@@ -82,5 +96,46 @@ public final class PieceItem extends Item {
             }
         }
         throw new IllegalArgumentException("no item for a " + piece.tier() + " " + kind + " piece");
+    }
+
+    /** La barra si vede solo con dati e la durata sotto il massimo. */
+    @Override
+    public boolean isBarVisible(ItemStack stack) {
+        Optional<PieceData> data = Compat.itemData().piece(stack);
+        return data.isPresent() && CellBar.visible(data.get().durability(), data.get().maxDurability());
+    }
+
+    /** La larghezza della barra dalla durata, da 0 a {@link CellBar#MAX_WIDTH}; 0 senza dati. */
+    @Override
+    public int getBarWidth(ItemStack stack) {
+        return Compat.itemData().piece(stack)
+                .map(data -> CellBar.width(data.durability(), data.maxDurability()))
+                .orElse(0);
+    }
+
+    /**
+     * Il colore della barra con la formula del gioco base, dal verde (intero) al rosso (consumato); senza dati quello
+     * di {@code super}.
+     */
+    @Override
+    public int getBarColor(ItemStack stack) {
+        Optional<PieceData> data = Compat.itemData().piece(stack);
+        if (data.isEmpty()) {
+            return super.getBarColor(stack);
+        }
+        float left = Math.max(0f, (float) data.get().durability() / data.get().maxDurability());
+        return Mth.hsvToRgb(left / 3f, 1f, 1f);
+    }
+
+    /** Una riga grigia: {@link #TOOLTIP_DURABILITY} con durata e durata massima, {@link #TOOLTIP_NEW} senza dati. */
+    @Override
+    public void tooltip(ItemStack stack, List<Component> lines, boolean advanced) {
+        Optional<PieceData> data = Compat.itemData().piece(stack);
+        if (data.isPresent()) {
+            lines.add(Component.translatable(TOOLTIP_DURABILITY, data.get().durability(), data.get().maxDurability())
+                    .withStyle(ChatFormatting.GRAY));
+        } else {
+            lines.add(Component.translatable(TOOLTIP_NEW).withStyle(ChatFormatting.GRAY));
+        }
     }
 }

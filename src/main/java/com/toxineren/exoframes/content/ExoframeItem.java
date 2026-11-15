@@ -1,17 +1,21 @@
 package com.toxineren.exoframes.content;
 
 import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.compat.CompatItem;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.FrameLog;
 import com.toxineren.exoframes.frame.FramePlacement;
+import java.util.List;
 import java.util.Optional;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.phys.Vec3;
 
@@ -19,7 +23,7 @@ import net.minecraft.world.phys.Vec3;
  * L'oggetto telaio (design, par. 5.4): usato su un blocco piazza un telaio vuoto (identita' nuova, chi lo usa come
  * proprietario, nulla di montato) al suolo sotto il lato cliccato, rivolto verso chi lo usa.
  */
-public final class ExoframeItem extends Item {
+public final class ExoframeItem extends CompatItem {
     /** Messaggio sulla barra delle azioni quando il telaio li' non ci sta. */
     public static final String NO_ROOM = "message." + RedstoneExoframes.MOD_ID + ".no_room";
     /**
@@ -29,8 +33,23 @@ public final class ExoframeItem extends Item {
      */
     public static final double MAX_DROP = 3.0;
 
+    /** Le chiavi delle righe del suggerimento, nell'ordine: piazzarlo, montare, entrare, togliere le cose. */
+    private static final List<String> TOOLTIP_KEYS = List.of(
+            "tooltip." + RedstoneExoframes.MOD_ID + ".exoframe.place",
+            "tooltip." + RedstoneExoframes.MOD_ID + ".exoframe.mount",
+            "tooltip." + RedstoneExoframes.MOD_ID + ".exoframe.enter",
+            "tooltip." + RedstoneExoframes.MOD_ID + ".exoframe.unmount");
+
     public ExoframeItem(Item.Properties properties) {
         super(properties);
+    }
+
+    /** Quattro righe grigie che insegnano i comandi: piazzarlo, montare pezzi e cella, entrare, togliere le cose. */
+    @Override
+    public void tooltip(ItemStack stack, List<Component> lines, boolean advanced) {
+        for (String key : TOOLTIP_KEYS) {
+            lines.add(Component.translatable(key).withStyle(ChatFormatting.GRAY));
+        }
     }
 
     /**
