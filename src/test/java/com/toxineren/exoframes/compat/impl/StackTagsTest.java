@@ -44,12 +44,14 @@ class StackTagsTest {
         assertEquals(2, StackTags.rememberedOutcomes());
 
         // un registro caricato e' un server nuovo: nulla di quello che ha ricordato il server di prima resta
-        FrameStateSavedData.load(new CompoundTag(), FrameStateCodec::read);
+        FrameStateSavedData.createEmpty();
         assertEquals(0, StackTags.rememberedOutcomes());
 
         assertTrue(StackTags.read(null, first).isEmpty());
         assertEquals(1, StackTags.rememberedOutcomes());
-        FrameStateSavedData.load(new CompoundTag(), FrameStateCodec::read);
+        CompoundTag schemaOnly = new CompoundTag();
+        schemaOnly.putInt(NbtKeys.SCHEMA, 2);
+        FrameStateSavedData.load(schemaOnly, FrameStateCodec::read);
         assertEquals(0, StackTags.rememberedOutcomes());
     }
 }

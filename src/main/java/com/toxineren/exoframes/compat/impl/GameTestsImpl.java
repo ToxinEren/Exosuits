@@ -223,6 +223,12 @@ public final class GameTestsImpl implements GameTests {
         /*DimensionDataStorage storage = new DimensionDataStorage(dataFolder.toFile(), server.getFixerUpper());*/
         //?}
         FrameStateSavedData data = FrameStateSavedData.get(storage, dataFolder);
+        //? if >=1.21 && neoforge {
+        // NeoForge, dopo un file letto, mette sul suo lavoratore di I/O la pulizia dei file temporanei della cartella:
+        // si aspetta che finisca, cosi' chi chiama puo' cancellare subito una cartella temporanea senza che la pulizia
+        // la cerchi dopo e scriva un ERROR.
+        net.neoforged.neoforge.common.IOUtilities.waitUntilIOWorkerComplete();
+        //?}
         return data.readOnly() ? Optional.empty() : Optional.of(data.write(new CompoundTag()));
     }
 

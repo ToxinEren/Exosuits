@@ -39,11 +39,15 @@ import net.minecraft.core.HolderLookup;
  * Cio' che passa fra l'inventario di un giocatore e il registro (armatura stivata e restituita, pezzi e celle montati
  * e smontati, il telaio come oggetto) sta in due file, quello del giocatore e questo: ogni operazione strutturale lo
  * ricorda ({@link #structuralUnsaved()}) e all'uscita di un giocatore, quando il gioco scrive il suo file, si scrivono
- * anche gli altri giocatori e questo ({@link #saveWithPlayersIfNeeded}); i salvataggi del gioco scrivono i giocatori e
- * poi i livelli. Resta un arresto brusco nei millisecondi di un salvataggio. Mentre il salvataggio e' spento con
- * {@code /save-off} non e' cosi': il gioco scrive ancora i file dei giocatori al salvataggio automatico e all'uscita
- * di un giocatore, questo file solo con {@code /save-all}, alla chiusura del server o all'uscita di un giocatore che
- * segue un'operazione strutturale.
+ * i file di tutti i giocatori e il solo file di questo registro, non gli altri dati salvati dell'overworld
+ * ({@link #saveWithPlayersIfNeeded}). Tutti i giocatori e non solo chi esce, perche' il segno strutturale e' uno solo
+ * per il registro e puo' venire dall'operazione di un altro giocatore. Questo salvataggio non guarda {@code /save-off}:
+ * il gioco scrive comunque il file del giocatore che esce ({@code PlayerList.remove} lo salva senza guardare
+ * {@code /save-off}), e rispettarlo separerebbe la coppia file del giocatore e registro su cui si regge il registro
+ * unico (design §4.5). I salvataggi del gioco scrivono i giocatori e poi i livelli. Resta un arresto brusco nei
+ * millisecondi di un salvataggio. Mentre il salvataggio e' spento con {@code /save-off} non e' cosi': il gioco scrive
+ * ancora i file dei giocatori al salvataggio automatico e all'uscita di un giocatore, questo file solo con
+ * {@code /save-all}, alla chiusura del server o all'uscita di un giocatore che segue un'operazione strutturale.
  * <p>
  * Si usa un SavedData, e non gli attachment o le capability dei loader, perche' e' un'unica implementazione per i
  * quattro target e lo stato non dipende dall'entita' del giocatore (morte, respawn e cambio di dimensione non lo
@@ -56,6 +60,13 @@ import net.minecraft.core.HolderLookup;
  * legge non vale mai come registro vuoto: la mod lo rilegge da se' e, se nemmeno cosi' si legge, si usa la copia
  * precedente o, se nemmeno quella si legge, il dato resta in sola lettura per la sessione con un ERROR che dice quale
  * file ripristinare ({@link #get(DimensionDataStorage, Path)}, {@link #afterUnreadFile}).
+ * <p>
+ * Un file che si legge ma non ha {@code schema} ne' alcuna delle sezioni {@code frames}, {@code worn}, {@code placed}
+ * (scritto da altro o svuotato; anche un file senza {@code data}, che il gioco passa come tag vuoto) non e' un
+ * registro: e' rovinato come un file che non si legge. Il dato resta in sola lettura per la sessione, con un ERROR che
+ * nomina il file ({@link #reportedWithoutSections}); il file non si tocca e la copia precedente non si cerca. Il
+ * registro vuoto e scrivibile, che nel gioco nasce solo per un mondo senza file, nei test viene da
+ * {@link #createEmpty()}.
  */
 final class FrameStateSavedData extends SavedData {
     static final String NAME = "redstone_exoframes_frames";
@@ -79,8 +90,13 @@ final class FrameStateSavedData extends SavedData {
 
     /** I telai e le voci non lette: le operazioni del registro, che vedono la sola lettura e i segni di questo dato. */
     private final FrameRegistry registry = new FrameRegistry(this::readOnly, this::setDirty, this::markStructural);
-    /** Il tag letto per intero quando il dato e' in sola lettura (schema piu' recente o non numerico), altrimenti null. */
+    /**
+     * Il tag letto per intero quando il dato e' in sola lettura (schema piu' recente o non numerico, o ne' schema ne'
+     * sezioni), altrimenti null.
+     */
     private CompoundTag readOnlyRoot;
+    /** Vero se il tag letto non aveva ne' schema ne' sezioni: non e' un registro ({@link #reportedWithoutSections}). */
+    private boolean withoutSections;
     /** Vero dopo il primo ERROR per una modifica rifiutata, per scriverlo una volta sola. */
     private boolean refusalLogged;
     /** Vero se il dato e' nato vuoto dalla factory e i file non sono ancora stati guardati ({@link #get}). */
@@ -99,6 +115,14 @@ final class FrameStateSavedData extends SavedData {
      */
     private FrameStateSavedData() {
         StackTags.forgetOutcomes();
+    }
+
+    /**
+     * Il registro vuoto e scrivibile, solo per i test: prende il posto del caricamento di un tag vuoto, che e' un file
+     * senza sezioni e quindi in sola lettura.
+     */
+    static FrameStateSavedData createEmpty() {
+        return new FrameStateSavedData();
     }
 
     /** Il dato del mondo del server, creato vuoto se non esiste ancora: {@link #get(DimensionDataStorage, Path)}. */
@@ -122,8 +146,9 @@ final class FrameStateSavedData extends SavedData {
      * richiesta guarda i file ({@link RegistryFile#recover}): con la copia precedente leggibile il dato viene da quella,
      * e' da salvare e prende il posto di quello vuoto in {@code storage}; se nulla si legge il dato resta vuoto e in
      * sola lettura per la sessione ({@link #readOnly()}), cosi' nessuno lo riscrive sopra il file da ripristinare; se
-     * nessuno dei due file esiste e' un mondo nuovo. Il server apre cosi' il suo dato; i test ne aprono altri sulla
-     * stessa cartella o su una copia.
+     * nessuno dei due file esiste e' un mondo nuovo. Un dato letto senza schema ne' sezioni, dal gioco o qui, resta in
+     * sola lettura come un file illeggibile, con un ERROR che nomina il file ({@link #reportedWithoutSections}). Il
+     * server apre cosi' il suo dato; i test ne aprono altri sulla stessa cartella o su una copia.
      */
     static FrameStateSavedData get(DimensionDataStorage storage, Path folder) {
         Supplier<FrameStateSavedData> fresh = () -> {
@@ -139,14 +164,29 @@ final class FrameStateSavedData extends SavedData {
         /*FrameStateSavedData data = storage.computeIfAbsent(loader, fresh, NAME);*/
         //?}
         if (!data.createdEmpty) {
-            return data;
+            return data.reportedWithoutSections(folder.resolve(NAME + ".dat"));
         }
         data.createdEmpty = false;
         FrameStateSavedData recovered = afterUnreadFile(folder.resolve(NAME + ".dat"), data);
         if (recovered != data) {
             storage.set(NAME, recovered);
         }
-        return recovered;
+        return recovered.reportedWithoutSections(folder.resolve(NAME + ".dat"));
+    }
+
+    /**
+     * Se il dato e' stato letto da un tag senza schema ne' sezioni, la prima volta lo segna come un file illeggibile
+     * ({@code file}, che {@link #load} non conosce) e lo scrive in un ERROR, una volta per dato: da li' {@link #write}
+     * da' il marcatore {@link #UNREADABLE_SCHEMA} e {@link #logRefusedChange} dice il file da ripristinare. Il file non
+     * si tocca e la copia precedente non si cerca.
+     */
+    private FrameStateSavedData reportedWithoutSections(Path file) {
+        if (withoutSections && unreadableFile == null) {
+            unreadableFile = file;
+            RedstoneExoframes.LOGGER.error("Frame registry file {} has no schema and no sections: frames are "
+                    + "read-only this session", file);
+        }
+        return this;
     }
 
     /**
@@ -305,23 +345,30 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Legge il dato con il lettore di stato dato (nel codice e' sempre {@link FrameStateCodec#read}; il parametro
-     * esiste per i test), con {@link FrameRegistryFormat#read}. Con uno schema piu' recente o non numerico il dato
-     * tiene il tag letto per intero ed e' in sola lettura. Un'eccezione che uscisse da qui varrebbe come un file
+     * esiste per i test), con {@link FrameRegistryFormat#read}. Con uno schema piu' recente o non numerico, o senza
+     * schema ne' sezioni, il dato tiene il tag letto per intero ed e' in sola lettura (nel secondo caso l'ERROR con il
+     * file lo scrive {@link #get(DimensionDataStorage, Path)}). Un'eccezione che uscisse da qui varrebbe come un file
      * illeggibile (vedi {@link #get(DimensionDataStorage, Path)}): la copia precedente o la sola lettura, mai il
      * registro vuoto.
      */
     static FrameStateSavedData load(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader) {
         FrameStateSavedData data = new FrameStateSavedData();
-        if (FrameRegistryFormat.read(tag, reader, data.registry) == FrameRegistryFormat.Outcome.READ_ONLY) {
-            data.readOnlyRoot = tag.copy();
+        switch (FrameRegistryFormat.read(tag, reader, data.registry)) {
+            case READ_ONLY -> data.readOnlyRoot = tag.copy();
+            case WITHOUT_SECTIONS -> {
+                data.readOnlyRoot = tag.copy();
+                data.withoutSections = true;
+            }
+            default -> {
+            }
         }
         return data;
     }
 
     /**
      * Vero se il file e' stato salvato con uno schema piu' recente di {@link #CURRENT_SCHEMA} o con un marcatore non
-     * numerico, o se ne' il file ne' la sua copia precedente si sono potuti leggere ({@link #get}): questa versione
-     * della mod non deve cambiare ne' riscrivere il dato.
+     * numerico, se non ha ne' schema ne' sezioni, o se ne' il file ne' la sua copia precedente si sono potuti leggere
+     * ({@link #get}): questa versione della mod non deve cambiare ne' riscrivere il dato.
      */
     boolean readOnly() {
         return readOnlyRoot != null || unreadableFile != null;
@@ -377,9 +424,13 @@ final class FrameStateSavedData extends SavedData {
     /**
      * All'uscita di un giocatore dal server ({@code PlayerEvent.PLAYER_QUIT}, che i quattro loader mandano in testa a
      * {@code PlayerList.remove}, prima che il gioco salvi il suo file): se un'operazione strutturale non e' ancora sul
-     * disco, il gioco salva i file di tutti i giocatori e poi i dati dell'overworld, registro compreso. Cosi'
-     * all'uscita cio' che si e' spostato fra un inventario e il registro e' sul disco da entrambe le parti. Questo
-     * salvataggio non guarda {@code /save-off}.
+     * disco, il gioco salva i file di tutti i giocatori e poi il solo file di questo registro, non gli altri dati
+     * salvati dell'overworld. Cosi' all'uscita cio' che si e' spostato fra un inventario e il registro e' sul disco da
+     * entrambe le parti. Tutti i giocatori, non solo chi esce, perche' il segno strutturale e' uno solo per il
+     * registro e puo' venire dall'operazione di un altro giocatore. Non guarda {@code /save-off}: il gioco scrive
+     * comunque il file del giocatore che esce ({@code PlayerList.remove} chiama {@code save(player)} senza guardarlo),
+     * e rispettarlo separerebbe la coppia file del giocatore e registro su cui si regge il registro unico (design
+     * §4.5).
      */
     static void saveWithPlayersIfNeeded(MinecraftServer server) {
         FrameStateSavedData data = get(server);
@@ -387,7 +438,7 @@ final class FrameStateSavedData extends SavedData {
             return;
         }
         server.getPlayerList().saveAll();
-        server.overworld().getDataStorage().save();
+        data.saveFile(dataFolder(server).resolve(NAME + ".dat"));
     }
 
     //? if >=1.21 {
@@ -458,11 +509,12 @@ final class FrameStateSavedData extends SavedData {
 
     /**
      * Scrive il marcatore di schema e le sezioni ({@link FrameRegistryFormat#write}). In sola lettura per uno schema
-     * piu' recente o non numerico riscrive il tag letto per intero. In sola lettura perche' ne' il file ne' la copia
-     * precedente si sono letti non c'e' un tag da riscrivere: non lancia e scrive solo il marcatore
-     * {@link #UNREADABLE_SCHEMA}, senza sezioni, cosi' chi rilegge quel tag ha di nuovo un dato in sola lettura e mai
-     * un registro vuoto. Il gioco comunque non arriva qui: un dato in sola lettura non risulta mai da salvare
-     * ({@link #isDirty()}), e il salvataggio su file lo salta.
+     * piu' recente o non numerico riscrive il tag letto per intero (cosi' anche un tag senza schema ne' sezioni finche'
+     * {@link #get(DimensionDataStorage, Path)} non lo ha segnato come file rovinato). In sola lettura perche' ne' il
+     * file ne' la copia precedente si sono letti, o il file non e' un registro, non c'e' un tag da riscrivere: non
+     * lancia e scrive solo il marcatore {@link #UNREADABLE_SCHEMA}, senza sezioni, cosi' chi rilegge quel tag ha di
+     * nuovo un dato in sola lettura e mai un registro vuoto. Il gioco comunque non arriva qui: un dato in sola lettura
+     * non risulta mai da salvare ({@link #isDirty()}), e il salvataggio su file lo salta.
      */
     CompoundTag write(CompoundTag tag) {
         if (unreadableFile != null) {

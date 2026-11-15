@@ -122,7 +122,7 @@ class FrameStateSavedDataTest {
     }
 
     private static FrameStateSavedData empty() {
-        return FrameStateSavedData.load(new CompoundTag(), FrameStateCodec::read);
+        return FrameStateSavedData.createEmpty();
     }
 
     private static FrameStateSavedData roundTrip(FrameStateSavedData data) {
@@ -418,6 +418,7 @@ class FrameStateSavedDataTest {
 
         // un valore inatteso non si perde: resta identico dentro un gruppo
         CompoundTag odd = new CompoundTag();
+        odd.putInt(NbtKeys.SCHEMA, 2);
         odd.putString(NbtKeys.ORPHANED, "not a list");
         FrameStateSavedData withOdd = FrameStateSavedData.load(odd, FrameStateCodec::read);
         assertEquals(StringTag.valueOf("not a list"), withOdd.orphaned().get(0).get(NbtKeys.ENTRIES));
@@ -641,6 +642,46 @@ class FrameStateSavedDataTest {
         assertTrue(data.frames().isEmpty());
 
         assertEquals(original, data.write(new CompoundTag()));
+    }
+
+    /**
+     * Un file che si legge ma non ha {@code schema} ne' alcuna sezione non e' un registro: sola lettura come uno schema
+     * piu' recente, nulla si cambia e la scrittura riproduce il tag. Cosi' anche il tag vuoto che il gioco passa per un
+     * file senza {@code data}.
+     */
+    @Test
+    void fileWithoutSectionsIsReadOnly() {
+        CompoundTag root = new CompoundTag();
+        root.putInt("foo", 1);
+        assertReadOnlyAndUnchanged(root);
+        assertTrue(FrameStateSavedData.load(new CompoundTag(), FrameStateCodec::read).readOnly());
+    }
+
+    /** Basta una sola sezione, anche vuota, o il solo marcatore di schema: il file e' un registro, scrivibile. */
+    @Test
+    void schemaOneFileIsStillARegistry() {
+        CompoundTag frames = new CompoundTag();
+        frames.put(FrameRegistryFormat.FRAMES, new CompoundTag());
+        CompoundTag placed = new CompoundTag();
+        placed.put(NbtKeys.PLACED, new CompoundTag());
+        CompoundTag schema = new CompoundTag();
+        schema.putInt(NbtKeys.SCHEMA, 2);
+        for (CompoundTag root : List.of(frames, placed, schema)) {
+            FrameStateSavedData data = FrameStateSavedData.load(root, FrameStateCodec::read);
+            assertFalse(data.readOnly(), root.toString());
+            assertNotNull(data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state), root.toString());
+        }
+    }
+
+    /** Il registro vuoto dei test: scrivibile, non da salvare finche' non cambia, con lo schema corrente. */
+    @Test
+    void createEmptyIsWritable() {
+        FrameStateSavedData data = FrameStateSavedData.createEmpty();
+        assertFalse(data.readOnly());
+        assertFalse(data.isDirty());
+        assertNotNull(data.getOrCreateWorn(GOOD, FrameStateSavedDataTest::state));
+        assertTrue(data.structuralUnsaved());
+        assertEquals(FrameStateSavedData.CURRENT_SCHEMA, data.write(new CompoundTag()).getInt(NbtKeys.SCHEMA));
     }
 
     @Test

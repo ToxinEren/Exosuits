@@ -47,7 +47,7 @@ class RegistryFileTest {
     }
 
     private static FrameStateSavedData empty() {
-        return FrameStateSavedData.load(new CompoundTag(), FrameStateCodec::read);
+        return FrameStateSavedData.createEmpty();
     }
 
     /** Un registro con un telaio piazzato con un elmo e uno indossato. */

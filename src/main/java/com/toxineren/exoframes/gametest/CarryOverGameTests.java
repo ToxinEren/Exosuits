@@ -3,22 +3,41 @@ package com.toxineren.exoframes.gametest;
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.GameTests;
+import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
+import net.minecraft.SharedConstants;
 import net.minecraft.core.NonNullList;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtIo;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.raid.Raids;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -43,6 +62,8 @@ public final class CarryOverGameTests {
                 CarryOverGameTests::strayPlaceholderInAChestGoesWhenTheMenuCloses);
         add(tests, "placeholderOfANonWearerGoesWhenAMenuCloses",
                 CarryOverGameTests::placeholderOfANonWearerGoesWhenAMenuCloses);
+        add(tests, "quitSaveIgnoresSaveOff", CarryOverGameTests::quitSaveIgnoresSaveOff);
+        add(tests, "registryFileWithoutSectionsIsReadOnly", CarryOverGameTests::registryFileWithoutSectionsIsReadOnly);
         return tests;
     }
 
@@ -127,6 +148,78 @@ public final class CarryOverGameTests {
         helper.assertTrue(countPlaceholders(player) == 0, countPlaceholders(player) + " placeholders, expected 0");
         helper.assertTrue(countInMainInventory(player, Items.DIRT) == 2,
                 countInMainInventory(player, Items.DIRT) + " dirt, expected 2");
+        helper.succeed();
+    }
+
+    /**
+     * Il salvataggio all'uscita di un giocatore (design §12.14) non guarda {@code /save-off}: con il salvataggio
+     * spento su tutti i livelli un telaio piazzato e' sul disco dopo {@code PlayerEvent.PLAYER_QUIT}, perche' il gioco
+     * scrive comunque il file di chi esce e i due file vanno sul disco insieme. Scrive solo il file del registro: un
+     * altro dato salvato dell'overworld (le incursioni), segnato da salvare, resta da salvare. Tutto nello stesso
+     * tick, quindi nessun altro test salva i dati dell'overworld fra {@code setDirty} e l'ultima asserzione.
+     */
+    private static void quitSaveIgnoresSaveOff(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        MinecraftServer server = helper.getLevel().getServer();
+        GameTests tests = Compat.gameTests();
+        Map<ServerLevel, Boolean> noSave = new HashMap<>();
+        server.getAllLevels().forEach(level -> noSave.put(level, level.noSave));
+        ExoframeEntity frame = null;
+        try {
+            server.getAllLevels().forEach(level -> level.noSave = true); // come /save-off
+            frame = placeFrame(helper, ownedBy(player), new Vec3(2.5, 1.0, 2.5), 0f);
+            helper.assertTrue(tests.registryChangeUnsaved(server), "placing a frame is not an unsaved change");
+            Raids raids = server.overworld().getRaids();
+            raids.setDirty();
+            PlayerEvent.PLAYER_QUIT.invoker().quit(player);
+            helper.assertTrue(!tests.registryChangeUnsaved(server), "the registry was not saved under /save-off");
+            Optional<CompoundTag> onDisk = tests.readRegistry(server, tests.registryFolder(server));
+            String frameId = frame.frameId().toString();
+            helper.assertTrue(onDisk.isPresent() && onDisk.get().getCompound(NbtKeys.PLACED).contains(frameId),
+                    "the placed frame is not in the registry on disk");
+            helper.assertTrue(raids.isDirty(), "the quit save wrote the other saved data of the overworld");
+        } finally {
+            noSave.forEach((level, value) -> level.noSave = value);
+            if (frame != null) {
+                removeFrame(server, frame);
+            }
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Un file del registro che il gioco legge ma che non ha {@code schema} ne' alcuna sezione (qui {@code data} =
+     * {@code {foo: 1}}, in una copia in una cartella temporanea, mai il file del mondo) non e' un registro: il dato
+     * resta in sola lettura con un ERROR (design §12.14, passo b), il file non si tocca e accanto non compare nulla
+     * (nessuna copia messa da parte, nessun {@code _old}).
+     */
+    private static void registryFileWithoutSectionsIsReadOnly(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        GameTests tests = Compat.gameTests();
+        Path copy = null;
+        try {
+            copy = Files.createTempDirectory("exoframes-registry-test");
+            Path file = copy.resolve("redstone_exoframes_frames.dat");
+            CompoundTag data = new CompoundTag();
+            data.putInt("foo", 1);
+            CompoundTag root = new CompoundTag();
+            root.put("data", data);
+            root.putInt("DataVersion", SharedConstants.getCurrentVersion().getDataVersion().getVersion());
+            try (OutputStream out = Files.newOutputStream(file)) {
+                NbtIo.writeCompressed(root, out);
+            }
+            byte[] before = Files.readAllBytes(file);
+            helper.assertTrue(tests.readRegistry(server, copy).isEmpty(),
+                    "a registry file without schema and sections is not read-only");
+            helper.assertTrue(Arrays.equals(before, Files.readAllBytes(file)), "the file without sections was changed");
+            try (Stream<Path> files = Files.list(copy)) {
+                helper.assertTrue(files.count() == 1, "extra files next to the registry");
+            }
+        } catch (IOException e) {
+            throw new IllegalStateException("could not prepare the registry file without sections", e);
+        } finally {
+            deleteTree(copy);
+        }
         helper.succeed();
     }
 }

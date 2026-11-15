@@ -105,7 +105,10 @@ public interface GameTests {
      * Legge il registro dalla cartella dei dati {@code dataFolder} come il server legge il suo all'avvio: un
      * {@code DimensionDataStorage} nuovo su quella cartella e la factory della mod, con il ripiego sulla copia
      * precedente se il file non si legge. Da' il registro letto come lo scriverebbe il salvataggio, o vuoto se e'
-     * rimasto in sola lettura (nulla si e' potuto leggere). Non tocca il registro del server. Esiste solo per i test.
+     * rimasto in sola lettura (nulla si e' potuto leggere, o il file non e' un registro). Non tocca il registro del
+     * server. Torna quando il loader non usa piu' la cartella (NeoForge 1.21.1, dopo un file letto, ci pulisce i file
+     * temporanei dal suo lavoratore di I/O, e qui lo si aspetta): chi chiama puo' cancellarla subito. Esiste solo per i
+     * test.
      */
     Optional<CompoundTag> readRegistry(MinecraftServer server, Path dataFolder);
 

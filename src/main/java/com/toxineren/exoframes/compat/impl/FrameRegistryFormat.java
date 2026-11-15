@@ -41,12 +41,14 @@ import net.minecraft.resources.ResourceLocation;
  * e' stato tolto), la voce grezza resta sotto la sua chiave.
  * <p>
  * Accanto alle sezioni c'e' il marcatore {@link NbtKeys#SCHEMA} ({@link FrameStateSavedData#CURRENT_SCHEMA}; assente
- * vale 1). Lo schema 1 aveva solo la sezione {@code frames} (uno stato per giocatore): si legge ancora, e ogni stato
- * diventa un record indossato con un'identita' nuova; le sue voci non lette restano in {@code frames}, identiche, per
- * sempre. Se il marcatore e' piu' recente di quello noto, o non e' un numero, il dato e' in sola lettura per questa
- * versione della mod ({@link FrameStateSavedData#readOnly()}): un solo ERROR al caricamento, nessuna voce viene letta,
- * e i punti di modifica non cambiano nulla; il dato non risulta mai da salvare, e se viene salvato lo stesso riproduce
- * il tag letto per intero. Nulla si legge, si cambia o si perde.
+ * vale 1, se c'e' almeno una delle sezioni {@code frames}, {@code worn}, {@code placed}: un tag senza marcatore e senza
+ * sezioni non e' un registro, {@link Outcome#WITHOUT_SECTIONS}). Lo schema 1 aveva solo la sezione {@code frames} (uno
+ * stato per giocatore): si legge ancora, e ogni stato diventa un record indossato con un'identita' nuova; le sue voci
+ * non lette restano in {@code frames}, identiche, per sempre. Se il marcatore e' piu' recente di quello noto, o non
+ * e' un numero, il dato e' in sola lettura per questa versione della mod ({@link FrameStateSavedData#readOnly()}): un
+ * solo ERROR al caricamento, nessuna voce viene letta, e i punti di modifica non cambiano nulla; il dato non risulta
+ * mai da salvare, e se viene salvato lo stesso riproduce il tag letto per intero. Nulla si legge, si cambia o si
+ * perde.
  * <p>
  * Regola per le versioni future: dentro un record che si legge, un pezzo con un livello, uno slot o un modulo che
  * questa versione non conosce si scarta alla lettura (con un avviso) e il salvataggio successivo lo cancella. Percio'
@@ -65,7 +67,13 @@ final class FrameRegistryFormat {
         /** Le voci leggibili sono nel registro, le altre fra le non lette. */
         READ,
         /** Schema piu' recente o non numerico: nulla e' stato letto, il dato va tenuto in sola lettura. */
-        READ_ONLY
+        READ_ONLY,
+        /**
+         * Ne' {@link NbtKeys#SCHEMA} ne' alcuna delle sezioni {@link #FRAMES}, {@link NbtKeys#WORN},
+         * {@link NbtKeys#PLACED}: il tag non e' un registro (scritto da altro, o svuotato), nulla e' stato letto e il
+         * dato va tenuto in sola lettura come per un file rovinato.
+         */
+        WITHOUT_SECTIONS
     }
 
     private FrameRegistryFormat() {
@@ -75,12 +83,19 @@ final class FrameRegistryFormat {
      * Legge il tag nel registro {@code into}, vuoto, con il lettore di stato dato (nel codice e' sempre
      * {@link FrameStateCodec#read}; il parametro esiste per i test). Ogni voce e' isolata: una voce che non si legge
      * viene saltata con un avviso e conservata grezza. Con uno schema piu' recente o non numerico scrive un ERROR, non
-     * legge nulla e dice {@link Outcome#READ_ONLY}: tenere il tag letto tocca a chi chiama. Un'eccezione che uscisse da
-     * qui varrebbe come un file illeggibile (vedi {@link FrameStateSavedData#afterUnreadFile}): la copia precedente o
-     * la sola lettura, mai il registro vuoto.
+     * legge nulla e dice {@link Outcome#READ_ONLY}: tenere il tag letto tocca a chi chiama. Un tag senza marcatore di
+     * schema e senza alcuna delle sezioni (conta la presenza delle chiavi, di qualunque tipo, non il loro essere vuote;
+     * {@code orphaned} da sola non basta, perche' {@link #write} scrive sempre lo schema) non e' un registro: nessuna
+     * riga di log, nulla letto, e l'esito e' {@link Outcome#WITHOUT_SECTIONS}. Un'eccezione che uscisse da qui
+     * varrebbe come un file illeggibile (vedi {@link FrameStateSavedData#afterUnreadFile}): la copia precedente o la
+     * sola lettura, mai il registro vuoto.
      */
     static Outcome read(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader,
             FrameRegistry into) {
+        if (!tag.contains(NbtKeys.SCHEMA) && !tag.contains(FRAMES) && !tag.contains(NbtKeys.WORN)
+                && !tag.contains(NbtKeys.PLACED)) {
+            return Outcome.WITHOUT_SECTIONS;
+        }
         CompoundTag wornTag = tag.getCompound(NbtKeys.WORN);
         CompoundTag placedTag = tag.getCompound(NbtKeys.PLACED);
         CompoundTag framesTag = tag.getCompound(FRAMES);
