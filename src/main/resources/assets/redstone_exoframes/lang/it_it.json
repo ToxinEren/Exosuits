@@ -37,6 +37,8 @@
   "key.redstone_exoframes.exit": "Esci dal telaio",
   "key.categories.redstone_exoframes": "Redstone Exoframes",
   "message.redstone_exoframes.exit_hold": "Tieni premuto per uscire dal telaio… %s%%",
+  "message.redstone_exoframes.energy_low": "Energia bassa: niente scatto",
+  "message.redstone_exoframes.energy_empty": "Energia esaurita: la tuta si muove appena",
   "message.redstone_exoframes.leave_frame_first": "Esci prima dall'esoscheletro",
   "message.redstone_exoframes.frame_taken": "Qui c'è già un altro telaio: spostati prima di uscire"
 }

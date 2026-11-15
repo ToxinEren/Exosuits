@@ -37,6 +37,8 @@
   "key.redstone_exoframes.exit": "Leave the exoframe",
   "key.categories.redstone_exoframes": "Redstone Exoframes",
   "message.redstone_exoframes.exit_hold": "Hold to leave the exoframe… %s%%",
+  "message.redstone_exoframes.energy_low": "Energy low: no sprinting",
+  "message.redstone_exoframes.energy_empty": "Energy empty: the exoframe barely moves",
   "message.redstone_exoframes.leave_frame_first": "Leave the exoframe first",
   "message.redstone_exoframes.frame_taken": "Another exoframe stands where yours would be left: move first"
 }

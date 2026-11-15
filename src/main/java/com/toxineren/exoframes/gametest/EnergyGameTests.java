@@ -3,6 +3,8 @@ package com.toxineren.exoframes.gametest;
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.frame.FrameSounds;
+import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import com.toxineren.exoframes.frame.SuitTick;
 import dev.architectury.event.events.common.TickEvent;
 import java.util.ArrayList;
@@ -48,6 +50,14 @@ public final class EnergyGameTests {
         add(tests, "creativeDrainsNothingBesideSurvival", EnergyGameTests::creativeDrainsNothingBesideSurvival);
         add(tests, "spectatorDrainsNothingAndKeepsTheRecord",
                 EnergyGameTests::spectatorDrainsNothingAndKeepsTheRecord);
+        add(tests, "firstEvaluationOfALowCellTellsWithoutSound",
+                EnergyGameTests::firstEvaluationOfALowCellTellsWithoutSound);
+        add(tests, "lowTransitionTellsSoundsAndSyncsOnce", EnergyGameTests::lowTransitionTellsSoundsAndSyncsOnce);
+        add(tests, "emptyTransitionTellsAndSounds", EnergyGameTests::emptyTransitionTellsAndSounds);
+        add(tests, "lowAfterAChangeWornStillSpeaks", EnergyGameTests::lowAfterAChangeWornStillSpeaks);
+        add(tests, "idleTickWithoutAWholeReDoesNotSync", EnergyGameTests::idleTickWithoutAWholeReDoesNotSync);
+        add(tests, "walkingSyncsEveryFiveTicks", EnergyGameTests::walkingSyncsEveryFiveTicks);
+        add(tests, "clockGoingBackwardsRestartsTheLimits", EnergyGameTests::clockGoingBackwardsRestartsTheLimits);
         return tests;
     }
 
@@ -252,6 +262,182 @@ public final class EnergyGameTests {
         p.setGameMode(GameType.SURVIVAL);
         walk(p, p.position(), 0.1, t0, 21, 40);
         helper.assertTrue(stored(p) == 4_992, stored(p) + " RE back in survival, expected 4 992");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * La prima valutazione di un record con la cella gia' in {@code LOW} (rientro nel server, rinascita) da' il
+     * messaggio senza suono, e sincronizza. Preparazione per esteso: il registratore vede il tick di preparazione ma
+     * non il suono {@code ENTER} dell'ingresso.
+     */
+    private static void firstEvaluationOfALowCellTellsWithoutSound(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, FEET, 500);
+        int synced0 = Compat.gameTests().syncCount(p);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            SuitTick.tick(p, t0);
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            int empty = messages(p, SuitTick.ENERGY_EMPTY);
+            helper.assertTrue(low == 1, low + " energy-low messages, expected 1");
+            helper.assertTrue(empty == 0, empty + " energy-empty messages, expected 0");
+            helper.assertTrue(sounds.sounds().isEmpty(), "sounds at the first evaluation: " + sounds.sounds());
+            int synced = Compat.gameTests().syncCount(p);
+            helper.assertTrue(synced == synced0 + 1, (synced - synced0) + " syncs at the first evaluation, expected 1");
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Da 1 000 RE (0,10: {@code NORMAL}) un tick di corsa toglie 1 RE: messaggio, suono, una sola sincronizzazione e lo
+     * scatto spento. Poi una cella carica (un miglioramento) non dice nulla.
+     */
+    private static void lowTransitionTellsSoundsAndSyncsOnce(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 1_000, t0);
+        int synced = Compat.gameTests().syncCount(p);
+        Vec3 start = p.position();
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            helper.assertTrue(messages(p, SuitTick.ENERGY_LOW) == 0, "energy-low message at 1 000 RE");
+            p.setSprinting(true);
+            p.setPos(start.x + 0.3, start.y, start.z);
+            SuitTick.tick(p, t0 + 1);
+            helper.assertTrue(stored(p) == 999, stored(p) + " RE, expected 999");
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            helper.assertTrue(low == 1, low + " energy-low messages, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_LOW)), "sounds: " + sounds.sounds());
+            int count = Compat.gameTests().syncCount(p);
+            helper.assertTrue(count == synced + 1, (count - synced) + " syncs at the low transition, expected 1");
+            helper.assertTrue(!p.isSprinting(), "still sprinting at low energy");
+            setStored(p, 5_000);
+            SuitTick.tick(p, t0 + 2);
+            low = messages(p, SuitTick.ENERGY_LOW);
+            helper.assertTrue(low == 1, low + " energy-low messages after the improvement, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_LOW)),
+                    "sounds after the improvement: " + sounds.sounds());
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Con 1 RE la prima valutazione e' {@code LOW} (messaggio, nessun suono); un tick di corsa porta a 0: messaggio e
+     * suono dell'energia esaurita, una sincronizzazione per ciascuno dei due tick.
+     */
+    private static void emptyTransitionTellsAndSounds(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, FEET, 1);
+        int synced0 = Compat.gameTests().syncCount(p);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            SuitTick.tick(p, t0);
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            helper.assertTrue(low == 1, low + " energy-low messages at the first evaluation, expected 1");
+            helper.assertTrue(sounds.sounds().isEmpty(), "sounds at the first evaluation: " + sounds.sounds());
+            Vec3 start = p.position();
+            p.setSprinting(true);
+            p.setPos(start.x + 0.3, start.y, start.z);
+            SuitTick.tick(p, t0 + 1);
+            helper.assertTrue(stored(p) == 0, stored(p) + " RE, expected 0");
+            int empty = messages(p, SuitTick.ENERGY_EMPTY);
+            helper.assertTrue(empty == 1, empty + " energy-empty messages, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_EMPTY)), "sounds: " + sounds.sounds());
+            int synced = Compat.gameTests().syncCount(p);
+            helper.assertTrue(synced == synced0 + 2, (synced - synced0) + " syncs, expected 2");
+            helper.assertTrue(!p.isSprinting(), "still sprinting at empty energy");
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Una sincronizzazione strutturale fuori dal tick ({@code changeWorn}) che porta la cella in {@code LOW} aggiorna
+     * i valori mandati ma non zittisce l'avviso: le transizioni si confrontano con gli effetti applicati. Il tick dopo
+     * non sincronizza di nuovo (prova anche che {@code afterSync} ascolta {@code syncTo}).
+     */
+    private static void lowAfterAChangeWornStillSpeaks(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 5_000, t0);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            setStored(p, 999);
+            int afterChange = Compat.gameTests().syncCount(p);
+            SuitTick.tick(p, t0 + 1);
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            helper.assertTrue(low == 1, low + " energy-low messages, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_LOW)), "sounds: " + sounds.sounds());
+            int synced = Compat.gameTests().syncCount(p);
+            helper.assertTrue(synced == afterChange,
+                    (synced - afterChange) + " syncs after the structural one, expected 0");
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Fermi, il riporto sale di 100 millesimi a tick: per otto tick non esce 1 RE e non parte nulla; al nono esce il
+     * primo RE e, segnato e a 9 tick dall'ultima, la sincronizzazione parte.
+     */
+    private static void idleTickWithoutAWholeReDoesNotSync(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 5_000, t0);
+        int synced = Compat.gameTests().syncCount(p);
+        for (int i = 1; i <= 8; i++) {
+            SuitTick.tick(p, t0 + i);
+            int count = Compat.gameTests().syncCount(p);
+            helper.assertTrue(count == synced, (count - synced) + " syncs after idle tick " + i + ", expected 0");
+        }
+        SuitTick.tick(p, t0 + 9);
+        helper.assertTrue(stored(p) == 4_999, stored(p) + " RE, expected 4 999");
+        int count = Compat.gameTests().syncCount(p);
+        helper.assertTrue(count == synced + 1, (count - synced) + " syncs after the first whole RE, expected 1");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Camminando esce 1 RE a t0+3, 5, 8, 10, 13, 15, 18, 20: le sincronizzazioni partono al piu' ogni 5 tick, quindi a
+     * 5, 10, 15 e 20.
+     */
+    private static void walkingSyncsEveryFiveTicks(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 5_000, t0);
+        int synced = Compat.gameTests().syncCount(p);
+        Vec3 start = p.position();
+        List<Integer> at = new ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            p.setPos(start.x + 0.2 * i, start.y, start.z);
+            SuitTick.tick(p, t0 + i);
+            int count = Compat.gameTests().syncCount(p);
+            if (count > synced) {
+                at.add(i);
+                synced = count;
+            }
+        }
+        helper.assertTrue(at.equals(List.of(5, 10, 15, 20)), "syncs at ticks " + at + ", expected [5, 10, 15, 20]");
+        helper.assertTrue(stored(p) == 4_992, stored(p) + " RE, expected 4 992");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * L'unico test con il tempo che torna indietro: a t0+103 esce 1 RE ma a 3 tick dall'ultima sincronizzazione non
+     * parte nulla; un tick a t0 (contatore ripartito) fa ripartire il limite e il segno ancora su sincronizza. Senza
+     * la regola, {@code now - lastSyncTick} sarebbe -100 e non partirebbe nulla.
+     */
+    private static void clockGoingBackwardsRestartsTheLimits(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 5_000, t0 + 100);
+        int synced = Compat.gameTests().syncCount(p);
+        Vec3 start = p.position();
+        walk(p, start, 0.2, t0, 101, 103);
+        helper.assertTrue(stored(p) == 4_999, stored(p) + " RE, expected 4 999");
+        int count = Compat.gameTests().syncCount(p);
+        helper.assertTrue(count == synced, (count - synced) + " syncs 3 ticks after the last one, expected 0");
+        SuitTick.tick(p, t0);
+        count = Compat.gameTests().syncCount(p);
+        helper.assertTrue(count == synced + 1, (count - synced) + " syncs after the clock went back, expected 1");
         leaveTestFrame(p);
         helper.succeed();
     }
