@@ -66,5 +66,12 @@
   "tooltip.redstone_exoframes.cell.charge": "%s / %s RE",
   "tooltip.redstone_exoframes.cell.empty": "Vuota: caricala in un caricatore",
   "tooltip.redstone_exoframes.piece.durability": "Durata %s / %s",
-  "tooltip.redstone_exoframes.piece.new": "Nuovo"
+  "tooltip.redstone_exoframes.piece.new": "Nuovo",
+  "commands.redstone_exoframes.debug.energy.show": "Cella: %s / %s RE (%s)",
+  "commands.redstone_exoframes.debug.energy.set": "Carica della cella portata a %s RE",
+  "commands.redstone_exoframes.debug.energy.no_cell": "Il telaio che indossi non ha una cella",
+  "commands.redstone_exoframes.debug.energy.not_wearing": "Non indossi un telaio",
+  "energy.redstone_exoframes.normal": "normale",
+  "energy.redstone_exoframes.low": "bassa",
+  "energy.redstone_exoframes.empty": "esaurita"
 }

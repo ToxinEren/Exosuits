@@ -21,8 +21,11 @@ import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.energy.EnergyCell;
+import com.toxineren.exoframes.core.energy.EnergyState;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
+import com.toxineren.exoframes.frame.DebugEnergy;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameLog;
 import com.toxineren.exoframes.frame.FramePlacement;
@@ -82,6 +85,16 @@ import net.minecraft.world.item.ItemStack;
  * <li>{@code /exoframe debug place rottame}: i sei pezzi Rottame e una cella carica, fatti con gli oggetti come se li
  * montasse un giocatore.</li>
  * </ul>
+ * Il ramo {@code energy} legge e imposta la carica della cella del telaio indossato ({@link DebugEnergy}; design
+ * §12.14), per portarla a {@code LOW} o {@code EMPTY} senza aspettare:
+ * <ul>
+ * <li>{@code /exoframe debug energy}: scrive carica, capacita' e stato dell'energia (normale, bassa, esaurita); il
+ * risultato del comando e' la carica;</li>
+ * <li>{@code /exoframe debug energy <re>}: porta la carica a {@code re} RE, limitata alla capacita' della cella,
+ * passando dal registro con un cambio strutturale che sincronizza subito il proprietario.</li>
+ * </ul>
+ * Senza telaio indossato o senza cella i due rami lo dicono e non cambiano nulla; con il registro in sola lettura
+ * {@code energy <re>} non scrive nulla in chat.
  */
 public final class ExoframeCommand {
     private static final String COMMANDS = "commands.redstone_exoframes.";
@@ -94,6 +107,7 @@ public final class ExoframeCommand {
     private static final String STATE = "stato";
     private static final String PRIMARY = "primario";
     private static final String SECONDARY = "secondario";
+    private static final String ENERGY = "re";
     private static final Pattern HEX_COLOR = Pattern.compile("[0-9A-Fa-f]{6}");
     private static final DynamicCommandExceptionType INVALID_COLOR = new DynamicCommandExceptionType(
             value -> Component.translatable(LANG + "invalid_color", value));
@@ -127,7 +141,11 @@ public final class ExoframeCommand {
                                 .then(Commands.literal("nudo")
                                         .executes(context -> place(context, false, "place.bare")))
                                 .then(Commands.literal("rottame")
-                                        .executes(context -> place(context, true, "place.scrap"))))));
+                                        .executes(context -> place(context, true, "place.scrap"))))
+                        .then(Commands.literal("energy")
+                                .executes(ExoframeCommand::showEnergy)
+                                .then(Commands.argument(ENERGY, IntegerArgumentType.integer(0))
+                                        .executes(ExoframeCommand::setEnergy)))));
     }
 
     /** {@code rottame [stato] [primario] [secondario]}: ogni argomento opzionale e' ammesso solo dopo i precedenti. */
@@ -187,6 +205,62 @@ public final class ExoframeCommand {
                     removed), false);
         }
         return removed;
+    }
+
+    /**
+     * {@code energy} senza argomento: scrive carica, capacita' e stato dell'energia della cella indossata; il risultato
+     * e' la carica, cosi' {@code execute store result} la legge. 0 e un errore senza telaio indossato o senza cella.
+     */
+    private static int showEnergy(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        FrameStateAccess frames = Compat.frameState();
+        Optional<FrameState> worn = frames.wornFrameId(player).isPresent() ? frames.get(player) : Optional.empty();
+        if (worn.isEmpty()) {
+            source.sendFailure(Component.translatable(LANG + "energy.not_wearing"));
+            return 0;
+        }
+        EnergyCell cell = worn.get().cell();
+        if (cell == null) {
+            source.sendFailure(Component.translatable(LANG + "energy.no_cell"));
+            return 0;
+        }
+        int stored = cell.stored();
+        int capacity = cell.capacity();
+        EnergyState state = RedstoneExoframes.rules().evaluate(worn.get()).energyState();
+        source.sendSuccess(() -> Component.translatable(LANG + "energy.show", stored, capacity,
+                Component.translatable("energy." + RedstoneExoframes.MOD_ID + "."
+                        + state.name().toLowerCase(Locale.ROOT))), false);
+        return stored;
+    }
+
+    /**
+     * {@code energy <re>}: porta la carica della cella indossata a {@code re}, limitata alla capacita'
+     * ({@link DebugEnergy#set}), e scrive la carica letta dopo. 0 e un errore senza telaio indossato o senza cella; 0
+     * senza messaggio se il registro rifiuta il cambio (resta la riga del log del registro).
+     */
+    private static int setEnergy(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        switch (DebugEnergy.set(player, IntegerArgumentType.getInteger(context, ENERGY))) {
+            case DONE -> {
+                int stored = DebugEnergy.cell(player).map(EnergyCell::stored).orElse(0);
+                source.sendSuccess(() -> Component.translatable(LANG + "energy.set", stored), false);
+                return 1;
+            }
+            case NOT_WEARING -> {
+                source.sendFailure(Component.translatable(LANG + "energy.not_wearing"));
+                return 0;
+            }
+            case NO_CELL -> {
+                source.sendFailure(Component.translatable(LANG + "energy.no_cell"));
+                return 0;
+            }
+            case REFUSED -> {
+                return 0;
+            }
+            default -> throw new IllegalStateException("unknown outcome");
+        }
     }
 
     /**

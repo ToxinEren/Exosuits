@@ -66,5 +66,12 @@
   "tooltip.redstone_exoframes.cell.charge": "%s / %s RE",
   "tooltip.redstone_exoframes.cell.empty": "Empty: charge it in a charger",
   "tooltip.redstone_exoframes.piece.durability": "Durability %s / %s",
-  "tooltip.redstone_exoframes.piece.new": "New"
+  "tooltip.redstone_exoframes.piece.new": "New",
+  "commands.redstone_exoframes.debug.energy.show": "Cell: %s / %s RE (%s)",
+  "commands.redstone_exoframes.debug.energy.set": "Cell charge set to %s RE",
+  "commands.redstone_exoframes.debug.energy.no_cell": "The exoframe you are wearing has no cell",
+  "commands.redstone_exoframes.debug.energy.not_wearing": "You are not wearing an exoframe",
+  "energy.redstone_exoframes.normal": "normal",
+  "energy.redstone_exoframes.low": "low",
+  "energy.redstone_exoframes.empty": "empty"
 }

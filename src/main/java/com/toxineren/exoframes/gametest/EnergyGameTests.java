@@ -2,12 +2,18 @@ package com.toxineren.exoframes.gametest;
 
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.SuitSummary;
+import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameEffects;
+import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
+import com.toxineren.exoframes.frame.DebugEnergy;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameSounds;
@@ -20,14 +26,18 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -89,6 +99,10 @@ public final class EnergyGameTests {
         add(tests, "attributesComeBackOnANewPlayerObject", EnergyGameTests::attributesComeBackOnANewPlayerObject);
         add(tests, "stepModifierFollowsTheVersion", EnergyGameTests::stepModifierFollowsTheVersion);
         add(tests, "leavingClearsTheAttributes", EnergyGameTests::leavingClearsTheAttributes);
+        add(tests, "debugEnergyShowsAndSetsTheCharge", EnergyGameTests::debugEnergyShowsAndSetsTheCharge);
+        add(tests, "debugEnergyClampsToTheCapacity", EnergyGameTests::debugEnergyClampsToTheCapacity);
+        add(tests, "debugEnergyWithoutAFrameChangesNothing", EnergyGameTests::debugEnergyWithoutAFrameChangesNothing);
+        add(tests, "debugEnergyWithoutACellSaysSo", EnergyGameTests::debugEnergyWithoutACellSaysSo);
         return tests;
     }
 
@@ -624,6 +638,120 @@ public final class EnergyGameTests {
         ServerLevel level = helper.getLevel();
         removeFrame(level.getServer(), (ExoframeEntity) level.getEntity(frameId));
         helper.succeed();
+    }
+
+    /**
+     * {@code /exoframe debug energy <RE>} porta la carica della cella indossata al valore dato passando da
+     * {@code changeWorn} (una sincronizzazione), e {@code /exoframe debug energy} senza argomento restituisce la carica
+     * come risultato del comando.
+     */
+    private static void debugEnergyShowsAndSetsTheCharge(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        wearScrap(helper, p, FEET, 5_000);
+        int synced = Compat.gameTests().syncCount(p);
+        helper.assertTrue(exoframeCommand(helper, p, 2, "debug energy 999") == 1, "debug energy 999 failed");
+        helper.assertTrue(stored(p) == 999, stored(p) + " RE, expected 999");
+        int syncs = Compat.gameTests().syncCount(p);
+        helper.assertTrue(syncs == synced + 1, (syncs - synced) + " syncs, expected 1");
+        int shown = exoframeCommand(helper, p, 2, "debug energy");
+        helper.assertTrue(shown == 999, "debug energy returned " + shown + ", expected 999");
+        Optional<Integer> cell = DebugEnergy.cell(p).map(EnergyCell::stored);
+        helper.assertTrue(cell.equals(Optional.of(999)), "DebugEnergy.cell gave " + cell + ", expected 999");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * La carica si limita alla capacita' della cella; un valore negativo il comando non lo accetta (errore di sintassi,
+     * nulla cambia), mentre {@link DebugEnergy#set} lo porta a zero.
+     */
+    private static void debugEnergyClampsToTheCapacity(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        wearScrap(helper, p, FEET, 5_000);
+        helper.assertTrue(exoframeCommand(helper, p, 2, "debug energy 20000") == 1, "debug energy 20000 failed");
+        helper.assertTrue(stored(p) == 10_000, stored(p) + " RE, expected 10 000");
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+        boolean refused;
+        try {
+            dispatcher.execute("exoframe debug energy -5",
+                    p.createCommandSourceStack().withPermission(2).withSuppressedOutput());
+            refused = false;
+        } catch (CommandSyntaxException e) {
+            refused = true;
+        }
+        helper.assertTrue(refused, "debug energy -5 was accepted");
+        helper.assertTrue(stored(p) == 10_000, stored(p) + " RE after -5, expected 10 000");
+        DebugEnergy.Outcome outcome = DebugEnergy.set(p, -5);
+        helper.assertTrue(outcome == DebugEnergy.Outcome.DONE, "DebugEnergy.set(-5) gave " + outcome);
+        helper.assertTrue(stored(p) == 0, stored(p) + " RE after set(-5), expected 0");
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /** Senza telaio indossato il comando lo dice e non crea nulla: nessun record, nessun id indossato. */
+    private static void debugEnergyWithoutAFrameChangesNothing(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        FrameStateAccess frames = Compat.frameState();
+        DebugEnergy.Outcome outcome = DebugEnergy.set(p, 500);
+        helper.assertTrue(outcome == DebugEnergy.Outcome.NOT_WEARING, "DebugEnergy.set gave " + outcome);
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+        CommandSourceStack source = p.createCommandSourceStack().withPermission(2);
+        int result = execute(dispatcher, "exoframe debug energy 500", source);
+        helper.assertTrue(result == 0, "debug energy 500 returned " + result + ", expected 0");
+        int said = failures(p, "commands.redstone_exoframes.debug.energy.not_wearing");
+        helper.assertTrue(said == 1, said + " not_wearing messages, expected 1");
+        helper.assertTrue(frames.get(p).isEmpty(), "a worn record appeared");
+        helper.assertTrue(frames.wornFrameId(p).isEmpty(), "a worn frame id appeared");
+        helper.succeed();
+    }
+
+    /** Senza cella installata il comando lo dice e non cambia nulla: nessuna sincronizzazione, nessuna cella. */
+    private static void debugEnergyWithoutACellSaysSo(GameTestHelper helper) {
+        ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        wearScrap(helper, p, FEET, 5_000);
+        helper.assertTrue(Compat.frameState().changeWorn(p, FrameState::removeCell), "removing the cell was refused");
+        int synced = Compat.gameTests().syncCount(p);
+        CommandDispatcher<CommandSourceStack> dispatcher = helper.getLevel().getServer().getCommands().getDispatcher();
+        CommandSourceStack source = p.createCommandSourceStack().withPermission(2);
+        int result = execute(dispatcher, "exoframe debug energy 500", source);
+        helper.assertTrue(result == 0, "debug energy 500 returned " + result + ", expected 0");
+        int said = failures(p, "commands.redstone_exoframes.debug.energy.no_cell");
+        helper.assertTrue(said == 1, said + " no_cell messages, expected 1");
+        int syncs = Compat.gameTests().syncCount(p);
+        helper.assertTrue(syncs == synced, (syncs - synced) + " syncs without a cell, expected none");
+        helper.assertTrue(DebugEnergy.cell(p).isEmpty(), "DebugEnergy.cell gave a cell without one installed");
+        DebugEnergy.Outcome outcome = DebugEnergy.set(p, 500);
+        helper.assertTrue(outcome == DebugEnergy.Outcome.NO_CELL, "DebugEnergy.set gave " + outcome);
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Quanti messaggi del giocatore finto sono la chiave data o la portano fra i figli: {@code sendFailure} la avvolge
+     * in un componente vuoto, che {@code messages} non vede.
+     */
+    private static int failures(ServerPlayer player, String key) {
+        int count = 0;
+        for (Component message : Compat.gameTests().messagesTo(player)) {
+            if (isKey(message, key) || message.getSiblings().stream().anyMatch(child -> isKey(child, key))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** Esegue il comando con la sorgente data; un errore di sintassi diventa {@link IllegalStateException}. */
+    private static int execute(CommandDispatcher<CommandSourceStack> dispatcher, String command,
+            CommandSourceStack source) {
+        try {
+            return dispatcher.execute(command, source);
+        } catch (CommandSyntaxException e) {
+            throw new IllegalStateException("command failed: " + command + ": " + e.getMessage(), e);
+        }
+    }
+
+    private static boolean isKey(Component message, String key) {
+        return message.getContents() instanceof TranslatableContents contents && contents.getKey().equals(key);
     }
 
     /** Gli attributi della mod che il gioco deve ancora mandare al proprietario; svuota l'insieme del gioco. */
