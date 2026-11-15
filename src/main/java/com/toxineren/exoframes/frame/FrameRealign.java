@@ -10,10 +10,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -77,10 +75,7 @@ public final class FrameRealign {
         int recreated = 0;
         for (PlacedFrame frame : Compat.frameState().placedIn(level)) {
             Vec3 spot = frame.position();
-            ChunkPos chunk = new ChunkPos(BlockPos.containing(spot));
-            // entita' caricate (brief) e chunk pieno: solo allora getEntity vede le entita' del chunk, e un'entita'
-            // che c'e' non sembra mancare
-            if (!level.areEntitiesLoaded(chunk.toLong()) || !level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
+            if (!FramePlacement.entitiesLoadedAt(level, spot)) {
                 continue;
             }
             Entity entity = level.getEntity(frame.frameId());

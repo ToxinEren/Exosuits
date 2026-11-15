@@ -12,6 +12,7 @@ import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -109,5 +110,16 @@ public final class FramePlacement {
         entity.setSummary(SuitSummary.of(frame.state()));
         level.addFreshEntity(entity);
         return entity;
+    }
+
+    /**
+     * Vero se il chunk di {@code at} ha le entita' caricate ed e' un chunk pieno, senza caricare ne' generare nulla:
+     * solo allora {@code getEntity} vede le entita' del chunk, e un'entita' che c'e' non sembra mancare. Lo chiedono
+     * l'uscita dal telaio (l'entita' nasce subito solo qui; altrove basta il record, e l'entita' la crea il
+     * riallineamento quando il chunk si carica) e il riallineamento stesso.
+     */
+    static boolean entitiesLoadedAt(ServerLevel level, Vec3 at) {
+        ChunkPos chunk = new ChunkPos(BlockPos.containing(at));
+        return level.areEntitiesLoaded(chunk.toLong()) && level.getChunkSource().hasChunk(chunk.x, chunk.z);
     }
 }

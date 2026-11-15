@@ -288,10 +288,9 @@ public final class FrameEntry {
         PlacedFrame record = frames.placed(player.server, frameId.get()).orElseThrow(
                 () -> new IllegalStateException("placed frame " + frameId.get() + " not found after exit"));
         ServerLevel level = spot.level();
-        ChunkPos chunk = new ChunkPos(BlockPos.containing(spot.position()));
-        // come nel riallineamento: entita' caricate e chunk pieno, senza caricare ne' generare nulla; altrove basta il
-        // record, e l'entita' la crea il riallineamento quando il chunk si carica
-        if (level.areEntitiesLoaded(chunk.toLong()) && level.getChunkSource().hasChunk(chunk.x, chunk.z)) {
+        // l'entita' nasce subito solo dove il chunk ha le entita' caricate; altrove basta il record, e l'entita' la
+        // crea il riallineamento quando il chunk si carica
+        if (FramePlacement.entitiesLoadedAt(level, spot.position())) {
             FramePlacement.spawnView(level, record);
         }
         WornState.changed(player, event + spot.logNote(), frameId.get(), level, spot.position());
