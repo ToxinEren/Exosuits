@@ -29,7 +29,7 @@ EXO_ACCEPT_EULA=true bash tools/client/m3b_shots.sh <variante> <cartella>
 
 Varianti: `1.20.1-forge`, `1.20.1-fabric`, `1.21.1-fabric`, `1.21.1-neoforge`.
 
-**`client_shot.sh`** fa un'esecuzione: server e client della variante, giocatore dentro (in creativa, mondo piatto, mezzogiorno, sereno, rivolto a sud in 0,5 -60 0,5), un passo avanti e ritorno per allineare il corpo alla testa (il client crea il giocatore con il corpo girato a caso, e da fermo il corpo resta indietro fino a 50 gradi: senza il passo, su 1.20.1 metà degli scatti "davanti" venivano di tre quarti), poi i comandi e i passi del client (sotto), in ordine; i comandi vanno via RCON, senza la barra iniziale; il giocatore si chiama `Exo` salvo `EXO_SHOT_USER`. Esempio:
+**`client_shot.sh`** fa un'esecuzione: server e client della variante, giocatore dentro (in creativa, mondo piatto, mezzogiorno, sereno, rivolto a sud in 0,5 -60 0,5), un passo avanti e ritorno per allineare il corpo alla testa (il client crea il giocatore con il corpo girato a caso, e da fermo il corpo resta indietro fino a 50 gradi: senza il passo, su 1.20.1 metà degli scatti "davanti" venivano di tre quarti), poi i comandi e i passi del client (sotto), in ordine; salto automatico spento nelle opzioni del client (`autoJump:false`), così un gradino non diventa un salto; i comandi vanno via RCON, senza la barra iniziale; il giocatore si chiama `Exo` salvo `EXO_SHOT_USER`. Esempio:
 
 ```
 EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh 1.21.1-fabric /tmp/scatti/rottame "execute as Exo run exoframe debug wear rottame 2"
@@ -41,7 +41,7 @@ Nella cartella lascia:
 - `<nome>.png` per ogni passo `@scatto <nome>` (e `@tieni` con uno scatto);
 - `gradle-server.log`, `gradle-client.log`: uscita di Gradle e del gioco; `server.log`, `client.log`: i `latest.log`;
 - `rcon.log`: comandi e risposte; `xvfb.log`: uscita di Xvfb;
-- `log-check.txt`: avvisi ed errori del mod nei due log che non sono nell'elenco di quelli voluti, `tools/log_allowlist.txt` (righe WARN/ERROR che nominano il mod o la sua entità, anche quelle di vanilla come `UUID of added entity already exists: ExoframeEntity[...]`; tracce che passano da `com.toxineren`; errori di applicazione dei mixin), scritti da `tools/check_log.py`; vuoto se non ce ne sono. Se non è vuoto lo script, dopo aver salvato scatti e log, esce con 1.
+- `log-check.txt`: avvisi ed errori del mod nei due log che non sono nell'elenco di quelli voluti, `tools/log_allowlist.txt` (righe WARN/ERROR che nominano il mod o la sua entità, anche quelle di vanilla come `UUID of added entity already exists: ExoframeEntity[...]`; tracce che passano da `com.toxineren`; errori di applicazione dei mixin), o che vi compaiono un numero di volte diverso da quello ammesso, scritti da `tools/check_log.py` con la variante (`--variant`, che sceglie i conteggi per loader); vuoto se non ce ne sono. Se non è vuoto lo script, dopo aver salvato scatti e log, esce con 1.
 
 All'inizio lo script cancella dalla cartella solo questi file, per nome (compresi gli scatti dei passi); il resto della cartella non lo tocca. `server.log` e `client.log` li copia solo se in questa esecuzione server e client sono partiti.
 
@@ -54,7 +54,7 @@ Fra i comandi possono stare passi che cominciano con `@`: li esegue il client, c
 | Passo | Cosa fa |
 |---|---|
 | `@click destro`, `@click sinistro` | un clic del mouse dove punta il mirino (il clic destro usa l'oggetto in mano o tocca l'entità o il blocco puntati) |
-| `@tieni <tasto> <secondi>` | tiene premuto un tasto per quei secondi; `<tasto>` è un nome di xdotool (`v`, `w`, `e`, `F5`, `Escape`, `space`...) |
+| `@tieni <tasto> <secondi>` | tiene premuto un tasto per quei secondi; `<tasto>` è un nome di xdotool (`v`, `w`, `e`, `F5`, `Escape`, `space`...), anche combinato con `+` (`ctrl+w`) |
 | `@tieni <tasto> <secondi> <nome> <dopo>` | come sopra, e salva `<nome>.png` `<dopo>` secondi dopo la pressione, a tasto ancora premuto (`<dopo>` minore di `<secondi>`): per esempio l'avanzamento di un tasto da tenere |
 | `@scatto <nome>` | salva `<nome>.png` subito, senza attese, con l'interfaccia com'è in quel momento (visibile, salvo un F1 dei passi) |
 | `@attendi <secondi>` | aspetta |
@@ -112,5 +112,5 @@ Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un min
 - `Reference map 'geckolib.refmap.json' for geckolib.mixins.json could not be read. If this is a development environment you can ignore this message`: GeckoLib in sviluppo; non nomina il mod, quindi `log-check.txt` non la prende.
 - Su NeoForge: `Attempted to select a dependency jar for JarJar which was passed in as source: library:mixinextras.neoforge`: ambiente di sviluppo; non nomina il mod.
 - `Shader rendertype_entity_translucent_emissive could not find sampler named Sampler2`: avviso del gioco base su 1.21.1.
-- Sulle due varianti Fabric, in client e server: `[ERROR] (Minecraft) No data fixer registered for exoframe`, il tipo dell'entità telaio senza correttore di dati (vedi `docs/compat.md`, `CompatEntity`); è nell'elenco degli avvisi voluti, una volta per log.
+- Sulle due varianti Fabric, in client e server: `[ERROR] (Minecraft) No data fixer registered for exoframe`, il tipo dell'entità telaio senza correttore di dati (vedi `docs/compat.md`, `CompatEntity`); è nell'elenco degli avvisi voluti, esattamente una volta per log, mai su Forge e NeoForge.
 - Sul server: `No key layers in MapLike[{}]` (impostazioni del mondo piatto lasciate vuote) e gli avvisi `SERVER IS RUNNING IN OFFLINE/INSECURE MODE`.

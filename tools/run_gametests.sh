@@ -5,8 +5,8 @@
 # numero di righe "add(tests," di tutti i file di gametest/: su Forge e NeoForge un server partito senza test esce
 # comunque con 0, e un test perso nella registrazione non deve passare inosservato. Passa inoltre solo se nel log non
 # c'e' nessun avviso o errore del mod (o di vanilla che nomina il telaio) fuori dall'elenco di quelli voluti,
-# tools/log_allowlist.txt, letto da tools/check_log.py. Il log di ogni variante resta in
-# versions/<variante>/build/gametest/server.log.
+# tools/log_allowlist.txt, letto da tools/check_log.py con la variante (--variant), che decide i conteggi per loader.
+# Il log di ogni variante resta in versions/<variante>/build/gametest/server.log.
 set -u
 
 cd "$(dirname "$0")/.."
@@ -40,7 +40,7 @@ for v in "${variants[@]}"; do
     elif [ "$passed" -ne "$expected" ]; then
         echo "FAIL $v: passati $passed test obbligatori, attesi $expected (righe 'add(tests,' in $tests_dir/*.java)" >&2
         fail=1
-    elif ! problems=$(python3 -I tools/check_log.py gametest "$log"); then
+    elif ! problems=$(python3 -I tools/check_log.py gametest --variant "$v" "$log"); then
         echo "FAIL $v: avvisi o errori del mod non previsti in tools/log_allowlist.txt:" >&2
         printf '%s\n' "$problems" >&2
         fail=1

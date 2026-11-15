@@ -18,7 +18,8 @@
 # Fra i comandi possono stare passi del client, che cominciano con @ e si eseguono nello stesso ordine:
 #   @click destro|sinistro             un clic del mouse dove punta il mirino
 #   @tieni <tasto> <secondi> [<nome> <dopo>]
-#                                      tiene premuto un tasto (nome di xdotool: v, F5, space...) per quei secondi;
+#                                      tiene premuto un tasto (nome di xdotool: v, F5, space; i tasti combinati con
+#                                      +, per esempio ctrl+w) per quei secondi;
 #                                      con <nome> e <dopo> salva <nome>.png <dopo> secondi dopo la pressione, a tasto
 #                                      ancora premuto (<dopo> minore di <secondi>)
 #   @scatto <nome>                     salva <nome>.png subito, con l'interfaccia com'e' in quel momento
@@ -100,7 +101,7 @@ for c in "$@"; do
         @tieni)
             { [ "${#w[@]}" -eq 3 ] || [ "${#w[@]}" -eq 5 ]; } \
                 || fatal "passo \"$c\": si scrive @tieni <tasto> <secondi> [<nome> <dopo>]"
-            [[ "${w[1]}" =~ ^[A-Za-z0-9_]+$ ]] || fatal "passo \"$c\": tasto non valido '${w[1]}'"
+            [[ "${w[1]}" =~ ^[A-Za-z0-9_+]+$ ]] || fatal "passo \"$c\": tasto non valido '${w[1]}'"
             is_seconds "${w[2]}" || fatal "passo \"$c\": secondi non validi '${w[2]}' (numero maggiore di 0)"
             if [ "${#w[@]}" -eq 5 ]; then
                 add_shot_name "${w[3]}" "$c"
@@ -203,7 +204,7 @@ motd=exo-shot
 EOF
 # options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica "Dettagliata"
 # (graphicsMode:1; 0 sarebbe "Rapida"), distanza di rendering 4 e 30 fps per il rendering software, mouse non grezzo
-# (xdotool muove il puntatore per lo scatto a tre quarti).
+# (xdotool muove il puntatore per lo scatto a tre quarti), salto automatico spento (un gradino non diventa un salto).
 cat >"$cdir/options.txt" <<EOF
 onboardAccessibility:false
 narrator:0
@@ -221,6 +222,7 @@ guiScale:2
 fov:0.0
 soundCategory_master:0.0
 rawMouseInput:false
+autoJump:false
 EOF
 
 # --- chiusura -------------------------------------------------------------------------------------------------------
@@ -466,9 +468,10 @@ shot quarter
 
 # Log del client e del server: le righe WARN/ERROR che nominano il mod o la sua entita' (anche quelle di vanilla, come
 # "UUID of added entity already exists: ExoframeEntity[...]"), gli errori di applicazione dei mixin e le tracce che
-# passano dal codice del mod, fuori dall'elenco degli avvisi voluti (tools/log_allowlist.txt, ambito client), vanno
-# in log-check.txt; se non e' vuoto l'esecuzione fallisce (uscita 1), dopo aver salvato scatti e log.
-python3 -I "$root/tools/check_log.py" client "$out/gradle-client.log" "$out/gradle-server.log" \
+# passano dal codice del mod, fuori dall'elenco degli avvisi voluti (tools/log_allowlist.txt, ambito client, con i
+# conteggi del loader della variante), vanno in log-check.txt; se non e' vuoto l'esecuzione fallisce (uscita 1),
+# dopo aver salvato scatti e log.
+python3 -I "$root/tools/check_log.py" client --variant "$variant" "$out/gradle-client.log" "$out/gradle-server.log" \
     >"$out/log-check.txt" 2>&1
 if [ -s "$out/log-check.txt" ]; then
     fail "$(wc -l <"$out/log-check.txt") righe del mod fuori dall'elenco degli avvisi voluti: $out/log-check.txt"
