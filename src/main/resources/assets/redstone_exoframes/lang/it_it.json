@@ -42,6 +42,7 @@
   "message.redstone_exoframes.piece_critical": "Pezzo in stato critico: %s",
   "message.redstone_exoframes.piece_broken": "Pezzo fuori uso: %s",
   "message.redstone_exoframes.leave_frame_first": "Esci prima dall'esoscheletro",
+  "message.redstone_exoframes.water_hint": "L'esoscheletro affonda: esci camminando, oppure tieni premuto il tasto di uscita per lasciarlo",
   "message.redstone_exoframes.frame_taken": "Qui c'è già un altro telaio: spostati prima di uscire",
   "piece.redstone_exoframes.helmet": "Elmo",
   "piece.redstone_exoframes.torso": "Torso",

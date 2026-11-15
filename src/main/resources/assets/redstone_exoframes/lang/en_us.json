@@ -42,6 +42,7 @@
   "message.redstone_exoframes.piece_critical": "Critical piece: %s",
   "message.redstone_exoframes.piece_broken": "Broken piece: %s",
   "message.redstone_exoframes.leave_frame_first": "Leave the exoframe first",
+  "message.redstone_exoframes.water_hint": "The exoframe sinks: walk out, or hold the exit key to leave it",
   "message.redstone_exoframes.frame_taken": "Another exoframe stands where yours would be left: move first",
   "piece.redstone_exoframes.helmet": "Helmet",
   "piece.redstone_exoframes.torso": "Torso",

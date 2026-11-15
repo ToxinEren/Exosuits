@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
@@ -77,6 +78,11 @@ import net.minecraft.world.phys.Vec3;
  * fuori dal tick, aggiorna nel record i valori mandati e il tick dell'ultima sincronizzazione e toglie il segno: un
  * ascoltatore di {@code onSynced}, che come tick usa l'ultimo {@code now} visto dal record.
  * <p>
+ * <b>Suggerimento sull'acqua</b> (design §12.6). Al primo tick del record in cui il giocatore tocca l'acqua, fuori
+ * dallo spettatore, una riga nella barra delle azioni ({@link SuitMovement#WATER_HINT}); il segno sta nel record.
+ * L'uscita dal telaio scarta il record, quindi a ogni ingresso il suggerimento torna una volta; un rientro nel server
+ * o una rinascita (oggetto giocatore nuovo, record nuovo) lo ripresentano.
+ * <p>
  * Ogni eccezione del tick si cattura: una riga ERROR alla prima per giocatore e sessione, poi silenzio.
  */
 public final class SuitTick {
@@ -117,11 +123,12 @@ public final class SuitTick {
     }
 
     /**
-     * Un tick dell'energia del giocatore, passi 1-8 di §12.3: senza telaio indossato scarta il record e toglie gli
+     * Un tick dell'energia del giocatore, passi 1-9 di §12.3: senza telaio indossato scarta il record e toglie gli
      * attributi; altrimenti crea il record se manca, fa scendere un passeggero, calcola attivita' e salto e, fuori da
      * creativa e spettatore, consuma con {@link FrameRules#tick} e {@link FrameRules#jump} in un solo {@code mutate};
-     * poi valuta gli effetti, applica gli attributi e dice le transizioni, spegne la corsa senza scatto e sincronizza
-     * il proprietario con la regola di §12.4.
+     * poi valuta gli effetti, applica gli attributi e dice le transizioni, spegne la corsa senza scatto, sincronizza
+     * il proprietario con la regola di §12.4 e, al primo contatto con l'acqua del record, manda il suggerimento
+     * {@link SuitMovement#WATER_HINT} (non a uno spettatore).
      *
      * @param now il tick del server ({@code server.getTickCount()})
      */
@@ -206,6 +213,10 @@ public final class SuitTick {
                     || !conditions(state).equals(r.sentConditions)
                     || (r.dirty && now - r.lastSyncTick >= SYNC_INTERVAL)) {
                 frames.syncTo(player); // afterSync aggiorna il record
+            }
+            if (!r.waterHintShown && !player.isSpectator() && player.isInWater()) { // 9
+                player.displayClientMessage(Component.translatable(SuitMovement.WATER_HINT), true);
+                r.waterHintShown = true;
             }
         } catch (RuntimeException e) {
             logFailure(player, e);
@@ -298,6 +309,8 @@ public final class SuitTick {
         EnergyState sentEnergy;
         /** La condizione dei pezzi partita con l'ultima sincronizzazione. */
         Map<PieceSlot, PieceCondition> sentConditions;
+        /** Il suggerimento sull'acqua e' gia' partito per questo record (design §12.6); falso alla creazione. */
+        boolean waterHintShown;
 
         Record(Vec3 lastPos, ResourceKey<Level> lastDimension, int jumpBase, long now) {
             this.lastPos = lastPos;
