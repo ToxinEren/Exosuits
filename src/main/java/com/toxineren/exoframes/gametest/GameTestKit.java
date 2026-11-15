@@ -282,6 +282,28 @@ final class GameTestKit {
                 + player.position() + ", expected " + left);
     }
 
+    /**
+     * Il giocatore, nel telaio piazzato {@code frameId} nel punto assoluto {@code spot} (dove era stato indossato), ci
+     * rientra se non ne indossa uno, esce rivolto a +Z (yaw 0) e fa il passo a sinistra, un blocco verso +X: il posto
+     * davanti, con {@code hazard}, e' scartato. Alla fine il giocatore e' fuori, il telaio piazzato.
+     */
+    static void assertExitStepsLeft(GameTestHelper helper, ServerPlayer player, UUID frameId, Vec3 spot,
+            String hazard) {
+        ServerLevel level = helper.getLevel();
+        if (Compat.frameState().wornFrameId(player).isEmpty()) {
+            player.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+            helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) level.getEntity(frameId)),
+                    "enter refused before " + hazard);
+        }
+        Vec3 at = player.position();
+        player.moveTo(at.x, at.y, at.z, 0f, 0f);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused before " + hazard);
+
+        helper.assertTrue(player.position().distanceTo(spot.add(1.0, 0.0, 0.0)) < 1e-6,
+                "player stepped onto " + hazard + ": " + player.position());
+    }
+
     /** Gli oggetti a terra entro 2,5 blocchi da {@code center}, come li lascia nel suo tick una morte in quel punto. */
     static List<ItemEntity> deathDrops(ServerLevel level, Vec3 center) {
         return level.getEntitiesOfClass(ItemEntity.class, new AABB(center, center).inflate(2.5));

@@ -36,5 +36,6 @@
   "message.redstone_exoframes.holds_armor": "Questo telaio contiene ancora un'armatura: prima tirala fuori (accovacciato e clic destro)",
   "key.redstone_exoframes.exit": "Esci dal telaio",
   "key.categories.redstone_exoframes": "Redstone Exoframes",
-  "message.redstone_exoframes.exit_hold": "Tieni premuto per uscire dal telaio… %s%%"
+  "message.redstone_exoframes.exit_hold": "Tieni premuto per uscire dal telaio… %s%%",
+  "message.redstone_exoframes.frame_taken": "Qui c'è già un altro telaio: spostati prima di uscire"
 }

@@ -2,13 +2,17 @@ package com.toxineren.exoframes.gametest;
 
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
+import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugWear;
+import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameSight;
 import dev.architectury.event.events.common.PlayerEvent;
 import dev.architectury.event.events.common.TickEvent;
@@ -23,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.stream.Stream;
 import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
@@ -40,6 +45,8 @@ import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.raid.Raids;
+import net.minecraft.world.entity.vehicle.Boat;
+import net.minecraft.world.entity.vehicle.Minecart;
 import net.minecraft.world.inventory.ChestMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -47,6 +54,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -72,6 +80,15 @@ public final class CarryOverGameTests {
         add(tests, "registryFileWithoutSectionsIsReadOnly", CarryOverGameTests::registryFileWithoutSectionsIsReadOnly);
         add(tests, "tallGrassHidesTheFrameFromTheCommand", CarryOverGameTests::tallGrassHidesTheFrameFromTheCommand);
         add(tests, "eyesInsideAFrameBoxPickThatFrame", CarryOverGameTests::eyesInsideAFrameBoxPickThatFrame);
+        add(tests, "exitStepsUpASmallLip", CarryOverGameTests::exitStepsUpASmallLip);
+        add(tests, "exitTakesAnAxisPathAroundAPost", CarryOverGameTests::exitTakesAnAxisPathAroundAPost);
+        add(tests, "exitAvoidsCampfireMagmaAndBerries", CarryOverGameTests::exitAvoidsCampfireMagmaAndBerries);
+        add(tests, "exitAvoidsWitherRosePowderSnowAndCactus",
+                CarryOverGameTests::exitAvoidsWitherRosePowderSnowAndCactus);
+        add(tests, "exitAvoidsAPortalBelow", CarryOverGameTests::exitAvoidsAPortalBelow);
+        add(tests, "exitAvoidsABoatBelowTheSpot", CarryOverGameTests::exitAvoidsABoatBelowTheSpot);
+        add(tests, "exitAvoidsAMinecartBelowTheSpot", CarryOverGameTests::exitAvoidsAMinecartBelowTheSpot);
+        add(tests, "exitRefusedOverAnotherFrame", CarryOverGameTests::exitRefusedOverAnotherFrame);
         return tests;
     }
 
@@ -302,5 +319,247 @@ public final class CarryOverGameTests {
                 "the sight did not pick the frame around the eyes");
         helper.assertTrue(exoframeCommand(helper, owner, 0, "unlock") == 1 && recordState(helper, a).unlocked()
                 && !recordState(helper, b).unlocked(), "the command unlocked the wrong frame");
+    }
+
+    /**
+     * Il passo fuori sale un piccolo gradino (design §12.14): da un sentiero (sommita' a 15/16) sulla pietra accanto,
+     * un sedicesimo piu' in alto, e da un telaio sulla pietra a una lastra in basso, mezzo blocco piu' in alto, il
+     * limite ammesso. Con il riquadro all'altezza del telaio il gradino lo urtava e il posto davanti era scartato.
+     */
+    private static void exitStepsUpASmallLip(GameTestHelper helper) {
+        ServerPlayer onPath = Compat.gameTests().mockServerPlayer(helper);
+        ServerPlayer onStone = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        // il sentiero prima del telaio: wearFrameAt mette la pietra sotto, in (2, 0, 2)
+        helper.setBlock(new BlockPos(2, 1, 2), Blocks.DIRT_PATH);
+        helper.setBlock(new BlockPos(2, 1, 3), Blocks.STONE);
+        UUID pathFrame = wearFrameAt(helper, onPath, charged(ownedBy(onPath)), new Vec3(2.5, 1.9375, 2.5));
+        helper.setBlock(new BlockPos(5, 1, 3), Blocks.STONE);
+        helper.setBlock(new BlockPos(5, 2, 3), Blocks.STONE_SLAB);
+        UUID slabFrame = wearFrameAt(helper, onStone, charged(ownedBy(onStone)), new Vec3(5.5, 2.0, 2.5));
+
+        assertStepsAheadTo(helper, onPath, helper.absoluteVec(new Vec3(2.5, 2.0, 3.5)), "a lip of 1/16");
+        assertStepsAheadTo(helper, onStone, helper.absoluteVec(new Vec3(5.5, 2.5, 3.5)), "a half slab");
+        removeFrame(server, (ExoframeEntity) level.getEntity(pathFrame));
+        removeFrame(server, (ExoframeEntity) level.getEntity(slabFrame));
+        helper.succeed();
+    }
+
+    /** Il giocatore, dentro il telaio, esce rivolto a +Z (yaw 0) e fa il passo davanti, con i piedi in {@code feet}. */
+    private static void assertStepsAheadTo(GameTestHelper helper, ServerPlayer player, Vec3 feet, String step) {
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, 0f, 0f);
+        helper.assertTrue(FrameEntry.exit(player), "exit refused before " + step);
+        helper.assertTrue(player.position().distanceTo(feet) < 1e-6, "player did not step up " + step + ": "
+                + player.position() + ", expected " + feet);
+    }
+
+    /**
+     * Il passo fuori in diagonale prova i percorsi asse per asse (design §12.14): rivolto a -45 gradi il posto davanti
+     * sta oltre l'angolo della cella in cui una staccionata da sola e' un palo al centro del blocco; il percorso prima
+     * lungo x urta il palo, quello prima lungo z no, e il giocatore va davanti. Con un solo riquadro attorno a tutto il
+     * percorso il palo lo scartava e il giocatore andava a destra.
+     */
+    private static void exitTakesAnAxisPathAroundAPost(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        for (BlockPos floor : List.of(new BlockPos(3, 1, 3), new BlockPos(4, 1, 3), new BlockPos(3, 1, 4),
+                new BlockPos(4, 1, 4))) {
+            helper.setBlock(floor, Blocks.STONE);
+        }
+        BlockPos post = new BlockPos(4, 2, 3);
+        helper.setBlock(post, Blocks.OAK_FENCE);
+        BlockPos at = helper.absolutePos(post);
+        AABB bounds = level.getBlockState(at).getCollisionShape(level, at).bounds();
+        helper.assertTrue(bounds.minX >= 0.375 - 1e-9 && bounds.maxX <= 0.625 + 1e-9 && bounds.minZ >= 0.375 - 1e-9
+                && bounds.maxZ <= 0.625 + 1e-9, "premise: the fence is not a lone post: " + bounds);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        player.moveTo(spot.x, spot.y, spot.z, -45f, 0f);
+        double r = Math.toRadians(-45);
+        Vec3 ahead = spot.add(-Math.sin(r), 0.0, Math.cos(r));
+        assertRoomToStand(helper, ahead);
+
+        helper.assertTrue(FrameEntry.exit(player), "exit refused");
+
+        helper.assertTrue(player.position().distanceTo(ahead) < 1e-6, "player did not step ahead around the post: "
+                + player.position() + ", expected " + ahead);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il passo fuori evita un falo', un blocco di magma e un cespuglio di bacche dolci davanti (design §12.14): ogni
+     * volta il giocatore va a sinistra, sulla pietra. Il falo' e' a terra, con la sommita' a 7/16: il passo ci
+     * atterrerebbe sopra; il cespuglio non ha collisione, quindi il posto davanti c'e' e lo scarta il pericolo.
+     */
+    private static void exitAvoidsCampfireMagmaAndBerries(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        // giocatore in (3.5, 2, 3.5) rivolto a sud (+Z): davanti (3, 2, 4), sinistra (4, 2, 3)
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        BlockPos ahead = new BlockPos(3, 1, 4);
+
+        helper.setBlock(new BlockPos(3, 0, 4), Blocks.STONE);
+        helper.setBlock(ahead, Blocks.CAMPFIRE);
+        assertExitStepsLeft(helper, player, frameId, spot, "a campfire");
+        helper.setBlock(ahead, Blocks.MAGMA_BLOCK);
+        assertExitStepsLeft(helper, player, frameId, spot, "a magma block");
+        helper.setBlock(ahead, Blocks.DIRT);
+        helper.setBlock(ahead.above(), Blocks.SWEET_BERRY_BUSH);
+        assertRoomToStand(helper, spot.add(0.0, 0.0, 1.0));
+        assertExitStepsLeft(helper, player, frameId, spot, "a sweet berry bush");
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il passo fuori evita una rosa del Wither, la neve polverosa e un cactus davanti (design §12.14): ogni volta il
+     * giocatore va a sinistra. La rosa e la neve polverosa non hanno collisione per il calcolo del pavimento, quindi il
+     * posto c'e' e lo scarta il pericolo; sul cactus il passo atterrerebbe, a 15/16. Il cactus accanto alla pietra del
+     * telaio si romperebbe al tick dopo: si mette per ultimo e si toglie nello stesso tick, con la sabbia sotto.
+     */
+    private static void exitAvoidsWitherRosePowderSnowAndCactus(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        BlockPos below = new BlockPos(3, 1, 4);
+        BlockPos ahead = below.above();
+
+        helper.setBlock(below, Blocks.DIRT);
+        helper.setBlock(ahead, Blocks.WITHER_ROSE);
+        assertRoomToStand(helper, spot.add(0.0, 0.0, 1.0));
+        assertExitStepsLeft(helper, player, frameId, spot, "a wither rose");
+        helper.setBlock(ahead, Blocks.AIR);
+        helper.setBlock(below, Blocks.STONE);
+        helper.setBlock(ahead, Blocks.POWDER_SNOW);
+        assertExitStepsLeft(helper, player, frameId, spot, "powder snow");
+        helper.setBlock(ahead, Blocks.AIR);
+        helper.setBlock(below.below(), Blocks.SAND);
+        helper.setBlock(below, Blocks.CACTUS);
+        assertExitStepsLeft(helper, player, frameId, spot, "a cactus");
+        // il cactus e poi la sabbia (che non cade: il suo tick trova un altro blocco), nello stesso tick
+        helper.setBlock(below, Blocks.AIR);
+        helper.setBlock(below.below(), Blocks.AIR);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il passo fuori evita i portali (design §12.14): un portale dell'End in una fossa davanti (il passo ci cadrebbe
+     * dentro, sulla pietra sotto) e un portale del Nether sulla pietra davanti. Ogni volta il giocatore va a sinistra;
+     * i due portali si mettono per ultimi e prima della fine i due posti tornano aria.
+     */
+    private static void exitAvoidsAPortalBelow(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        BlockPos below = new BlockPos(3, 1, 4);
+        BlockPos ahead = below.above();
+
+        helper.setBlock(below.below(), Blocks.STONE);
+        helper.setBlock(below, Blocks.END_PORTAL);
+        BlockPos portal = helper.absolutePos(below);
+        helper.assertTrue(level.getBlockState(portal).getCollisionShape(level, portal).isEmpty(),
+                "premise: the end portal has a collision shape");
+        assertExitStepsLeft(helper, player, frameId, spot, "an end portal");
+        helper.setBlock(below, Blocks.STONE);
+        helper.setBlock(ahead, Blocks.NETHER_PORTAL);
+        assertExitStepsLeft(helper, player, frameId, spot, "a nether portal");
+        helper.setBlock(ahead, Blocks.AIR);
+        helper.setBlock(below, Blocks.AIR);
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il passo fuori non scende in una fossa davanti dove c'e' una barca (design §12.14): la barca, un ostacolo per il
+     * gioco, sta nel riquadro del giocatore in fondo alla fossa; il giocatore va a sinistra. Il posto in fondo alla
+     * fossa si controlla prima di creare la barca, che lo occuperebbe.
+     */
+    private static void exitAvoidsABoatBelowTheSpot(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        helper.setBlock(new BlockPos(3, 0, 4), Blocks.STONE);
+        Vec3 pit = helper.absoluteVec(new Vec3(3.5, 1.0, 4.5));
+        assertRoomToStand(helper, pit);
+        Boat boat = new Boat(level, pit.x, pit.y, pit.z);
+        level.addFreshEntity(boat);
+
+        assertExitStepsLeft(helper, player, frameId, spot, "a boat");
+
+        boat.discard();
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * Il passo fuori non scende in una fossa davanti dove c'e' un carrello su un binario (design §12.14): il carrello
+     * non e' un ostacolo per il gioco, quindi lo si cerca a parte; il giocatore va a sinistra.
+     */
+    private static void exitAvoidsAMinecartBelowTheSpot(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        helper.setBlock(new BlockPos(4, 1, 3), Blocks.STONE);
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        helper.setBlock(new BlockPos(3, 0, 4), Blocks.STONE);
+        helper.setBlock(new BlockPos(3, 1, 4), Blocks.RAIL);
+        Vec3 pit = helper.absoluteVec(new Vec3(3.5, 1.0, 4.5));
+        assertRoomToStand(helper, pit);
+        Minecart cart = new Minecart(level, pit.x, pit.y + 0.0625, pit.z);
+        level.addFreshEntity(cart);
+
+        assertExitStepsLeft(helper, player, frameId, spot, "a minecart");
+
+        cart.discard();
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
+    }
+
+    /**
+     * L'uscita voluta si rifiuta quando nel punto di riposo c'e' gia' un altro telaio piazzato (design §12.14), con un
+     * messaggio e senza toccare nulla: il record resta indossato, i segnaposto restano, l'elmo stivato resta nel record
+     * e il giocatore resta dov'e'. Tolto l'altro telaio, l'uscita riesce e l'elmo torna in testa.
+     */
+    private static void exitRefusedOverAnotherFrame(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+        ServerLevel level = helper.getLevel();
+        MinecraftServer server = level.getServer();
+        FrameStateAccess frames = Compat.frameState();
+        player.setItemSlot(EquipmentSlot.HEAD, new ItemStack(Items.IRON_HELMET));
+        UUID frameId = wearFrameAt(helper, player, charged(ownedBy(player)), new Vec3(3.5, 2.0, 3.5));
+        Vec3 spot = player.position();
+        ExoframeEntity other = placeFrame(helper, new FrameState(RedstoneExoframes.config()),
+                new Vec3(3.5, 2.0, 3.5), 0f);
+
+        helper.assertTrue(!FrameEntry.exit(player), "exit over another frame accepted");
+        helper.assertTrue(frames.wornFrameId(player).equals(Optional.of(frameId)), "worn record changed");
+        assertPlaceholdersWorn(helper, player);
+        helper.assertTrue(countInMainInventory(player, Items.IRON_HELMET) == 0, "stowed helmet handed back");
+        helper.assertTrue(frames.placed(server, frameId).isEmpty() && player.position().equals(spot),
+                "refused exit placed the frame or moved the player to " + player.position());
+        helper.assertTrue(messages(player, FrameEntry.FRAME_TAKEN) == 1, "not told why");
+        removeFrame(server, other);
+        helper.assertTrue(FrameEntry.exit(player), "exit refused once the spot is free");
+        helper.assertTrue(player.getItemBySlot(EquipmentSlot.HEAD).is(Items.IRON_HELMET), "stowed helmet lost");
+        removeFrame(server, (ExoframeEntity) level.getEntity(frameId));
+        helper.succeed();
     }
 }

@@ -24,8 +24,10 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.vehicle.AbstractMinecart;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -58,6 +60,11 @@ public final class FrameEntry {
      * telaio non si potrebbe toccare.
      */
     public static final String ELSEWHERE_BORDER = "message." + RedstoneExoframes.MOD_ID + ".frame_elsewhere_border";
+    /**
+     * Messaggio sulla barra delle azioni a chi vuole uscire dove il telaio andrebbe a toccare un altro telaio
+     * piazzato: l'uscita si rifiuta e il giocatore deve prima spostarsi.
+     */
+    public static final String FRAME_TAKEN = "message." + RedstoneExoframes.MOD_ID + ".frame_taken";
 
     /** Distanza in blocchi dal centro del telaio del posto in cui il giocatore fa il passo fuori. */
     private static final double STEP = 1.0;
@@ -66,6 +73,11 @@ public final class FrameEntry {
     private static final double PLAYER_HEIGHT = 1.8;
     /** Margine sul blocco di caduta concesso fino al pavimento del passo fuori. */
     private static final double FLOOR_EPSILON = 1.0e-3;
+    /**
+     * Quanto sopra i piedi del telaio puo' stare il pavimento del passo fuori, in blocchi: un piccolo gradino in
+     * salita (terra arata, sentiero, sabbia delle anime, tappeto, una lastra in basso). Vanilla sale 0,6.
+     */
+    private static final double MAX_STEP_UP = 0.5;
 
     private FrameEntry() {
     }
@@ -147,14 +159,20 @@ public final class FrameEntry {
     /**
      * Toglie il giocatore dal telaio che indossa, sul server (design, par. 5.5), tutto nello stesso tick: e' l'uscita
      * voluta (il tasto). Se non ne indossa uno, non e' vivo (un pacchetto del tasto arrivato dopo la morte: la morte la
-     * gestisce solo {@link #onDeath}) o e' spettatore, non tocca nulla e da' falso. Altrimenti, in quest'ordine:
+     * gestisce solo {@link #onDeath}) o e' spettatore, non tocca nulla e da' falso. Si calcola poi il punto di riposo
+     * del telaio ({@link #restingSpot}), prima di toccare altro: se il riquadro del telaio in piedi in quel punto
+     * ({@link SuitSize#standingBox}) tocca l'entita' di un altro telaio piazzato, l'uscita si rifiuta con
+     * {@link #FRAME_TAKEN} sulla barra delle azioni e nient'altro cambia (record, segnaposto, armatura stivata,
+     * posizione): due telai nello stesso punto non si potrebbero piu' cliccare l'uno senza l'altro (design §12.14). Il
+     * telaio indossato non ha un'entita', quindi non conta; un telaio piazzato che in quel momento non ha l'entita'
+     * (chunk senza entita' caricate) non si vede. Altrimenti, in quest'ordine:
      * <ol>
      * <li>tutti i segnaposto lasciano il giocatore, in silenzio, da ogni posto in cui possono stare
      * ({@link Placeholders#removeAll}); uno stack vero in uno slot armatura resta dov'e';</li>
      * <li>l'armatura stivata torna al giocatore ({@link #returnStowed}): cio' che esce dal record gli e' gia'
      * restituito prima che succeda altro;</li>
-     * <li>il record diventa piazzato nel punto di riposo del telaio (vedi {@link #restingSpot}), con il yaw del
-     * giocatore riportato a [-180, 180) come per l'oggetto telaio ({@link FrameStateAccess#exit});</li>
+     * <li>il record diventa piazzato nel punto di riposo calcolato sopra, con il yaw del giocatore riportato a
+     * [-180, 180) come per l'oggetto telaio ({@link FrameStateAccess#exit});</li>
      * <li>l'entita' del record piazzato ({@link FramePlacement#spawnView}), se il chunk del punto ha le entita'
      * caricate (altrimenti la crea il riallineamento quando si carica), poi {@link WornState#changed};</li>
      * <li>se gli occhi del giocatore stanno nel riquadro del telaio appena lasciato, il giocatore fa un passo fuori
@@ -171,10 +189,15 @@ public final class FrameEntry {
         if (!player.isAlive() || player.isSpectator() || frames.wornFrameId(player).isEmpty()) {
             return false;
         }
+        RestingSpot spot = restingSpot(player);
+        if (!spot.level().getEntitiesOfClass(ExoframeEntity.class, SuitSize.standingBox(spot.position())).isEmpty()) {
+            FrameInteractions.tell(player, FRAME_TAKEN);
+            return false;
+        }
         Placeholders.removeAll(player);
         returnStowed(player, frames);
-        Optional<RestingSpot> left = leaveFrame(player, frames, "left");
-        left.ifPresent(spot -> stepOut(player, spot));
+        Optional<RestingSpot> left = leaveFrame(player, frames, "left", spot);
+        left.ifPresent(placed -> stepOut(player, placed));
         return left.isPresent();
     }
 
@@ -185,7 +208,8 @@ public final class FrameEntry {
      * fabbricazione e menu aperto compresi (cosi' non cadono a terra, ne' ora ne' quando il gioco toglie il giocatore
      * morto, e con {@code keepInventory} non passano al giocatore rinato); l'armatura stivata resta nel record; il
      * record diventa piazzato nel punto di riposo del telaio ({@link #restingSpot}) e l'entita' nasce li' se il chunk
-     * ha le entita' caricate. Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
+     * ha le entita' caricate, anche se li' c'e' gia' un altro telaio (la morte non si rifiuta, e cosi' nulla si perde).
+     * Non annulla mai la morte e non lancia: un errore si scrive nel log e la morte prosegue.
      */
     public static void onDeath(ServerPlayer player) {
         try {
@@ -194,7 +218,7 @@ public final class FrameEntry {
                 return;
             }
             Placeholders.removeAll(player);
-            leaveFrame(player, frames, "left at death");
+            leaveFrame(player, frames, "left at death", restingSpot(player));
         } catch (RuntimeException e) {
             RedstoneExoframes.LOGGER.error("Could not leave the frame of player {} at death", player.getUUID(), e);
         }
@@ -270,17 +294,17 @@ public final class FrameEntry {
     }
 
     /**
-     * La parte comune dell'uscita e della morte: il record indossato diventa piazzato nel punto di riposo, con il yaw
-     * del giocatore; l'entita' nasce se il chunk del punto ha le entita' caricate; poi {@link WornState#changed}, con
-     * l'identita' del telaio appena lasciato e il punto di riposo ({@code event}: lasciato, lasciato alla morte, con la
-     * nota del punto di riposo). Se il telaio non e' rimasto sotto il giocatore un messaggio glielo dice, dopo:
-     * {@link #ELSEWHERE} se sotto non c'era suolo, {@link #ELSEWHERE_BORDER} se il suolo c'era ma fuori dal bordo del
-     * mondo; la riga del log dice lo stesso.
+     * La parte comune dell'uscita e della morte: il record indossato diventa piazzato nel punto di riposo {@code spot}
+     * (lo calcola chi chiama, con {@link #restingSpot}), con il yaw del giocatore; l'entita' nasce se il chunk del
+     * punto ha le entita' caricate; poi {@link WornState#changed}, con l'identita' del telaio appena lasciato e il
+     * punto di riposo ({@code event}: lasciato, lasciato alla morte, con la nota del punto di riposo). Se il telaio non
+     * e' rimasto sotto il giocatore un messaggio glielo dice, dopo: {@link #ELSEWHERE} se sotto non c'era suolo,
+     * {@link #ELSEWHERE_BORDER} se il suolo c'era ma fuori dal bordo del mondo; la riga del log dice lo stesso.
      *
      * @return il punto di riposo, o vuoto se il registro ha rifiutato l'uscita
      */
-    private static Optional<RestingSpot> leaveFrame(ServerPlayer player, FrameStateAccess frames, String event) {
-        RestingSpot spot = restingSpot(player);
+    private static Optional<RestingSpot> leaveFrame(ServerPlayer player, FrameStateAccess frames, String event,
+            RestingSpot spot) {
         Optional<UUID> frameId = frames.exit(player, spot.level(), spot.position(), Mth.wrapDegrees(player.getYRot()));
         if (frameId.isEmpty()) {
             return Optional.empty();
@@ -303,14 +327,15 @@ public final class FrameEntry {
     }
 
     /**
-     * Il passo fuori dal telaio appena lasciato (design, par. 5.5): se gli occhi del giocatore stanno nel riquadro del
-     * telaio (il clic successivo lo prenderebbe al posto di qualunque blocco), il giocatore va in un posto libero a un
-     * blocco dal centro del telaio, nell'ordine davanti (dove guarda), a sinistra, a destra, dietro. Un posto va bene
-     * se c'e' spazio per un giocatore vanilla in piedi, il pavimento e' al massimo un blocco sotto (il giocatore ci
-     * si appoggia), sta dentro il bordo del mondo, non c'e' lava ne' fuoco, non sta nel riquadro di un altro telaio
-     * ({@link #standingSpot}) e la strada fino a li' e' libera ({@link #wayIsFree}): il passo non porta mai il
-     * giocatore dove non potrebbe camminare. Senza un posto cosi', o su un veicolo, il giocatore resta dov'e'. Yaw e
-     * pitch restano i suoi.
+     * Il passo fuori dal telaio appena lasciato (design, par. 5.5 e §12.14): se gli occhi del giocatore stanno nel
+     * riquadro del telaio (il clic successivo lo prenderebbe al posto di qualunque blocco), il giocatore va in un posto
+     * a un blocco dal centro del telaio, nell'ordine davanti (dove guarda), a sinistra, a destra, dietro. Un posto va
+     * bene se c'e' spazio per un giocatore vanilla in piedi con il pavimento fra mezzo blocco sopra e un blocco sotto i
+     * piedi del telaio (un piccolo gradino in salita si sale), dentro il bordo del mondo, senza pericoli (lava, fuoco,
+     * falo', magma, bacche dolci, rosa del Wither, neve polverosa, cactus, portali), senza un altro telaio, una barca o
+     * un carrello ({@link #standingSpot}), e se la strada fino a li' e' libera lungo gli assi, prima x e poi z o prima
+     * z e poi x ({@link #wayIsFree}): il passo non porta mai il giocatore dove non potrebbe camminare. Senza un posto
+     * cosi', o su un veicolo, il giocatore resta dov'e'. Yaw e pitch restano i suoi.
      */
     private static void stepOut(ServerPlayer player, RestingSpot spot) {
         Vec3 frame = spot.position();
@@ -327,7 +352,7 @@ public final class FrameEntry {
         for (double[] direction : directions) {
             Vec3 candidate = new Vec3(frame.x + direction[0] * STEP, frame.y, frame.z + direction[1] * STEP);
             Optional<Vec3> target = standingSpot(player, level, candidate);
-            if (target.isPresent() && wayIsFree(player, level, candidate)) {
+            if (target.isPresent() && wayIsFree(player, level, candidate, target.get())) {
                 Vec3 to = target.get();
                 player.teleportTo(level, to.x, to.y, to.z, player.getYRot(), player.getXRot());
                 return;
@@ -336,57 +361,77 @@ public final class FrameEntry {
     }
 
     /**
-     * Vero se fra il giocatore e {@code candidate} (un posto all'altezza del telaio, prima di scendere al pavimento)
-     * non c'e' nulla in cui un giocatore non puo' passare. Il riquadro guardato contiene quello di un giocatore vanilla
-     * in piedi (0,6 x 1,8) dove sta il giocatore, lo stesso abbassato all'altezza del telaio e quello in
-     * {@code candidate}: quindi ogni strada fra i due posti, dritta o di sbieco, e anche quella lungo gli assi con cui
-     * il gioco muove un'entita' ({@code Entity.collideBoundingBox}, prima y e poi x e z). Non deve urtare nulla per
-     * {@code noCollision}: forme di collisione dei blocchi, entita' che fanno da ostacolo, il bordo del mondo. Cosi'
-     * una porta chiusa (con l'anta su qualunque lato del suo blocco), sbarre, vetri, staccionate, cancelli chiusi,
-     * muretti o una botola aperta fra il giocatore e il posto lo scartano, anche di sbieco; un ostacolo accanto alla
-     * strada ma dentro il riquadro lo scarta lo stesso (nel dubbio niente passo). La discesa dal posto al pavimento e'
-     * gia' libera: {@link #standingSpot} la misura con lo stesso riquadro. I telai non contano: non sono ostacoli per
-     * {@code noCollision}, e il giocatore sta lasciando il suo.
+     * Vero se il giocatore puo' andare da dove sta ai piedi {@code to} che {@link #standingSpot} ha trovato per
+     * {@code candidate} (il posto all'altezza del telaio) lungo uno dei due percorsi a L per assi: prima lungo x e poi
+     * lungo z, oppure prima lungo z e poi lungo x, il primo libero. Ogni tratto e' un riquadro largo quanto un
+     * giocatore vanilla (0,6) attorno al segmento, alto dal piu' basso fra il giocatore e {@code candidate}, ma non
+     * sotto {@code to} (cosi' un gradino fino a mezzo blocco non chiude la strada), fino al piu' alto fra i tre piu'
+     * 1,8. Non deve urtare nulla per {@code noCollision}: forme di collisione dei blocchi, entita' che fanno da
+     * ostacolo, il bordo del mondo. Cosi' una porta chiusa (con l'anta su qualunque lato del suo blocco), sbarre,
+     * vetri, staccionate, cancelli chiusi, muretti o una botola aperta fra il giocatore e il posto lo scartano; un palo
+     * solo all'angolo di una cella si aggira dall'altra parte. Lungo un asse i due percorsi coincidono; in diagonale
+     * contro delle sbarre tutti e due urtano. La discesa dal posto al pavimento la misura gia' {@link #standingSpot}. I
+     * telai non contano: non sono ostacoli per {@code noCollision}, e il giocatore sta lasciando il suo.
      */
-    private static boolean wayIsFree(ServerPlayer player, ServerLevel level, Vec3 candidate) {
+    private static boolean wayIsFree(ServerPlayer player, ServerLevel level, Vec3 candidate, Vec3 to) {
         Vec3 from = player.position();
-        AABB way = new AABB(Math.min(from.x, candidate.x) - PLAYER_HALF_WIDTH, Math.min(from.y, candidate.y),
-                Math.min(from.z, candidate.z) - PLAYER_HALF_WIDTH, Math.max(from.x, candidate.x) + PLAYER_HALF_WIDTH,
-                Math.max(from.y, candidate.y) + PLAYER_HEIGHT, Math.max(from.z, candidate.z) + PLAYER_HALF_WIDTH);
-        return level.noCollision(player, way);
+        double bottom = Math.max(Math.min(from.y, candidate.y), to.y); // un gradino fino a 0,5 non chiude la strada
+        double top = Math.max(from.y, Math.max(candidate.y, to.y)) + PLAYER_HEIGHT;
+        boolean xThenZ = level.noCollision(player, segment(from.x, from.z, to.x, from.z, bottom, top))
+                && level.noCollision(player, segment(to.x, from.z, to.x, to.z, bottom, top));
+        return xThenZ || level.noCollision(player, segment(from.x, from.z, from.x, to.z, bottom, top))
+                && level.noCollision(player, segment(from.x, to.z, to.x, to.z, bottom, top));
+    }
+
+    /** Il riquadro largo quanto un giocatore vanilla attorno al segmento da (x1, z1) a (x2, z2), da bottom a top. */
+    private static AABB segment(double x1, double z1, double x2, double z2, double bottom, double top) {
+        return new AABB(Math.min(x1, x2) - PLAYER_HALF_WIDTH, bottom, Math.min(z1, z2) - PLAYER_HALF_WIDTH,
+                Math.max(x1, x2) + PLAYER_HALF_WIDTH, top, Math.max(z1, z2) + PLAYER_HALF_WIDTH);
     }
 
     /**
-     * I piedi di un giocatore vanilla in piedi in {@code candidate}, appoggiato al pavimento che sta al massimo un
-     * blocco sotto; vuoto se li' non c'e' spazio, se il pavimento manca o e' piu' in basso, fuori dal bordo del mondo,
-     * con lava o fuoco nel riquadro o nel blocco sotto i piedi, o se il riquadro tocca quello di un telaio (il clic
-     * successivo prenderebbe quel telaio, come {@link FramePlacement#place} rifiuta un telaio dentro un altro).
+     * I piedi di un giocatore vanilla in piedi in {@code candidate} (un posto all'altezza del telaio), appoggiato al
+     * pavimento piu' alto fra {@link #MAX_STEP_UP} sopra e un blocco sotto: il riquadro del giocatore parte mezzo
+     * blocco sopra e scende finche' non trova una forma di collisione di un blocco (quelle che urta gia' in partenza
+     * non fanno da pavimento). Vuoto se il pavimento manca o e' piu' in basso, o, in quest'ordine, se dove si ferma il
+     * riquadro urta qualcosa per {@code noCollision} (blocchi, barche, il bordo del mondo), se i piedi sono fuori dal
+     * bordo del mondo, se nel riquadro o fino a mezzo blocco sotto i piedi c'e' un pericolo ({@link #hazard}), se il
+     * riquadro tocca quello di un altro telaio (il clic successivo prenderebbe quel telaio, come
+     * {@link FramePlacement#place} rifiuta un telaio dentro un altro) o se nel riquadro, o fino a un blocco sotto, c'e'
+     * un carrello (che per {@code noCollision} non e' un ostacolo).
      */
     private static Optional<Vec3> standingSpot(ServerPlayer player, ServerLevel level, Vec3 candidate) {
-        AABB box = new AABB(candidate.x - PLAYER_HALF_WIDTH, candidate.y, candidate.z - PLAYER_HALF_WIDTH,
-                candidate.x + PLAYER_HALF_WIDTH, candidate.y + PLAYER_HEIGHT, candidate.z + PLAYER_HALF_WIDTH);
-        if (!level.noCollision(player, box)) {
-            return Optional.empty();
-        }
-        double depth = 1.0 + FLOOR_EPSILON;
+        Vec3 top = candidate.add(0.0, MAX_STEP_UP, 0.0);
+        AABB box = new AABB(top.x - PLAYER_HALF_WIDTH, top.y, top.z - PLAYER_HALF_WIDTH,
+                top.x + PLAYER_HALF_WIDTH, top.y + PLAYER_HEIGHT, top.z + PLAYER_HALF_WIDTH);
+        double depth = MAX_STEP_UP + 1.0 + FLOOR_EPSILON;
+        // Shapes.collide guarda solo le forme sotto il riquadro: quelle che urta gia' non fanno da pavimento
         double drop = Shapes.collide(Direction.Axis.Y, box,
                 level.getBlockCollisions(null, box.expandTowards(0.0, -depth, 0.0)), -depth);
         if (drop <= -depth) {
             return Optional.empty();
         }
-        Vec3 feet = candidate.add(0.0, drop, 0.0);
-        if (!FramePlacement.insideBorder(level, feet)) {
-            return Optional.empty();
-        }
+        Vec3 feet = top.add(0.0, drop, 0.0);
         AABB standing = box.move(0.0, drop, 0.0);
-        boolean hot = BlockPos.betweenClosedStream(standing.expandTowards(0.0, -0.5, 0.0)).anyMatch(pos -> {
-            BlockState state = level.getBlockState(pos);
-            return state.getFluidState().is(FluidTags.LAVA) || state.is(BlockTags.FIRE);
-        });
-        if (hot || !level.getEntitiesOfClass(ExoframeEntity.class, standing).isEmpty()) {
+        if (!level.noCollision(player, standing) || !FramePlacement.insideBorder(level, feet)
+                || BlockPos.betweenClosedStream(standing.expandTowards(0.0, -0.5, 0.0))
+                        .anyMatch(pos -> hazard(level.getBlockState(pos)))
+                || !level.getEntitiesOfClass(ExoframeEntity.class, standing).isEmpty()
+                || !level.getEntitiesOfClass(AbstractMinecart.class, standing.expandTowards(0.0, -1.0, 0.0))
+                        .isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(feet);
+    }
+
+    /**
+     * Vero per un blocco su cui o in cui il passo fuori non porta mai il giocatore: lava, fuoco, falo', blocco di
+     * magma, cespuglio di bacche dolci, rosa del Wither, neve polverosa, cactus e portali.
+     */
+    private static boolean hazard(BlockState s) {
+        return s.getFluidState().is(FluidTags.LAVA) || s.is(BlockTags.FIRE) || s.is(BlockTags.CAMPFIRES)
+                || s.is(BlockTags.PORTALS) || s.is(Blocks.MAGMA_BLOCK) || s.is(Blocks.SWEET_BERRY_BUSH)
+                || s.is(Blocks.WITHER_ROSE) || s.is(Blocks.POWDER_SNOW) || s.is(Blocks.CACTUS);
     }
 
     /**
