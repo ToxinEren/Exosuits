@@ -34,6 +34,8 @@ jobs:
         run: python3 -m pip install -r tools/art/requirements.txt
       - name: Controllo della grafica generata
         run: bash tools/check_art.sh
+      - name: Controllo dei dati generati
+        run: bash tools/check_data.sh
       - name: Controlli sui jar
         run: bash tools/check_jars.sh
       - uses: actions/upload-artifact@v5

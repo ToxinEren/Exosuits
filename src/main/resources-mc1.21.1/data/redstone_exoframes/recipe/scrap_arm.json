@@ -1,0 +1,21 @@
+{
+  "category": "equipment",
+  "key": {
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "CI",
+    " I",
+    " I"
+  ],
+  "result": {
+    "count": 1,
+    "id": "redstone_exoframes:scrap_arm"
+  },
+  "type": "minecraft:crafting_shaped"
+}

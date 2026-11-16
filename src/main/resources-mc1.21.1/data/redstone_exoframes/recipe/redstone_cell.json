@@ -1,0 +1,24 @@
+{
+  "category": "redstone",
+  "key": {
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "Q": {
+      "item": "minecraft:quartz"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "pattern": [
+    " C ",
+    "rQr",
+    " C "
+  ],
+  "result": {
+    "count": 1,
+    "id": "redstone_exoframes:redstone_cell"
+  },
+  "type": "minecraft:crafting_shaped"
+}

@@ -1,0 +1,21 @@
+{
+  "category": "equipment",
+  "key": {
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    }
+  },
+  "pattern": [
+    "I ",
+    "I ",
+    "IC"
+  ],
+  "result": {
+    "count": 1,
+    "id": "redstone_exoframes:scrap_leg"
+  },
+  "type": "minecraft:crafting_shaped"
+}

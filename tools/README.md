@@ -6,11 +6,13 @@ per il client senza schermo in `tools/client/README.md`.
 | Strumento | Che cosa fa |
 |---|---|
 | `bash tools/check_sources.sh` | regole sui sorgenti (separazione di `core/`, direttive di Stonecutter, codice client): `OK sources` |
-| `bash tools/check_jars.sh` | controlli sui quattro jar in `build/libs/all` (metadati, mixin, risorse, privacy): `OK jars`; serve Python 3.11 o più recente |
+| `bash tools/check_jars.sh` | controlli sui quattro jar in `build/libs/all` (metadati, mixin, risorse, dati della sola versione del jar, privacy): `OK jars`; serve Python 3.11 o più recente |
 | `bash tools/check_art.sh` | prove negative del generatore della grafica, poi rigenera la grafica del telaio e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
+| `bash tools/check_data.sh` | prove negative del generatore dei dati, poi rigenera ricette, sblocchi, bottino e tag in una cartella temporanea e li confronta con quelli committati; i due alberi per versione contengono solo i file generati: `OK data` |
 | `bash tools/run_gametests.sh [variante...]` | test in gioco sulle varianti (di default tutte e quattro); conta le righe `add(tests,` di tutti i file di `gametest/`; una variante passa se tutti i test elencati sono passati e il log non ha avvisi del mod fuori elenco, ciascuno il numero di volte che l'elenco ammette per il suo loader; prima di ogni variante toglie `versions/<variante>/run-gametest/config/redstone_exoframes.json`, che la mod riscrive con i predefiniti all'avvio (i test contano sui predefiniti) |
 | `python3 -I tools/check_log.py gametest\|client --variant <variante> <log>...` | avvisi ed errori del mod in un log, confrontati con `tools/log_allowlist.txt` con i conteggi del loader della variante (lo chiamano `run_gametests.sh` e `client/client_shot.sh`) |
 | `python3 -I tools/gen_placeholders.py [--out <dir>]` | rigenera le texture placeholder (sotto) |
+| `python3 -I tools/gen_data.py [--out <dir> \| --selftest]` | rigenera i dati per versione: ricette, sblocchi, bottino e tag (sotto) |
 
 ## Avvisi voluti: `log_allowlist.txt`
 
@@ -57,3 +59,52 @@ qui ma da `tools/art/build.py`.
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
 `tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciotto file con quelli committati, pixel per pixel.
+
+## Dati per versione: `gen_data.py`
+
+Ricette, avanzamenti di sblocco, tabella di bottino e tag non si scrivono a mano: li scrive `tools/gen_data.py` (solo
+libreria standard di Python 3; due esecuzioni danno file identici byte per byte) in due alberi, uno per versione di
+Minecraft, perché le cartelle dei dati hanno nomi diversi (al plurale su 1.20.1, al singolare su 1.21.1) e una
+cartella con il nome dell'altra versione il gioco la ignora in silenzio:
+
+| | `src/main/resources-mc1.20.1/data/` | `src/main/resources-mc1.21.1/data/` |
+|---|---|---|
+| 7 ricette | `redstone_exoframes/recipes/<oggetto>.json` | `redstone_exoframes/recipe/<oggetto>.json` |
+| 7 sblocchi | `redstone_exoframes/advancements/recipes/<categoria>/<oggetto>.json` | `redstone_exoframes/advancement/recipes/<categoria>/<oggetto>.json` |
+| bottino del caricatore | `redstone_exoframes/loot_tables/blocks/charger.json` | `redstone_exoframes/loot_table/blocks/charger.json` |
+| tag `minecraft:mineable/pickaxe` | `minecraft/tags/blocks/mineable/pickaxe.json` | `minecraft/tags/block/mineable/pickaxe.json` |
+
+Sono 32 file, sedici per albero, con gli stessi id sulle due versioni. La sola differenza di contenuto è il risultato
+di una ricetta: `{"count": 1, "item": "<id>"}` su 1.20.1, `{"count": 1, "id": "<id>"}` su 1.21.1. La build non ha
+nulla di apposta: ogni variante aggiunge già alle risorse la cartella `resources-mc<versione>` della sua versione.
+
+Le ricette stanno nella tabella `RECIPES` del generatore (oggetto, categoria, righe della forma, con `_` per il
+vuoto) e gli ingredienti in `INGREDIENTS` (simbolo → id dell'oggetto). Per cambiarne o aggiungerne una si tocca la
+tabella e si rigenera; una ricetta nuova va aggiunta anche all'elenco del controllo (f3) di `check_jars.sh`.
+
+    python3 -I tools/gen_data.py               riscrive i file nei sorgenti
+    python3 -I tools/gen_data.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
+    python3 -I tools/gen_data.py --selftest    prove negative di validate(): OK selftest (7 difetti segnalati)
+
+Prima di scrivere, `validate()` controlla i file delle due versioni insieme, e se ne rifiuta uno non si scrive
+nulla. Impone:
+
+- in ogni ricetta un risultato con `count` 1 e con la chiave della sua versione (`item` o `id`);
+- una categoria fra `building`, `redstone`, `equipment`, `misc`;
+- un `pattern` rettangolare, da 1×1 a 3×3; una chiave per ogni simbolo di `pattern` diverso dallo spazio, e nessuna
+  chiave non usata;
+- ogni id nella forma `spazio:percorso`;
+- per ogni ricetta il suo sblocco (`recipes/<categoria>/<oggetto>`), con lo stesso id nei premi;
+- gli stessi id di ricette, sblocchi, bottini e tag sulle due versioni;
+- nessun percorso di una versione nelle cartelle dell'altra;
+- nei file dei tag nessuna chiave `remove`, e `replace` falso (il tag è del gioco: il file aggiunge un valore).
+
+`--selftest` inietta in memoria un difetto alla volta (`count` 2, la categoria `tools`, un simbolo senza chiave, una
+chiave non usata, `remove` in un tag, una ricetta tolta da una sola versione, un file di 1.20.1 sotto `recipe/`) e
+pretende che `validate()` lo rifiuti nominando quel file.
+
+`tools/check_data.sh` (anche nella CI) esegue `--selftest`, rigenera con `--out` e confronta i 32 file con quelli
+committati, byte per byte; fallisce anche per un file in più nei due alberi (`non viene dal generatore`) e per
+qualunque file sotto `src/main/resources/data` che non sia una delle due strutture vuote dei test: i dati per
+versione non stanno nelle risorse comuni. Sui jar, il controllo (f3) di `check_jars.sh` ripete la regola delle
+cartelle e pretende in ogni jar i sedici file della sua versione.

@@ -257,6 +257,38 @@ sys.exit(0 if any(m.get("config") == sys.argv[1] for m in tomllib.load(sys.stdin
     done
     ! echo "$listing" | grep -qE '^assets/minecraft/textures/models/armor/frame_layer_[12]\.png$' \
         || err "$name" "texture con il vecchio nome generico frame_layer_*.png (il materiale e' redstone_exoframes_frame)"
+
+    # (f3) dati per versione (design par. 12.12): le cartelle dei dati hanno nomi diversi sulle due versioni (al
+    #      plurale su 1.20.1, al singolare su 1.21.1) e una cartella con il nome dell'altra versione il gioco la
+    #      ignora in silenzio: la ricetta o il bottino che contiene non esiste, senza una riga nel log. Quindi nessun
+    #      percorso nelle cartelle dell'altra versione, sui cinque tipi (ricette, avanzamenti, tabelle di bottino, tag
+    #      dei blocchi, tag degli oggetti: questi ultimi oggi non li scrive nessuno), in qualunque spazio dei nomi; e
+    #      presenti, nelle cartelle della versione del jar, le sette ricette, i loro sette sblocchi, la tabella di
+    #      bottino del caricatore e il tag minecraft:mineable/pickaxe che scrive tools/gen_data.py. Le due strutture
+    #      vuote dei test (data/redstone_exoframes/structure/empty.nbt e structures/empty.nbt) non sono fra i cinque
+    #      tipi e restano ammesse in tutti i jar.
+    case "$mc" in
+        1.20.1) other_dirs='recipe|advancement|loot_table|tags/block|tags/item'
+                recipes=recipes; advancements=advancements; loot_tables=loot_tables; block_tags=tags/blocks ;;
+        *) other_dirs='recipes|advancements|loot_tables|tags/blocks|tags/items'
+           recipes=recipe; advancements=advancement; loot_tables=loot_table; block_tags=tags/block ;;
+    esac
+    wrong=$(echo "$listing" | grep -E "^data/[^/]+/($other_dirs)/" || true)
+    [ -z "$wrong" ] || while IFS= read -r p; do
+        err "$name" "cartella di dati di un'altra versione: $p"
+    done <<< "$wrong"
+    data=data/redstone_exoframes
+    for entry in exoframe:equipment scrap_helmet:equipment scrap_torso:equipment scrap_arm:equipment \
+            scrap_leg:equipment redstone_cell:redstone charger:redstone; do
+        object=${entry%%:*}
+        category=${entry##*:}
+        for f in "$data/$recipes/$object.json" "$data/$advancements/recipes/$category/$object.json"; do
+            echo "$listing" | grep -qxF "$f" || err "$name" "manca $f"
+        done
+    done
+    for f in "$data/$loot_tables/blocks/charger.json" "data/minecraft/$block_tags/mineable/pickaxe.json"; do
+        echo "$listing" | grep -qxF "$f" || err "$name" "manca $f"
+    done
 done
 
 # (g) nessun dato personale nei jar da pubblicare: percorsi locali, e-mail, metadati di immagini e suoni.

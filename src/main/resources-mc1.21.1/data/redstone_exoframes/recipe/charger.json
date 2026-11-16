@@ -1,0 +1,24 @@
+{
+  "category": "redstone",
+  "key": {
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "R": {
+      "item": "minecraft:redstone_block"
+    }
+  },
+  "pattern": [
+    "ICI",
+    "CRC",
+    "III"
+  ],
+  "result": {
+    "count": 1,
+    "id": "redstone_exoframes:charger"
+  },
+  "type": "minecraft:crafting_shaped"
+}
