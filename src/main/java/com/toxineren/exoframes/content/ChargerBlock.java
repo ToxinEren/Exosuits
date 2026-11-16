@@ -41,7 +41,8 @@ import net.minecraft.world.phys.Vec3;
  * <p>
  * Senza GUI, il caricatore si usa con il clic destro ({@link #onClick}): una cella in mano entra o si scambia con
  * quella dentro, la polvere di redstone in mano lo alimenta, la mano vuota prende la cella e poi la polvere, e ogni
- * clic dice lo stato nella barra delle azioni.
+ * clic dice lo stato nella barra delle azioni. Le tramogge passano dalla block entity, che e' un contenitore del gioco
+ * base; rotto, il caricatore lascia a terra cella e polvere ({@link #onRemove}).
  */
 public final class ChargerBlock extends CompatEntityBlock {
     /** Il lato del fronte, orizzontale. */
@@ -118,6 +119,22 @@ public final class ChargerBlock extends CompatEntityBlock {
     @Override
     public BlockState mirror(BlockState state, Mirror mirror) {
         return state.rotate(mirror.getRotation(state.getValue(FACING)));
+    }
+
+    /**
+     * Quando il caricatore sparisce davvero (rotto, esploso, sostituito da un altro blocco) la cella, con la sua
+     * carica, e la polvere cadono a terra ({@link ChargerBlockEntity#dropContents}) e i comparatori vicini vengono
+     * avvisati. Il gioco chiama {@code onRemove} anche a ogni cambio di proprieta' dello stato ({@link #LIT},
+     * {@link #CELL}: il blocco resta lo stesso), e li' non deve cadere nulla: si agisce solo se il blocco nuovo e' un
+     * altro. Poi sempre {@code super}, che toglie la block entity.
+     */
+    @Override
+    public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
+        if (!state.is(newState.getBlock()) && level.getBlockEntity(pos) instanceof ChargerBlockEntity charger) {
+            charger.dropContents();
+            level.updateNeighbourForOutputSignal(pos, this);
+        }
+        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     /**

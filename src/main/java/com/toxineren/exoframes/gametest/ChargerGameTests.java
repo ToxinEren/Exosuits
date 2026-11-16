@@ -21,6 +21,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -41,14 +42,19 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Clearable;
+import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -64,6 +70,10 @@ import net.minecraft.world.phys.Vec3;
  * server, cosi' il ticker vero non si mette in mezzo e i numeri sono esatti; un solo test
  * ({@code chargerRealTickerChargesInRealTime}) lascia fare al ticker vero. Chi ha messo qualcosa in un caricatore lo
  * toglie con {@code removeCharger}: svuotato, poi aria.
+ * <p>
+ * I test delle tramogge posano tramogge vere e lasciano fare al gioco per qualche decina di tick: cosi' passano dal
+ * codice delle tramogge di ogni loader. Prima di togliere una tramoggia la svuotano ({@code clearContent()}), perche'
+ * una tramoggia tolta lascia cadere cio' che tiene.
  */
 public final class ChargerGameTests {
     /** Dove sta il caricatore dei test, relativo alla struttura. */
@@ -122,6 +132,14 @@ public final class ChargerGameTests {
         add(tests, "otherItemsAndTheOffHandPass", ChargerGameTests::otherItemsAndTheOffHandPass);
         add(tests, "creativeHandIsNotConsumed", ChargerGameTests::creativeHandIsNotConsumed);
         add(tests, "twoPlayersOneCell", ChargerGameTests::twoPlayersOneCell);
+        add(tests, "hopperAboveInsertsOneCell", ChargerGameTests::hopperAboveInsertsOneCell);
+        add(tests, "hopperAtTheSideAddsDustToANonEmptySlot",
+                ChargerGameTests::hopperAtTheSideAddsDustToANonEmptySlot);
+        add(tests, "hopperBelowTakesOnlyAFullCell", ChargerGameTests::hopperBelowTakesOnlyAFullCell);
+        add(tests, "fullHopperBelowNeitherLosesNorDuplicatesTheCell",
+                ChargerGameTests::fullHopperBelowNeitherLosesNorDuplicatesTheCell);
+        add(tests, "facesAcceptOnlyWhatTheyShould", ChargerGameTests::facesAcceptOnlyWhatTheyShould);
+        add(tests, "breakingDropsTheCellAndTheDust", ChargerGameTests::breakingDropsTheCellAndTheDust);
         return tests;
     }
 
@@ -856,6 +874,271 @@ public final class ChargerGameTests {
     }
 
     /**
+     * Una tramoggia sopra il caricatore con due celle in coda: ne entra una sola, con la sua carica, e l'altra resta
+     * nella tramoggia. Le celle restano due.
+     */
+    private static void hopperAboveInsertsOneCell(GameTestHelper helper) {
+        Item cellItem = ModItems.REDSTONE_CELL.get();
+        ChargerBlockEntity c = charger(helper, POS);
+        HopperBlockEntity hopper = hopper(helper, POS.above(), Direction.DOWN);
+        hopper.setItem(0, cell(100));
+        hopper.setItem(1, cell(200));
+        helper.runAfterDelay(20, () -> runInSequence(helper, h -> {
+            h.assertTrue(c.cell().is(cellItem) && c.cell().getCount() == 1 && energy(c.cell()) == 100,
+                    "cell in the charger after 20 ticks: " + c.cell() + " with " + energy(c.cell())
+                            + " RE, not one cell with 100");
+            h.assertTrue(count(hopper, cellItem) == 1 && hopper.getItem(1).is(cellItem)
+                    && energy(hopper.getItem(1)) == 200, "cells left in the hopper: " + count(hopper, cellItem)
+                    + ", second slot " + hopper.getItem(1) + " with " + energy(hopper.getItem(1))
+                    + " RE; expected one cell with 200");
+            h.assertTrue(count(c, cellItem) + count(hopper, cellItem) == 2 && itemsIn(h).isEmpty(),
+                    "cells in the charger " + count(c, cellItem) + ", in the hopper " + count(hopper, cellItem)
+                            + ", on the ground " + itemsIn(h) + "; expected two cells in all");
+            hopper.clearContent();
+            h.setBlock(POS.above(), Blocks.AIR);
+            removeCharger(h, POS);
+            h.succeed();
+        }));
+    }
+
+    /**
+     * Una tramoggia di lato porta la polvere nello slot 1 anche quando non e' vuoto (lo stack cresce sul posto), e
+     * nessuna polvere si perde; la pietra e la cella della tramoggia non entrano da un lato.
+     */
+    private static void hopperAtTheSideAddsDustToANonEmptySlot(GameTestHelper helper) {
+        Item cellItem = ModItems.REDSTONE_CELL.get();
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setDust(redstone(3));
+        HopperBlockEntity hopper = hopper(helper, POS.west(), Direction.EAST);
+        hopper.setItem(0, redstone(5));
+        hopper.setItem(1, new ItemStack(Items.COBBLESTONE));
+        hopper.setItem(2, cell(300));
+        helper.runAfterDelay(30, () -> runInSequence(helper, h -> {
+            int inside = c.dust().getCount();
+            int left = count(hopper, Items.REDSTONE);
+            h.assertTrue(inside > 3, "dust in the charger after 30 ticks: " + inside + ", not more than 3");
+            h.assertTrue(inside + left == 8, "dust in the charger " + inside + " and in the hopper " + left
+                    + ", not 8 in all");
+            h.assertTrue(c.cell().isEmpty(), "a cell entered from the side: " + c.cell());
+            h.assertTrue(count(hopper, Items.COBBLESTONE) == 1 && count(hopper, cellItem) == 1
+                    && energy(hopper.getItem(2)) == 300, "the hopper lost its cobblestone or its cell: cobblestone "
+                    + count(hopper, Items.COBBLESTONE) + ", cells " + count(hopper, cellItem) + ", third slot "
+                    + hopper.getItem(2));
+            h.assertTrue(itemsIn(h).isEmpty(), "items on the ground: " + itemsIn(h));
+            hopper.clearContent();
+            h.setBlock(POS.west(), Blocks.AIR);
+            removeCharger(h, POS);
+            h.succeed();
+        }));
+    }
+
+    /**
+     * Una tramoggia sotto il caricatore prende la cella solo quando e' piena: a 9 999 RE resta dentro, a 10 000 scende.
+     * La polvere da sotto non esce mai, e senza cella lo stato del blocco dice {@code cell} falso. Le tre attese sono
+     * fissate all'inizio, a 20, 40 e 60 tick.
+     */
+    private static void hopperBelowTakesOnlyAFullCell(GameTestHelper helper) {
+        Item cellItem = ModItems.REDSTONE_CELL.get();
+        BlockPos above = POS.above();
+        HopperBlockEntity hopper = hopper(helper, POS, Direction.DOWN);
+        ChargerBlockEntity c = charger(helper, above);
+        c.setCell(cell(9_999));
+        helper.runAfterDelay(20, () -> runInSequence(helper, h -> {
+            h.assertTrue(c.cell().is(cellItem) && c.cell().getCount() == 1 && energy(c.cell()) == 9_999,
+                    "cell one RE short of full: charger " + c.cell() + " with " + energy(c.cell()) + " RE");
+            h.assertTrue(hopper.isEmpty(), "the hopper took a cell that is not full: " + count(hopper, cellItem));
+            c.setCell(cell(10_000));
+        }));
+        helper.runAfterDelay(40, () -> runInSequence(helper, h -> {
+            h.assertTrue(c.cell().isEmpty(), "the full cell is still in the charger: " + c.cell());
+            h.assertTrue(count(hopper, cellItem) == 1 && hopper.getItem(0).is(cellItem)
+                    && energy(hopper.getItem(0)) == 10_000, "full cell in the hopper: " + count(hopper, cellItem)
+                    + " cells, first slot " + hopper.getItem(0) + " with " + energy(hopper.getItem(0)) + " RE");
+            c.setDust(redstone(5));
+        }));
+        helper.runAfterDelay(60, () -> runInSequence(helper, h -> {
+            h.assertTrue(c.dust().getCount() == 5 && count(hopper, Items.REDSTONE) == 0,
+                    "dust in the charger " + c.dust().getCount() + ", in the hopper "
+                            + count(hopper, Items.REDSTONE) + "; expected 5 and 0");
+            h.assertTrue(count(hopper, cellItem) == 1 && c.cell().isEmpty() && itemsIn(h).isEmpty(),
+                    "cells in the hopper " + count(hopper, cellItem) + ", charger " + c.cell()
+                            + ", on the ground " + itemsIn(h));
+            BlockState state = stateAt(h, above);
+            h.assertTrue(state.is(ModBlocks.CHARGER.get()) && !state.getValue(ChargerBlock.CELL),
+                    "block state without the cell: " + state);
+            hopper.clearContent();
+            h.setBlock(POS, Blocks.AIR);
+            removeCharger(h, above);
+            h.succeed();
+        }));
+    }
+
+    /**
+     * Una tramoggia sotto che non ha posto per la cella (cinque slot con una pietra ciascuno: nessuno libero, nulla con
+     * cui unirla, ma non piena di pile intere, quindi tira) a ogni tick la toglie e la rimette: la cella resta una,
+     * con la sua carica, e nulla finisce nella tramoggia o a terra. Il secondo caricatore tiene una cella letta dal
+     * chunk con piu' della capacita' della config: il rimettere non la taglia.
+     */
+    private static void fullHopperBelowNeitherLosesNorDuplicatesTheCell(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        Item cellItem = ModItems.REDSTONE_CELL.get();
+        BlockPos above = POS.above();
+        BlockPos hopperPos2 = new BlockPos(5, 2, 3);
+        BlockPos chargerPos2 = new BlockPos(5, 3, 3);
+
+        HopperBlockEntity hopper = hopper(helper, POS, Direction.DOWN);
+        HopperBlockEntity hopper2 = hopper(helper, hopperPos2, Direction.DOWN);
+        for (int slot = 0; slot < hopper.getContainerSize(); slot++) {
+            hopper.setItem(slot, new ItemStack(Items.COBBLESTONE));
+            hopper2.setItem(slot, new ItemStack(Items.COBBLESTONE));
+        }
+
+        ChargerBlockEntity c = charger(helper, above);
+        c.setCell(cell(10_000));
+        ItemStack before = c.cell();
+
+        charger(helper, chargerPos2);
+        BlockPos abs2 = helper.absolutePos(chargerPos2);
+        CompoundTag saved = Compat.gameTests().saveBlockEntity(level, abs2);
+        saved.putBoolean(NbtKeys.CHARGER_HAS_CELL, true);
+        saved.putInt(NbtKeys.CHARGER_CELL_ENERGY, 40_000);
+        ChargerBlockEntity c2 = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs2, saved);
+        ItemStack before2 = c2.cell();
+        helper.assertTrue(energy(before) == 10_000 && energy(before2) == 40_000, "premise: cells with "
+                + energy(before) + " and " + energy(before2) + " RE, not 10000 and 40000");
+
+        helper.runAfterDelay(20, () -> runInSequence(helper, h -> {
+            h.assertTrue(c.cell() != before, "the hopper never took the full cell out and put it back");
+            h.assertTrue(c.cell().is(cellItem) && c.cell().getCount() == 1 && energy(c.cell()) == 10_000,
+                    "cell put back by the hopper: " + c.cell() + " with " + energy(c.cell()) + " RE");
+            h.assertTrue(count(hopper, Items.COBBLESTONE) == 5 && count(hopper, cellItem) == 0,
+                    "hopper with no room: cobblestone " + count(hopper, Items.COBBLESTONE) + ", cells "
+                            + count(hopper, cellItem));
+
+            h.assertTrue(c2.cell() != before2, "the second hopper never took the cell out and put it back");
+            h.assertTrue(c2.cell().is(cellItem) && c2.cell().getCount() == 1 && energy(c2.cell()) == 40_000,
+                    "cell above the capacity put back by the hopper: " + c2.cell() + " with " + energy(c2.cell())
+                            + " RE, not 40000");
+            h.assertTrue(count(hopper2, Items.COBBLESTONE) == 5 && count(hopper2, cellItem) == 0,
+                    "second hopper with no room: cobblestone " + count(hopper2, Items.COBBLESTONE) + ", cells "
+                            + count(hopper2, cellItem));
+
+            h.assertTrue(itemsIn(h).isEmpty(), "items on the ground: " + itemsIn(h));
+            hopper.clearContent();
+            hopper2.clearContent();
+            h.setBlock(POS, Blocks.AIR);
+            h.setBlock(hopperPos2, Blocks.AIR);
+            removeCharger(h, above);
+            removeCharger(h, chargerPos2);
+            h.succeed();
+        }));
+    }
+
+    /**
+     * Facce e slot, senza tick: sopra e sotto lo slot 0, ai lati lo slot 1. Entra solo una cella da sopra nello slot 0
+     * vuoto e solo polvere di redstone dai lati nello slot 1; esce solo da sotto la cella piena.
+     */
+    private static void facesAcceptOnlyWhatTheyShould(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        List<Direction> sides = List.of(Direction.NORTH, Direction.SOUTH, Direction.WEST, Direction.EAST);
+        ItemStack dust = redstone(1);
+
+        helper.assertTrue(Arrays.equals(c.getSlotsForFace(Direction.UP), new int[] {0})
+                && Arrays.equals(c.getSlotsForFace(Direction.DOWN), new int[] {0}), "slots from above "
+                + Arrays.toString(c.getSlotsForFace(Direction.UP)) + ", from below "
+                + Arrays.toString(c.getSlotsForFace(Direction.DOWN)) + "; expected [0] and [0]");
+        for (Direction side : sides) {
+            helper.assertTrue(Arrays.equals(c.getSlotsForFace(side), new int[] {1}), "slots from " + side + ": "
+                    + Arrays.toString(c.getSlotsForFace(side)) + ", not [1]");
+            helper.assertTrue(c.canPlaceItemThroughFace(1, dust, side), "dust refused from " + side);
+        }
+
+        helper.assertTrue(c.canPlaceItemThroughFace(0, cell(5), Direction.UP),
+                "a cell refused from above by an empty charger");
+        helper.assertTrue(!c.canPlaceItemThroughFace(0, cell(5), Direction.NORTH), "a cell accepted from a side");
+        helper.assertTrue(!c.canPlaceItemThroughFace(0, cell(5), Direction.DOWN), "a cell accepted from below");
+        helper.assertTrue(!c.canPlaceItemThroughFace(0, dust, Direction.UP), "dust accepted in the cell slot");
+        helper.assertTrue(!c.canPlaceItemThroughFace(1, dust, Direction.UP), "dust accepted from above");
+        helper.assertTrue(!c.canPlaceItemThroughFace(1, dust, Direction.DOWN), "dust accepted from below");
+        helper.assertTrue(!c.canPlaceItemThroughFace(1, cell(5), Direction.NORTH), "a cell accepted in the dust slot");
+        helper.assertTrue(!c.canPlaceItemThroughFace(1, new ItemStack(Items.STICK), Direction.NORTH),
+                "a stick accepted in the dust slot");
+        ItemStack twoCells = cell(5);
+        twoCells.setCount(2);
+        helper.assertTrue(c.canPlaceItem(0, cell(5)) && !c.canPlaceItem(0, twoCells),
+                "one cell must fit the empty cell slot, a stack of two must not");
+
+        c.setCell(cell(9_999));
+        helper.assertTrue(!c.canPlaceItemThroughFace(0, cell(5), Direction.UP),
+                "a second cell accepted from above");
+        helper.assertTrue(!c.canTakeItemThroughFace(0, c.cell(), Direction.DOWN),
+                "a cell with 9999 RE can be taken from below");
+        c.setCell(cell(10_000));
+        helper.assertTrue(c.canTakeItemThroughFace(0, c.cell(), Direction.DOWN),
+                "a full cell cannot be taken from below");
+        helper.assertTrue(!c.canTakeItemThroughFace(0, c.cell(), Direction.UP), "a full cell can be taken from above");
+        c.setDust(redstone(5));
+        helper.assertTrue(!c.canTakeItemThroughFace(1, c.dust(), Direction.DOWN), "dust can be taken from below");
+        helper.assertTrue(!c.canTakeItemThroughFace(1, c.dust(), Direction.NORTH), "dust can be taken from a side");
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * La rottura fa cadere la cella, con la sua carica, e la polvere, una volta sola, al centro del blocco e ferme;
+     * la riserva non si rimborsa e senza bottino il blocco non cade. Un caricatore svuotato prima di sparire, come fa
+     * {@code /setblock}, non lascia nulla.
+     */
+    private static void breakingDropsTheCellAndTheDust(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = helper.absolutePos(POS);
+        Vec3 center = Vec3.atCenterOf(abs);
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setCell(cell(4_321));
+        c.setDust(redstone(9));
+        tick(helper, c, 1);
+        assertContents(helper, c, "before breaking", 4_323, 8, 498);
+
+        helper.assertTrue(level.destroyBlock(abs, false), "destroyBlock refused the charger");
+        helper.assertTrue(stateAt(helper, POS).isAir() && level.getBlockEntity(abs) == null,
+                "the broken charger left " + stateAt(helper, POS) + " and " + level.getBlockEntity(abs));
+        List<ItemEntity> dropped = itemsIn(helper);
+        helper.assertTrue(dropped.size() == 2, "the broken charger dropped " + dropped.size() + " stacks, not 2: "
+                + dropped);
+        int cells = 0;
+        int dusts = 0;
+        for (ItemEntity drop : dropped) {
+            ItemStack stack = drop.getItem();
+            if (stack.is(ModItems.REDSTONE_CELL.get())) {
+                helper.assertTrue(stack.getCount() == 1 && energy(stack) == 4_323, "dropped cell " + stack + " with "
+                        + energy(stack) + " RE, not one cell with 4323");
+                cells++;
+            } else {
+                helper.assertTrue(stack.is(Items.REDSTONE) && stack.getCount() == 8, "dropped " + stack
+                        + ", not 8 redstone dust");
+                dusts++;
+            }
+            helper.assertTrue(drop.position().distanceTo(center) < 1e-6
+                    && drop.getDeltaMovement().equals(Vec3.ZERO), "dropped " + stack + " not lying at the centre "
+                    + center + ": " + drop.position() + " moving " + drop.getDeltaMovement());
+        }
+        helper.assertTrue(cells == 1 && dusts == 1, "dropped " + cells + " cell stacks and " + dusts
+                + " dust stacks, not one each");
+        dropped.forEach(ItemEntity::discard);
+
+        ChargerBlockEntity second = charger(helper, POS);
+        second.setCell(cell(1_000));
+        second.setDust(redstone(3));
+        Clearable.tryClear(level.getBlockEntity(abs));
+        helper.assertTrue(second.cell().isEmpty() && second.dust().isEmpty(), "a cleared charger still holds "
+                + second.cell() + " and " + second.dust());
+        helper.setBlock(POS, Blocks.AIR);
+        helper.assertTrue(itemsIn(helper).isEmpty(), "a cleared charger dropped " + itemsIn(helper));
+        helper.succeed();
+    }
+
+    /**
      * Posa un caricatore nello stato predefinito nel punto relativo alla struttura e restituisce la sua block entity,
      * letta dal livello.
      */
@@ -864,6 +1147,29 @@ public final class ChargerGameTests {
         BlockEntity entity = helper.getLevel().getBlockEntity(helper.absolutePos(relative));
         helper.assertTrue(entity instanceof ChargerBlockEntity, "block entity of a new charger: " + entity);
         return (ChargerBlockEntity) entity;
+    }
+
+    /**
+     * Posa una tramoggia rivolta verso {@code facing} (in basso o un lato) nel punto relativo alla struttura e
+     * restituisce la sua block entity, letta dal livello.
+     */
+    private static HopperBlockEntity hopper(GameTestHelper helper, BlockPos relative, Direction facing) {
+        helper.setBlock(relative, Blocks.HOPPER.defaultBlockState().setValue(HopperBlock.FACING, facing));
+        BlockEntity entity = helper.getLevel().getBlockEntity(helper.absolutePos(relative));
+        helper.assertTrue(entity instanceof HopperBlockEntity, "block entity of a new hopper: " + entity);
+        return (HopperBlockEntity) entity;
+    }
+
+    /** Quanti oggetti di quel tipo tiene il contenitore, sommati su tutti gli slot. */
+    private static int count(Container c, Item item) {
+        int total = 0;
+        for (int slot = 0; slot < c.getContainerSize(); slot++) {
+            ItemStack stack = c.getItem(slot);
+            if (stack.is(item)) {
+                total += stack.getCount();
+            }
+        }
+        return total;
     }
 
     /** Lo stato del blocco nel punto relativo alla struttura. */

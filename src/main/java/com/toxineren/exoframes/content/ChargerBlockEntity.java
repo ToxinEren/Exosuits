@@ -7,16 +7,22 @@ import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.core.config.ConfigValidation;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.energy.ChargerRule;
+import com.toxineren.exoframes.frame.Handouts;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.util.Mth;
+import net.minecraft.world.Container;
+import net.minecraft.world.WorldlyContainer;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.Vec3;
 
 /**
  * La block entity del caricatore (design §12.11): tiene il contenuto e chiama la regola di carica
@@ -47,14 +53,35 @@ import net.minecraft.world.level.block.state.BlockState;
  * {@code setChanged()} (chunk da salvare, comparatori vicini aggiornati); le proprieta' {@code cell} e {@code lit} le
  * ricava {@link #serverTick} una volta per tick, e le scrive solo se differiscono.
  * <p>
+ * <b>Tramogge.</b> Il caricatore e' un {@link WorldlyContainer} del gioco base, senza codice per loader: slot 0 la
+ * cella, slot 1 la polvere. Da sopra entra una cella nello slot 0, solo se e' vuoto; dai lati entra la polvere di
+ * redstone nello slot 1; da sotto esce la cella, solo quando e' piena (carica almeno pari alla capacita' della
+ * config). Ogni altro passaggio e' rifiutato. I limiti stanno in {@link #canPlaceItem} e nelle facce
+ * ({@link #canPlaceItemThroughFace}, {@link #canTakeItemThroughFace}), mai in {@code getMaxStackSize()}, che qui non
+ * si ridefinisce: le tramogge ignorano la dimensione massima di un contenitore. Due fatti delle tramogge decidono il
+ * resto: quella che spinge in uno slot non vuoto fa crescere sul posto lo stack avuto da {@link #getItem} (per questo
+ * mai una copia); quella che tira e non ha dove mettere la cella l'ha gia' tolta con {@link #removeItem} e la rimette
+ * con {@link #setItem}, a ogni tick finche' non trova posto (per questo {@link #setItem}, come {@link #setCell}, non
+ * taglia la carica). Una cella che entra da una tramoggia tiene quindi la sua carica anche sopra la capacita', e vale
+ * piena.
+ * <p>
  * <b>Limite dichiarato</b> (design §7 punto 27, §8 domanda 10). Il contenuto sta nei dati del chunk e si salva con il
  * salvataggio automatico, come quello di un forziere del gioco base; non sta nel registro dei telai. Un inserimento o
  * un ritiro seguito dall'uscita del giocatore e da un crash prima del salvataggio puo' duplicare o perdere una cella.
  * In M3 nessun rimedio.
  */
-public final class ChargerBlockEntity extends CompatBlockEntity {
+public final class ChargerBlockEntity extends CompatBlockEntity implements WorldlyContainer {
     /** Quante polveri di redstone tiene al piu' lo slot 1. */
     public static final int MAX_DUST = 64;
+
+    /** Lo slot della cella. */
+    private static final int SLOT_CELL = 0;
+    /** Lo slot della polvere di redstone. */
+    private static final int SLOT_DUST = 1;
+    /** Gli slot che si vedono da sopra e da sotto: la cella. */
+    private static final int[] CELL_SLOTS = {SLOT_CELL};
+    /** Gli slot che si vedono dai quattro lati: la polvere. */
+    private static final int[] DUST_SLOTS = {SLOT_DUST};
 
     /** Il riporto e' in millesimi di RE: sempre sotto un RE intero. */
     private static final int MAX_CARRY_MILLI = 999;
@@ -180,6 +207,160 @@ public final class ChargerBlockEntity extends CompatBlockEntity {
             }
             dust = stack;
         }
+        setChanged();
+    }
+
+    /** Due slot: 0 la cella, 1 la polvere di redstone. */
+    @Override
+    public int getContainerSize() {
+        return 2;
+    }
+
+    /** Vero se non c'e' ne' la cella ne' la polvere; riserva e riporto non contano. */
+    @Override
+    public boolean isEmpty() {
+        return cell.isEmpty() && dust.isEmpty();
+    }
+
+    /** Lo stack vero dello slot ({@link #cell()} o {@link #dust()}), mai una copia; vuoto per ogni altro slot. */
+    @Override
+    public ItemStack getItem(int slot) {
+        return switch (slot) {
+            case SLOT_CELL -> cell;
+            case SLOT_DUST -> dust;
+            default -> ItemStack.EMPTY;
+        };
+    }
+
+    /**
+     * Toglie dallo slot al piu' {@code amount} oggetti e li restituisce. Dallo slot 0 esce lo stack stesso della cella
+     * (lo stesso oggetto, non una copia) e lo slot resta vuoto; dallo slot 1 escono le polveri chieste, e lo slot
+     * resta vuoto se non ne restano. Chiama {@code setChanged()} solo se e' uscito qualcosa. Con {@code amount} sotto
+     * 1, o per un altro slot, non esce nulla.
+     */
+    @Override
+    public ItemStack removeItem(int slot, int amount) {
+        ItemStack removed = ItemStack.EMPTY;
+        if (amount >= 1) {
+            if (slot == SLOT_CELL) {
+                removed = cell;
+                cell = ItemStack.EMPTY;
+            } else if (slot == SLOT_DUST && !dust.isEmpty()) {
+                removed = dust.split(amount);
+                if (dust.isEmpty()) {
+                    dust = ItemStack.EMPTY;
+                }
+            }
+        }
+        if (!removed.isEmpty()) {
+            setChanged();
+        }
+        return removed;
+    }
+
+    /** Toglie e restituisce lo stack dello slot, senza {@code setChanged()}; vuoto per ogni altro slot. */
+    @Override
+    public ItemStack removeItemNoUpdate(int slot) {
+        ItemStack removed = getItem(slot);
+        if (slot == SLOT_CELL) {
+            cell = ItemStack.EMPTY;
+        } else if (slot == SLOT_DUST) {
+            dust = ItemStack.EMPTY;
+        }
+        return removed;
+    }
+
+    /**
+     * Slot 0: {@link #setCell}; slot 1: {@link #setDust}. Non taglia mai la carica di una cella: e' anche il rimettere
+     * di una tramoggia che l'ha tolta e non ha trovato dove metterla (vedi la classe).
+     * <p>
+     * Lancia per uno stack che {@link #canPlaceItem} rifiuterebbe perche' non e' cio' che lo slot tiene (non una sola
+     * cella, non polvere di redstone, piu' di {@link #MAX_DUST}) e per ogni altro slot: tramogge e distributori
+     * chiedono prima {@link #canPlaceItem}.
+     *
+     * @throws IllegalArgumentException per uno stack non vuoto che lo slot non puo' tenere, o per un altro slot
+     */
+    @Override
+    public void setItem(int slot, ItemStack stack) {
+        switch (slot) {
+            case SLOT_CELL -> setCell(stack);
+            case SLOT_DUST -> setDust(stack);
+            default -> throw new IllegalArgumentException("no such slot in a charger: " + slot);
+        }
+    }
+
+    @Override
+    public boolean stillValid(Player player) {
+        return Container.stillValidBlockEntity(this, player);
+    }
+
+    /** Svuota i due slot senza far cadere nulla (lo usa {@code /setblock}); riserva e riporto restano. */
+    @Override
+    public void clearContent() {
+        if (isEmpty()) {
+            return;
+        }
+        cell = ItemStack.EMPTY;
+        dust = ItemStack.EMPTY;
+        setChanged();
+    }
+
+    /**
+     * Che cosa puo' entrare in uno slot, da qualunque parte arrivi. Slot 0: una sola cella, e solo se lo slot e' vuoto
+     * (uno stack di due celle no). Slot 1: polvere di redstone. Ogni altro slot: nulla. I limiti stanno qui e nelle
+     * facce, non in {@code getMaxStackSize()}.
+     */
+    @Override
+    public boolean canPlaceItem(int slot, ItemStack stack) {
+        return switch (slot) {
+            case SLOT_CELL -> stack.getItem() instanceof CellItem && stack.getCount() == 1 && cell.isEmpty();
+            case SLOT_DUST -> stack.is(Items.REDSTONE);
+            default -> false;
+        };
+    }
+
+    /** Da sopra e da sotto si vede lo slot 0, la cella; dai quattro lati lo slot 1, la polvere. */
+    @Override
+    public int[] getSlotsForFace(Direction side) {
+        return side == Direction.UP || side == Direction.DOWN ? CELL_SLOTS : DUST_SLOTS;
+    }
+
+    /**
+     * Da sopra entra solo cio' che {@link #canPlaceItem} accetta nello slot 0 (una cella, a slot vuoto); da un lato
+     * solo cio' che accetta nello slot 1 (polvere di redstone). Da sotto, o senza una faccia ({@code null}), nulla.
+     */
+    @Override
+    public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction face) {
+        if (face == null || face == Direction.DOWN) {
+            return false;
+        }
+        int faceSlot = face == Direction.UP ? SLOT_CELL : SLOT_DUST;
+        return slot == faceSlot && canPlaceItem(slot, stack);
+    }
+
+    /**
+     * Esce solo la cella, solo da sotto e solo quando e' piena: la carica della cella dello slot 0 e' almeno la
+     * capacita' della config (una cella che tiene di piu' vale piena). La polvere non esce da nessuna faccia.
+     */
+    @Override
+    public boolean canTakeItemThroughFace(int slot, ItemStack stack, Direction face) {
+        return face == Direction.DOWN && slot == SLOT_CELL && !cell.isEmpty() && storedEnergy() >= capacity();
+    }
+
+    /**
+     * Lascia a terra, ferme, al centro del blocco, la cella (con la sua carica) e la polvere, e svuota i due slot: lo
+     * chiama il blocco quando viene rotto. La riserva della polvere che stava bruciando non si rimborsa (design
+     * §12.11). Un caricatore vuoto, o non ancora in un livello, non fa nulla.
+     */
+    public void dropContents() {
+        if (level == null || isEmpty()) {
+            return;
+        }
+        Vec3 center = Vec3.atCenterOf(worldPosition);
+        Handouts.dropStill(level, center, cell);
+        Handouts.dropStill(level, center, dust);
+        cell = ItemStack.EMPTY;
+        dust = ItemStack.EMPTY;
         setChanged();
     }
 
