@@ -21,8 +21,9 @@ public final class ModItems {
     public static final RegistrySupplier<CellItem> REDSTONE_CELL = ITEMS.register("redstone_cell",
             () -> new CellItem(new Item.Properties().stacksTo(1)));
 
-    // Pezzi Rottame da montare a mano sul telaio: braccio e gamba valgono per i due lati. Nessuna ricetta in questa
-    // parte: si prendono dalla scheda creativa.
+    // Pezzi Rottame da montare a mano sul telaio: braccio e gamba valgono per i due lati. Si fabbricano al banco da
+    // lavoro: le ricette sono nei dati per versione (src/main/resources-mc<versione>/data, scritti da
+    // tools/gen_data.py). Stanno anche nella scheda creativa.
     public static final RegistrySupplier<PieceItem> SCRAP_HELMET =
             registerPiece("scrap_helmet", Tier.SCRAP, PieceKind.HELMET);
     public static final RegistrySupplier<PieceItem> SCRAP_TORSO =

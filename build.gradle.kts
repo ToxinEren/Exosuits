@@ -178,7 +178,9 @@ java {
 
 // Risorse per versione di Minecraft: src/main/resources-mc<versione> (es. resources-mc1.20.1) si aggiunge alle risorse
 // comuni delle varianti di quella versione. La cartella puo' mancare: Gradle ignora una srcDir inesistente. Oggi porta
-// le texture trasparenti del layer armatura vanilla di 1.20.1 per il materiale "frame".
+// la configurazione dei mixin della sua versione (redstone_exoframes.mixins.json), i dati della sua versione (ricette,
+// avanzamenti di sblocco, tabella di bottino e tag del caricatore, scritti da tools/gen_data.py) e, solo su 1.20.1, le
+// texture trasparenti del layer armatura vanilla per il materiale "frame".
 sourceSets.main {
     resources.srcDir(rootProject.file("src/main/resources-mc$mc"))
     // Grandezza reale (design par. 4.8): un mixin di Player per versione del gioco, senza direttive. Si compila solo

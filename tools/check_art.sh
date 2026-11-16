@@ -48,8 +48,8 @@ for f in "${files[@]}"; do
     fi
 done
 
-# texture placeholder (oggetti, icona del mod, layer armatura trasparenti di 1.20.1): stessi percorsi relativi a
-# src/main
+# texture placeholder (oggetti, facce del blocco caricatore, icona del mod, layer armatura trasparenti di 1.20.1):
+# stessi percorsi relativi a src/main
 if ! python3 -I tools/gen_placeholders.py --out "$tmp/placeholders" >"$tmp/placeholders.log" 2>&1; then
     cat "$tmp/placeholders.log" >&2
     echo "FAIL: tools/gen_placeholders.py non e' riuscito" >&2
