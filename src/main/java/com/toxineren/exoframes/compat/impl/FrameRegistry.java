@@ -169,9 +169,10 @@ final class FrameRegistry {
 
     /**
      * Applica la modifica allo stato del record indossato dal giocatore e segna il dato come da salvare (anche se la
-     * modifica lancia), ma non come cambio strutturale: e' la scrittura ad alta frequenza (l'energia a ogni tick, in
-     * una parte successiva), e un salvataggio a ogni uscita di un giocatore per questo sarebbe troppo. Falso, senza
-     * cambiare nulla, se il giocatore non indossa un telaio o in sola lettura.
+     * modifica lancia), ma non come cambio strutturale: e' la scrittura ad alta frequenza (l'energia a ogni tick da
+     * {@code SuitTick}, l'usura dei pezzi a ogni colpo applicato e a ogni caduta annullata da {@code SuitDamage}), e
+     * un salvataggio a ogni uscita di un giocatore per questo sarebbe troppo. Falso, senza cambiare nulla, se il
+     * giocatore non indossa un telaio o in sola lettura.
      */
     boolean mutateWorn(UUID player, Consumer<FrameState> change) {
         Objects.requireNonNull(change, "change must not be null");

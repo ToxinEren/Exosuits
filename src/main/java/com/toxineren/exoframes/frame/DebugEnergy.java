@@ -24,7 +24,11 @@ public final class DebugEnergy {
         NOT_WEARING,
         /** Il telaio indossato non ha una cella: nulla cambia, nessuna sincronizzazione. */
         NO_CELL,
-        /** Il registro e' in sola lettura e ha rifiutato il cambio (l'ERROR del registro e' gia' nel log). */
+        /**
+         * Il registro ha rifiutato il cambio. Ramo di difesa, che oggi non si raggiunge: un registro in sola lettura
+         * non legge nessuna voce, quindi in quella sessione nessun telaio e' indossato e la risposta e'
+         * {@link #NOT_WEARING}; dove un telaio indossato c'e', il registro e' scrivibile.
+         */
         REFUSED
     }
 
@@ -33,7 +37,8 @@ public final class DebugEnergy {
 
     /**
      * Porta la carica della cella indossata a {@code stored} RE, limitata a [0, capacita' della cella]: la cella si
-     * sostituisce con una nuova della stessa capacita', dentro {@link FrameStateAccess#changeWorn}.
+     * sostituisce con una nuova della stessa capacita', dentro {@link FrameStateAccess#changeWorn}. Con il registro in
+     * sola lettura nessun telaio e' indossato in questa sessione, quindi l'esito e' {@link Outcome#NOT_WEARING}.
      */
     public static Outcome set(ServerPlayer player, int stored) {
         Objects.requireNonNull(player, "player must not be null");

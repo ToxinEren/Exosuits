@@ -34,8 +34,10 @@ public interface GameTests {
     /**
      * Crea un giocatore finto connesso nel livello del test, con una connessione dotata di canale (su Forge 1.20.1
      * il giocatore finto vanilla non ha canale e fa fallire l'ingresso nel mondo). Come quello vanilla dice sempre di
-     * essere in creativa ({@code isCreative()}); a differenza di quello vanilla {@code isSpectator()} segue la sua
-     * modalita' di gioco, cosi' {@code setGameMode(GameType.SPECTATOR)} ne fa uno spettatore. Il giocatore resta
+     * essere in creativa ({@code isCreative()}), ma solo quello: le sue capacita' seguono la modalita' di gioco del
+     * mondo dei test (su 1.20.1-forge non la creativa), quindi un test che vuole la creativa o la sopravvivenza la
+     * imposta da se'. A differenza di quello vanilla {@code isSpectator()} segue la sua modalita' di gioco, cosi'
+     * {@code setGameMode(GameType.SPECTATOR)} ne fa uno spettatore. Il giocatore resta
      * nella lista dei giocatori del server per il resto dell'esecuzione: i test non devono contare i giocatori ne'
      * scorrere la lista aspettandosi di trovarci solo i propri.
      */

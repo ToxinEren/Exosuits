@@ -60,7 +60,8 @@ public interface FrameStateAccess {
     /**
      * Lo stato del giocatore. Sul server logico legge il dato salvato senza crearlo; sul client restituisce la copia
      * sincronizzata ({@link #clientView}). L'oggetto restituito e' lo stato vivo: va trattato in sola lettura, e ogni
-     * modifica passa da un metodo di scrittura ({@link #update}, {@link #mutate}, {@link #clear}).
+     * modifica passa da un metodo di scrittura ({@link #update}, {@link #mutate}, {@link #changeWorn},
+     * {@link #clear}).
      */
     Optional<FrameState> get(Player p);
 

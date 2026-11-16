@@ -93,8 +93,8 @@ import net.minecraft.world.item.ItemStack;
  * <li>{@code /exoframe debug energy <re>}: porta la carica a {@code re} RE, limitata alla capacita' della cella,
  * passando dal registro con un cambio strutturale che sincronizza subito il proprietario.</li>
  * </ul>
- * Senza telaio indossato o senza cella i due rami lo dicono e non cambiano nulla; con il registro in sola lettura
- * {@code energy <re>} non scrive nulla in chat.
+ * Senza telaio indossato o senza cella i due rami lo dicono e non cambiano nulla. Con il registro in sola lettura
+ * nessun telaio e' indossato in questa sessione, quindi i due rami rispondono "non indossi un telaio".
  */
 public final class ExoframeCommand {
     private static final String COMMANDS = "commands.redstone_exoframes.";
@@ -236,8 +236,9 @@ public final class ExoframeCommand {
 
     /**
      * {@code energy <re>}: porta la carica della cella indossata a {@code re}, limitata alla capacita'
-     * ({@link DebugEnergy#set}), e scrive la carica letta dopo. 0 e un errore senza telaio indossato o senza cella; 0
-     * senza messaggio se il registro rifiuta il cambio (resta la riga del log del registro).
+     * ({@link DebugEnergy#set}), e scrive la carica letta dopo. 0 e un errore senza telaio indossato o senza cella;
+     * con il registro in sola lettura nessun telaio e' indossato, quindi l'errore e' quello senza telaio. 0 senza
+     * messaggio se il registro rifiuta il cambio: ramo di difesa, che oggi non si raggiunge.
      */
     private static int setEnergy(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();

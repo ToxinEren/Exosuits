@@ -22,10 +22,11 @@ import java.util.UUID;*/
  * <p>
  * Ogni modificatore ha un id stabile ({@code redstone_exoframes:frame_*}): cosi' una nuova applicazione trova
  * esattamente quella precedente e i valori non si sommano mai. {@code apply} e' idempotente: legge il modificatore
- * presente e lo tocca solo se importo ({@code ==} sul {@code double}) o operazione sono diversi; altrimenti lo toglie
- * e aggiunge quello nuovo con {@code addTransientModifier}. Mai {@code addOrUpdateTransientModifier}, che su 1.21.1
- * sporca l'attributo anche a valori uguali (confronta i riferimenti), e mai {@code AttributeModifier.equals}, che su
- * 1.20.1 confronta solo l'UUID: ogni attributo sporco parte in un pacchetto al proprietario e a chi lo guarda.
+ * presente e, se importo ({@code ==} sul {@code double}) e operazione sono gli stessi, non lo tocca; solo se uno dei
+ * due e' diverso lo toglie, e aggiunge quello nuovo con {@code addTransientModifier} (lo aggiunge anche se mancava).
+ * Mai {@code addOrUpdateTransientModifier}, che su 1.21.1 sporca l'attributo anche a valori uguali (confronta i
+ * riferimenti), e mai {@code AttributeModifier.equals}, che su 1.20.1 confronta solo l'UUID: ogni attributo sporco
+ * parte in un pacchetto al proprietario e a chi lo guarda.
  * I modificatori sono transitori perche' sono derivati dallo stato del telaio, che viene salvato altrove: un
  * modificatore permanente sopravviverebbe al salvataggio dell'entita' anche dopo aver tolto il telaio.
  * <p>

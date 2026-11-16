@@ -73,9 +73,10 @@ import net.neoforged.neoforge.gametest.GameTestHooks;
  * dell'entrypoint solo per i metodi {@code @GameTest}; i nostri test nascono da un {@code @GameTestGenerator}.
  * Giocatore finto: costruito qui su entrambe le versioni, come lo costruisce {@code makeMockServerPlayerInLevel} di
  * 1.21.1 (connessione agganciata a un {@code EmbeddedChannel}: senza canale Forge 1.20.1 lancia un NPE in
- * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli), sempre in creativa
- * come quello vanilla ma con {@code isSpectator()} vero, quello della modalita' di gioco: quello vanilla dice sempre
- * falso, e i test dello spettatore non si potrebbero fare.
+ * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli), che come quello
+ * vanilla dice sempre {@code isCreative()} (solo quello: le capacita' seguono la modalita' di gioco del mondo dei test,
+ * che su 1.20.1-forge non e' la creativa, e i test la impostano da se'), ma con {@code isSpectator()} quello della
+ * modalita' di gioco: quello vanilla dice sempre falso, e i test dello spettatore non si potrebbero fare.
  */
 public final class GameTestsImpl implements GameTests {
     /**
@@ -143,8 +144,9 @@ public final class GameTestsImpl implements GameTests {
     }
 
     /**
-     * Il giocatore finto di {@link #mockServerPlayer}: sempre in creativa come quello vanilla, spettatore secondo la sua
-     * modalita' di gioco, e ricorda i messaggi di sistema che riceve ({@link #messagesTo}).
+     * Il giocatore finto di {@link #mockServerPlayer}: dice sempre {@code isCreative()} come quello vanilla (le
+     * capacita' seguono la modalita' di gioco, che i test impostano da se'), e' spettatore secondo la sua modalita' di
+     * gioco, e ricorda i messaggi di sistema che riceve ({@link #messagesTo}).
      */
     private static final class MockPlayer extends ServerPlayer {
         private final List<Component> messages = new ArrayList<>();

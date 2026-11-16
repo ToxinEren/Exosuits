@@ -29,12 +29,15 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Test in gioco dell'usura dei pezzi (design §12.7) e della caduta (§12.8) della parte 3c. Tutti con un giocatore
- * in sopravvivenza ({@code survivalPlayer}: in creativa il gioco rifiuta il colpo prima di
- * {@code hurtArmor}, e nei primi 60 tick lo rifiuta la protezione d'ingresso) dentro sei pezzi Rottame nuovi (180 di
- * durata). Il danno viene dal cactus: nessuna posizione e nessuna entita', quindi {@code GENERIC}, e nessuna scala di
- * difficolta'. I numeri vengono dalle quote predefinite della config (elmo 0,15, torso 0,30, braccia 0,125, gambe
- * 0,15; quota primaria 0,60), in millesimi di punto. Le regole comuni e gli aiuti stanno in {@link GameTestKit}.
+ * Test in gioco dell'usura dei pezzi (design §12.7) e della caduta (§12.8) della parte 3c. Di base un giocatore in
+ * sopravvivenza ({@code survivalPlayer}: in creativa il gioco rifiuta il colpo prima di {@code hurtArmor}, e nei primi
+ * 60 tick lo rifiuta la protezione d'ingresso) dentro sei pezzi Rottame nuovi (180 di durata), colpito dal cactus:
+ * nessuna posizione e nessuna entita', quindi {@code GENERIC}, e nessuna scala di difficolta'. Non tutti: i test della
+ * caduta usano la caduta (uno su due gambe rotte), quello della lava la lava, quello dell'incudine l'incudine, quello
+ * del telaio nudo un telaio senza pezzi, e quello della creativa e dello spettatore mette da se' quei modi di gioco;
+ * ciascuno lo dice nel suo commento. I numeri vengono dalle quote predefinite della config (elmo 0,15, torso 0,30,
+ * braccia 0,125, gambe 0,15; quota primaria 0,60), in millesimi di punto. Le regole comuni e gli aiuti stanno in
+ * {@link GameTestKit}.
  */
 public final class DamageGameTests {
     /** I piedi del test, sopra la pietra che {@code wearFrameAt} posa in (3, 1, 3). */

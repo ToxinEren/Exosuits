@@ -201,8 +201,8 @@ final class FrameRegistryFormat {
 
     /**
      * Quante celle dei record letti hanno una capacita' piu' grande di quella della config: sono quelle che al
-     * caricamento tenevano piu' di {@code configured} RE e hanno tenuto la loro capacita' ({@link FrameStateCodec#read},
-     * design §12.10).
+     * caricamento tenevano piu' di {@code configured} RE e hanno tenuto la loro capacita'
+     * ({@link FrameStateCodec#read}, design §12.10).
      */
     private static int cellsOverCapacity(FrameRegistry registry, int configured) {
         int count = 0;

@@ -59,8 +59,9 @@ public final class CellSwap {
      * minore dell'ultimo cambio vuol dire un contatore ripartito: si accetta);</li>
      * <li>la cella da prendere con {@link CellSwapRule#pick} (cariche tagliate alla capacita' della config); se non ce
      * n'e' una, il messaggio {@link #NO_BETTER_CELL} e basta;</li>
-     * <li>il registro: vecchia cella fuori, nuova dentro, con {@link FrameStateAccess#changeWorn}; se rifiuta (registro
-     * in sola lettura, la riga ERROR e' gia' nel log) l'inventario non si tocca;</li>
+     * <li>il registro: vecchia cella fuori, nuova dentro, con {@link FrameStateAccess#changeWorn}; se rifiuta
+     * l'inventario non si tocca (ramo di difesa: con il registro in sola lettura nessun telaio e' indossato in questa
+     * sessione, quindi il cambio non fa nulla gia' al primo punto);</li>
      * <li>solo dopo, l'inventario: la cella presa lascia il suo slot (anche in creativa) e la vecchia, se c'era, va
      * nello stesso slot se ora e' vuoto, altrimenti a {@link Handouts#give};</li>
      * <li>il suono del cambio e il tick nella mappa dell'intervallo.</li>

@@ -38,8 +38,8 @@ import net.minecraft.world.phys.Vec3;
  * {@link FrameStateSavedData#structuralUnsaved()}); {@link #update}, {@link #changeWorn} (solo se il record c'era) e
  * {@link #clear} risincronizzano anche il giocatore, {@link #mutate} no. Nessuna scrittura toglie le voci grezze non
  * lette del giocatore: restano nel file, identiche (vedi {@link FrameStateSavedData}). Se il dato salvato e' in sola
- * lettura (schema piu' recente), le quattro scritture non fanno nulla: nessuna modifica, nessun setDirty, nessun sync,
- * un solo ERROR nel log; {@link #get} resta vuoto.
+ * lettura (schema piu' recente o non numerico, file senza sezioni, file illeggibile), le quattro scritture non fanno
+ * nulla: nessuna modifica, nessun setDirty, nessun sync, un solo ERROR nel log; {@link #get} resta vuoto.
  * <p>
  * {@link #syncTo} conta ogni chiamata per giocatore in {@link SyncCounter} (per i test, anche quando il loader non
  * spedisce), manda stato e indicatori ({@link FrameIndicators} da {@code RedstoneExoframes.rules()}) o la loro
