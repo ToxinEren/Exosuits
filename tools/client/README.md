@@ -25,6 +25,7 @@ Dalla radice del repository:
 EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> ["comando" | "@passo" ...]
 EXO_ACCEPT_EULA=true bash tools/client/m3a_shots.sh <variante> <cartella>
 EXO_ACCEPT_EULA=true bash tools/client/m3b_shots.sh <variante> <cartella>
+EXO_ACCEPT_EULA=true bash tools/client/m3c_shots.sh <variante> <cartella>
 ```
 
 Varianti: `1.20.1-forge`, `1.20.1-fabric`, `1.21.1-fabric`, `1.21.1-neoforge`.
@@ -71,6 +72,23 @@ Tutti i passi si controllano prima di avviare qualunque cosa: un passo sconosciu
 
 **`m3b_shots.sh`** fa la sequenza della parte 3b in una sola esecuzione, con clic e tasti veri: il giocatore in sopravvivenza, con elmo e corazza di ferro, piazza il telaio con l'oggetto (clic destro sull'erba), monta elmo, braccio destro (cliccando il lato destro del telaio) e cella carica con l'oggetto in mano, entra a mano vuota, esce tenendo `V`, rientra, si sposta nella tuta, muore (`kill`) e, rinato, rientra nel telaio lasciato dalla morte e ne riesce. Dopo ogni passo uno scatto (`01-piazzato` … `15-armatura-ritrovata`, elencati in testa allo script); fra i passi comandi `execute if`/`unless` controllano dove sta l'entità telaio e quante ce ne sono, i segnaposto negli slot armatura solo mentre il giocatore è dentro, i pezzi montati a ogni ingresso (nel riassunto visivo del segnaposto del torso: elmo e braccio destro sì, braccio sinistro no), l'armatura di ferro nei suoi slot a ogni uscita, il passo fuori dal telaio a ogni uscita (il giocatore un blocco davanti al centro del telaio), niente a terra dopo la morte, e al rientro nel telaio lasciato dalla morte l'armatura che resta nel telaio (non nell'inventario) e torna nei suoi slot all'uscita; `data get entity` sul telaio scrive il suo stato in `rcon.log`. Un controllo che non torna ferma l'esecuzione con uscita 1. Alla fine i tre scatti di `client_shot.sh`, con il giocatore otto blocchi davanti al telaio.
 
+**`m3c_shots.sh`** fa la sequenza della parte 3c-1 ("consumare") in una sola esecuzione, in sopravvivenza: il giocatore indossa la tuta Rottame (`/exoframe debug wear rottame`, cella a 10 000 RE) accanto alle costruzioni della ricognizione `docs/superpowers/specs/ricognizioni/2026-11-15-m3c-movimento-e-dati.md` (vasca profonda 3 con pareti di vetro, canale d'acqua profondo 1, una sorgente d'acqua che scorre, uno scalino di pietra alto 1). Dopo ogni prova `data get entity Exo Pos` scrive la posizione in `rcon.log` e un `execute if`/`unless entity @a[...,distance=..r]` la controlla. Le soglie sono quelle della ricognizione con le distanze moltiplicate per 0,85, perché la tuta applica `frame.baseSpeedPenalty` (dal Task 14), che la ricognizione non aveva:
+
+| Passo | Che cosa controlla |
+|---|---|
+| affondare | tp sopra la vasca (Y −58): dopo 1,5 s la tuta è sul fondo, entro 0,1 da 12,5 −60 0,5 |
+| Spazio sul fondo | Spazio tenuto 3 s: resta sul fondo, entro 0,1 (senza la regola dell'acqua salirebbe a −57,5); scatto `vasca-spazio` |
+| avanti sul fondo | W tenuto 2 s: oltre 6 blocchi dal punto di partenza (velocità di terra della tuta, circa 7,2: 8,5 della ricognizione × 0,85; misurati 7,0-7,2) |
+| acqua profonda 1 | Spazio tenuto 2 s nel canale: non si muove (entro 0,1); poi W 1,5 s verso est: esce dalla sponda alta 1 con il gradino, Y −60, entro 1,2 da 28 −60 0,5 (misurati X 27,70-27,97; senza gradino resterebbe a Y −61, X 24,70) |
+| corrente | 3 s nell'acqua che scorre: non si sposta (entro 0,05) |
+| scalino | W 1,5 s: sale lo scalino alto 1 senza saltare, Y −59, entro 1,5 da −4,5 −59 6,8 (misurati Z 5,76-5,88; senza gradino resterebbe a Y −60, a più di 3,9) |
+| corsa | `Ctrl+W` 2 s a 999 RE (sotto il 10 %): niente scatto, fra 6 e 8,2 blocchi (misurati 7,04-7,22); a 5 000 RE lo scatto c'è, oltre 8,6 (misurati 9,38) |
+| riga dell'energia | carica letta con `/exoframe debug energy` prima e dopo 5 s di cammino: dopo minore di prima; scatti `riga-energia` (verde), `riga-energia-bassa` (500 RE, gialla), `riga-energia-esaurita` (0 RE, rossa), in alto a sinistra |
+| barre | una cella da 5 000 RE e un elmo Rottame a 90/180 con `give`, inventario aperto: scatto `barre-inventario` (la cella con la barra rossa a metà, l'elmo con la barra di durata gialla a metà) |
+| cambio cella | carica a 1 000 RE, `R` tenuto 3 s: scatto `cambio-cella-tenuto` a 1 s (l'avanzamento sulla barra delle azioni); poi la cella installata ha fra 4 900 e 5 000 RE (quella da 5 000, meno il consumo da fermi) e nell'inventario c'è una cella sola (la vecchia, tornata al posto della nuova); scatto `cambio-cella-fatto` |
+
+La corsa e la riga dell'energia portano la carica dove serve con `/exoframe debug energy <RE>`. Alla fine i tre scatti di `client_shot.sh`, con il giocatore all'aperto in 0,5 −60 −5,5. Gli avvisi `moved too quickly` del server dopo un `tp` sono un artefatto noto della ricognizione; `moved wrongly` non deve comparire in `server.log` (`grep -c 'moved wrongly' <cartella>/server.log` → 0). Non prova il doppio W e lo scatto a interruttore, i suoni, i suggerimenti al passaggio del mouse e l'uscita dall'acqua a cella vuota: sono nella checklist per il PC della parte 3c-2.
+
 Variabili d'ambiente:
 
 | Variabile | Default | Significato |
@@ -93,7 +111,7 @@ Uno scatto non si salva se il client non è più vivo o il giocatore ha lasciato
 
 ## Quanto dura
 
-Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 8,5-10 minuti per variante (misurati 503-589 s sulle quattro varianti); la sequenza di `m3b_shots.sh` circa due minuti (misurati 115-132 s). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
+Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 8,5-10 minuti per variante (misurati 503-589 s sulle quattro varianti); la sequenza di `m3b_shots.sh` circa due minuti (misurati 115-132 s), quella di `m3c_shots.sh` altrettanto (misurati 116-127 s). La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
 
 ## Cosa non copre
 
