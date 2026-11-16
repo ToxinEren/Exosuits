@@ -14,6 +14,8 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityTicker;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -27,8 +29,10 @@ import net.minecraft.world.phys.BlockHitResult;
  * senza registrazioni lato client. Lo stato del blocco dice da che parte guarda ({@link #FACING}, orizzontale: verso
  * chi lo piazza, come una fornace), se tiene una cella ({@link #CELL}) e se sta caricando ({@link #LIT}, luce 7).
  * <p>
- * In questo primo passo e' vuoto: il clic a mano vuota dice solo "nessuna cella", e prova la cucitura del clic sulle
- * due versioni.
+ * Sul server la block entity fa un tick di carica a ogni tick del gioco ({@link #getTicker}) ed e' lei, in quel tick, a
+ * scrivere {@link #CELL} e {@link #LIT}; un comparatore accanto legge la carica della cella, da 0 a 15.
+ * <p>
+ * Il clic e' ancora quello del primo passo: a mano vuota dice solo "nessuna cella".
  */
 public final class ChargerBlock extends CompatEntityBlock {
     /** Il lato del fronte, orizzontale. */
@@ -56,6 +60,34 @@ public final class ChargerBlock extends CompatEntityBlock {
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
         return new ChargerBlockEntity(pos, state);
+    }
+
+    /**
+     * Il ticker della block entity: nessuno sul client (cio' che si vede sta nello stato del blocco), sul server
+     * {@link ChargerBlockEntity#serverTick} per il tipo del caricatore.
+     */
+    @Override
+    public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state,
+            BlockEntityType<T> type) {
+        if (level.isClientSide || type != ModBlockEntities.CHARGER.get()) {
+            return null;
+        }
+        return (l, p, s, be) -> ChargerBlockEntity.serverTick(l, p, s, (ChargerBlockEntity) be);
+    }
+
+    /** Il caricatore ha un'uscita per il comparatore. */
+    @Override
+    public boolean hasAnalogOutputSignal(BlockState state) {
+        return true;
+    }
+
+    /**
+     * L'uscita per il comparatore: la carica della cella da 0 a 15 ({@link ChargerBlockEntity#comparatorOutput}), 0 se
+     * la block entity manca.
+     */
+    @Override
+    public int getAnalogOutputSignal(BlockState state, Level level, BlockPos pos) {
+        return level.getBlockEntity(pos) instanceof ChargerBlockEntity charger ? charger.comparatorOutput() : 0;
     }
 
     /** Il fronte guarda verso chi lo piazza, come una fornace. */

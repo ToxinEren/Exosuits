@@ -12,6 +12,7 @@ import com.toxineren.exoframes.content.ChargerBlockEntity;
 import com.toxineren.exoframes.content.ChargerItem;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.energy.ChargerRule.Status;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -31,6 +32,7 @@ import net.minecraft.gametest.framework.GameTestGenerator;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.TextColor;
 import net.minecraft.network.chat.contents.TranslatableContents;
@@ -51,6 +53,11 @@ import net.minecraft.world.phys.Vec3;
  * vero del gioco ({@code clickBlock}: prima il blocco, poi l'oggetto in mano), cosi' prova la base del clic di ogni
  * versione; salvataggio e lettura passano dagli aiuti {@code saveBlockEntity} e {@code loadBlockEntity} di
  * {@link Compat#gameTests()}, che fanno cio' che fa il chunk. Gli aiuti comuni stanno in {@link GameTestKit}.
+ * <p>
+ * I test della carica chiamano a mano {@link ChargerBlockEntity#serverTick} ({@code tick}) dentro un solo tick del
+ * server, cosi' il ticker vero non si mette in mezzo e i numeri sono esatti; un solo test
+ * ({@code chargerRealTickerChargesInRealTime}) lascia fare al ticker vero. Chi ha messo qualcosa in un caricatore lo
+ * toglie con {@code removeCharger}: svuotato, poi aria.
  */
 public final class ChargerGameTests {
     /** Dove sta il caricatore dei test, relativo alla struttura. */
@@ -62,6 +69,11 @@ public final class ChargerGameTests {
      */
     private static final List<String> CHARGER_TEXT_KEYS =
             Stream.concat(Stream.of(ChargerBlock.STATUS_NO_CELL), ChargerItem.TOOLTIP_KEYS.stream()).toList();
+
+    /** Le cinque chiavi del caricatore nel tag della sua block entity (docs/compat.md, "Schema NBT"). */
+    private static final List<String> CHARGER_NBT_KEYS = List.of(NbtKeys.CHARGER_HAS_CELL,
+            NbtKeys.CHARGER_CELL_ENERGY, NbtKeys.CHARGER_REDSTONE, NbtKeys.CHARGER_RESERVE,
+            NbtKeys.CHARGER_CARRY_MILLI);
 
     /** I due file di lingua della mod, come risorse del jar. */
     private static final List<String> LANG_FILES = List.of("en_us.json", "it_it.json");
@@ -80,6 +92,14 @@ public final class ChargerGameTests {
         add(tests, "chargerTooltipTeachesTheControls", ChargerGameTests::chargerTooltipTeachesTheControls);
         add(tests, "everyItemAndBlockHasANameInBothLanguages",
                 ChargerGameTests::everyItemAndBlockHasANameInBothLanguages);
+        add(tests, "chargerChargesTwoAndAHalfRePerTick", ChargerGameTests::chargerChargesTwoAndAHalfRePerTick);
+        add(tests, "chargerStopsWhenFullOrOutOfRedstone", ChargerGameTests::chargerStopsWhenFullOrOutOfRedstone);
+        add(tests, "litTogglesTwiceWithoutLosingTheCell", ChargerGameTests::litTogglesTwiceWithoutLosingTheCell);
+        add(tests, "chargerRealTickerChargesInRealTime", ChargerGameTests::chargerRealTickerChargesInRealTime);
+        add(tests, "chargerSavesAndLoadsItsContents", ChargerGameTests::chargerSavesAndLoadsItsContents);
+        add(tests, "chargerLoadNeverThrowsAndNeverCutsACharge",
+                ChargerGameTests::chargerLoadNeverThrowsAndNeverCutsACharge);
+        add(tests, "comparatorReadsTheCharge", ChargerGameTests::comparatorReadsTheCharge);
         return tests;
     }
 
@@ -264,6 +284,239 @@ public final class ChargerGameTests {
     }
 
     /**
+     * Con i predefiniti (50 RE al secondo, 500 RE per polvere) la cella prende 2,5 RE per tick: 2 nei tick dispari, 3
+     * nei pari, con il riporto in millesimi. La prima polvere si brucia al primo tick e dura 200 tick; la seconda si
+     * brucia solo al tick 201. Lo stato del blocco dice cella presente e in carica.
+     */
+    private static void chargerChargesTwoAndAHalfRePerTick(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setCell(cell(0));
+        c.setDust(redstone(20));
+
+        tick(helper, c, 1);
+        assertContents(helper, c, "after 1 tick", 2, 19, 498);
+        helper.assertTrue(c.carryMilli() == 500, "carry after 1 tick " + c.carryMilli() + ", not 500");
+        assertCellAndLit(helper, POS, "after 1 tick", true, true);
+
+        tick(helper, c, 1);
+        assertContents(helper, c, "after 2 ticks", 5, 19, 495);
+
+        tick(helper, c, 198);
+        assertContents(helper, c, "after 200 ticks", 500, 19, 0);
+
+        tick(helper, c, 1);
+        assertContents(helper, c, "after 201 ticks", 502, 18, 498);
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * La carica si ferma da sola: a cella piena (la riserva resta per la cella dopo, e la luce si spegne al tick
+     * seguente) e quando non c'e' piu' ne' polvere ne' riserva. Una cella vuota messa dopo consuma la riserva rimasta
+     * senza altra polvere.
+     */
+    private static void chargerStopsWhenFullOrOutOfRedstone(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setCell(cell(9_999));
+        c.setDust(redstone(1));
+
+        tick(helper, c, 1);
+        assertContents(helper, c, "filling tick", 10_000, 0, 499);
+        assertCellAndLit(helper, POS, "filling tick", true, true);
+
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "tick after full", true, false);
+        helper.assertTrue(c.status() == Status.FULL, "status of a full cell: " + c.status());
+        assertContents(helper, c, "tick after full", 10_000, 0, 499);
+
+        c.setCell(cell(0));
+        tick(helper, c, 200);
+        assertContents(helper, c, "empty cell on the reserve left, 200 ticks", 499, 0, 0);
+
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "reserve spent", true, false);
+        helper.assertTrue(c.status() == Status.NO_REDSTONE, "status with nothing to burn: " + c.status());
+        assertContents(helper, c, "reserve spent", 499, 0, 0);
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * {@code lit} si accende e si spegne due volte e {@code cell} una: ogni volta il tick riscrive lo stato del blocco,
+     * e la block entity resta la stessa, non rimossa, e nulla cade a terra. Un cambio di proprieta' non e' una rottura.
+     */
+    private static void litTogglesTwiceWithoutLosingTheCell(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+
+        c.setCell(cell(0));
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "cell, nothing to burn", true, false);
+        assertSameEntityNothingDropped(helper, c, "cell, nothing to burn");
+
+        c.setDust(redstone(1));
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "cell and dust", true, true);
+        assertSameEntityNothingDropped(helper, c, "cell and dust");
+
+        c.setCell(cell(10_000));
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "full cell", true, false);
+        assertSameEntityNothingDropped(helper, c, "full cell");
+
+        c.setCell(cell(0));
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "empty cell on the reserve left", true, true);
+        assertSameEntityNothingDropped(helper, c, "empty cell on the reserve left");
+
+        c.setCell(ItemStack.EMPTY);
+        tick(helper, c, 1);
+        assertCellAndLit(helper, POS, "no cell", false, false);
+        assertSameEntityNothingDropped(helper, c, "no cell");
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * Il ticker vero del gioco ({@code ChargerBlock.getTicker}), senza chiamate a mano: dopo 40 tick del server la
+     * cella ha circa 100 RE (un tick in piu' o in meno secondo l'ordine fra il tick del livello e quello dei test), una
+     * polvere e' stata bruciata e lo stato del blocco dice cella presente e in carica.
+     */
+    private static void chargerRealTickerChargesInRealTime(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setCell(cell(0));
+        c.setDust(redstone(2));
+        helper.runAfterDelay(40, () -> runInSequence(helper, h -> {
+            int stored = energy(c.cell());
+            h.assertTrue(stored >= 95 && stored <= 105, "charge after 40 real ticks: " + stored + ", not about 100");
+            assertCellAndLit(h, POS, "after 40 real ticks", true, true);
+            h.assertTrue(c.dust().getCount() == 1, "dust after 40 real ticks: " + c.dust().getCount() + ", not 1");
+            removeCharger(h, POS);
+            h.succeed();
+        }));
+    }
+
+    /**
+     * Il contenuto passa dal salvataggio del chunk: cinque chiavi, tutte numeri (nessuno stack nell'NBT), con i valori
+     * di cella, polvere, riserva e riporto; la block entity letta da quel tag li ha uguali e riprende a caricare dal
+     * riporto salvato (il tick dopo sposta 3 RE, non 2).
+     */
+    private static void chargerSavesAndLoadsItsContents(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = helper.absolutePos(POS);
+        ChargerBlockEntity c = charger(helper, POS);
+        c.setCell(cell(1_234));
+        c.setDust(redstone(7));
+        tick(helper, c, 1);
+        assertContents(helper, c, "before saving", 1_236, 6, 498);
+        helper.assertTrue(c.carryMilli() == 500, "carry before saving " + c.carryMilli() + ", not 500");
+
+        CompoundTag saved = Compat.gameTests().saveBlockEntity(level, abs);
+        helper.assertTrue(saved.getBoolean(NbtKeys.CHARGER_HAS_CELL)
+                && saved.getInt(NbtKeys.CHARGER_CELL_ENERGY) == 1_236 && saved.getInt(NbtKeys.CHARGER_REDSTONE) == 6
+                && saved.getInt(NbtKeys.CHARGER_RESERVE) == 498
+                && saved.getInt(NbtKeys.CHARGER_CARRY_MILLI) == 500, "saved charger " + saved);
+        for (String key : CHARGER_NBT_KEYS) {
+            helper.assertTrue(saved.contains(key, Tag.TAG_ANY_NUMERIC), "saved key '" + key + "' is not a number: "
+                    + saved);
+        }
+
+        ChargerBlockEntity loaded = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs, saved);
+        helper.assertTrue(loaded != c && !loaded.cell().isEmpty(), "loaded charger has no cell, or is the saved one");
+        assertContents(helper, loaded, "loaded", 1_236, 6, 498);
+        helper.assertTrue(loaded.carryMilli() == 500, "loaded carry " + loaded.carryMilli() + ", not 500");
+
+        tick(helper, loaded, 1);
+        assertContents(helper, loaded, "loaded, one tick later", 1_239, 6, 495);
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * La lettura non lancia mai e non taglia mai una carica: una cella con piu' della capacita' della config resta
+     * com'e' (vale piena, e il tick non la tocca), gli altri valori si limitano, un valore mancante o del tipo
+     * sbagliato vale zero. Nemmeno {@code setCell} taglia: mette nello slot uno stack nuovo con la stessa carica e non
+     * tocca quello passato.
+     */
+    private static void chargerLoadNeverThrowsAndNeverCutsACharge(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = helper.absolutePos(POS);
+        charger(helper, POS);
+        CompoundTag empty = Compat.gameTests().saveBlockEntity(level, abs);
+
+        CompoundTag over = empty.copy();
+        over.putBoolean(NbtKeys.CHARGER_HAS_CELL, true);
+        over.putInt(NbtKeys.CHARGER_CELL_ENERGY, 40_000);
+        over.putInt(NbtKeys.CHARGER_REDSTONE, 500);
+        over.putInt(NbtKeys.CHARGER_RESERVE, -7);
+        over.putInt(NbtKeys.CHARGER_CARRY_MILLI, 5_000);
+        ChargerBlockEntity a = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs, over);
+        assertContents(helper, a, "over the capacity", 40_000, 64, 0);
+        helper.assertTrue(a.carryMilli() == 999, "carry read from 5000: " + a.carryMilli() + ", not 999");
+        helper.assertTrue(a.status() == Status.FULL && a.comparatorOutput() == 15,
+                "cell over the capacity: status " + a.status() + ", comparator " + a.comparatorOutput());
+        tick(helper, a, 1);
+        assertContents(helper, a, "over the capacity, one tick later", 40_000, 64, 0);
+
+        CompoundTag broken = empty.copy();
+        broken.putBoolean(NbtKeys.CHARGER_HAS_CELL, true);
+        broken.putInt(NbtKeys.CHARGER_CELL_ENERGY, -5);
+        broken.putString(NbtKeys.CHARGER_REDSTONE, "x");
+        broken.putInt(NbtKeys.CHARGER_RESERVE, 2_000_000);
+        ChargerBlockEntity b = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs, broken);
+        helper.assertTrue(!b.cell().isEmpty(), "the cell with a negative charge was not read");
+        assertContents(helper, b, "negative charge, redstone as a string", 0, 0, 1_000_000);
+
+        CompoundTag bare = new CompoundTag();
+        for (String key : List.of("id", "x", "y", "z")) {
+            bare.put(key, empty.get(key).copy());
+        }
+        ChargerBlockEntity c = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs, bare);
+        helper.assertTrue(c.cell().isEmpty() && c.dust().isEmpty() && c.reserve() == 0 && c.carryMilli() == 0,
+                "charger read from a bare tag: cell " + c.cell() + ", dust " + c.dust() + ", reserve " + c.reserve()
+                        + ", carry " + c.carryMilli());
+
+        // cell(40_000) non si puo' scrivere: una EnergyCell non tiene piu' della sua capacita'
+        ItemStack passed = cell(0);
+        Compat.itemData().setCellEnergy(passed, 40_000);
+        c.setCell(passed);
+        helper.assertTrue(energy(c.cell()) == 40_000, "setCell cut the charge to " + energy(c.cell()));
+        helper.assertTrue(c.cell() != passed, "setCell kept the stack it was given");
+        helper.assertTrue(energy(passed) == 40_000 && passed.getCount() == 1,
+                "setCell changed the stack it was given: " + passed + " with " + energy(passed) + " RE");
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * L'uscita per il comparatore: 0 senza cella, altrimenti la carica in quindicesimi della capacita', per difetto (15
+     * solo a cella piena).
+     */
+    private static void comparatorReadsTheCharge(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos abs = helper.absolutePos(POS);
+        ChargerBlockEntity c = charger(helper, POS);
+        BlockState state = stateAt(helper, POS);
+        helper.assertTrue(state.hasAnalogOutputSignal(), "the charger has no comparator output");
+        helper.assertTrue(state.getAnalogOutputSignal(level, abs) == 0,
+                "comparator output without a cell: " + state.getAnalogOutputSignal(level, abs));
+        int[][] cases = {{666, 0}, {667, 1}, {5_000, 7}, {9_999, 14}, {10_000, 15}};
+        for (int[] expected : cases) {
+            c.setCell(cell(expected[0]));
+            int output = state.getAnalogOutputSignal(level, abs);
+            helper.assertTrue(output == expected[1], "comparator output with " + expected[0] + " RE: " + output
+                    + ", not " + expected[1]);
+        }
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
      * Posa un caricatore nello stato predefinito nel punto relativo alla struttura e restituisce la sua block entity,
      * letta dal livello.
      */
@@ -277,6 +530,56 @@ public final class ChargerGameTests {
     /** Lo stato del blocco nel punto relativo alla struttura. */
     private static BlockState stateAt(GameTestHelper helper, BlockPos relative) {
         return helper.getLevel().getBlockState(helper.absolutePos(relative));
+    }
+
+    /**
+     * Chiama {@code times} volte il tick del server del caricatore, ogni volta con lo stato del blocco letto dal
+     * livello, come fa il ticker del gioco.
+     */
+    private static void tick(GameTestHelper helper, ChargerBlockEntity c, int times) {
+        ServerLevel level = helper.getLevel();
+        BlockPos pos = c.getBlockPos();
+        for (int i = 0; i < times; i++) {
+            ChargerBlockEntity.serverTick(level, pos, level.getBlockState(pos), c);
+        }
+    }
+
+    /** Toglie il caricatore nel punto relativo alla struttura: prima svuotato (cella e polvere), poi aria. */
+    private static void removeCharger(GameTestHelper helper, BlockPos relative) {
+        if (helper.getLevel().getBlockEntity(helper.absolutePos(relative)) instanceof ChargerBlockEntity c) {
+            c.setCell(ItemStack.EMPTY);
+            c.setDust(ItemStack.EMPTY);
+        }
+        helper.setBlock(relative, Blocks.AIR);
+    }
+
+    /** Uno stack di {@code count} polveri di redstone. */
+    private static ItemStack redstone(int count) {
+        return new ItemStack(Items.REDSTONE, count);
+    }
+
+    /** Carica della cella, numero di polveri e riserva del caricatore sono quelli attesi. */
+    private static void assertContents(GameTestHelper helper, ChargerBlockEntity c, String when, int energy, int dust,
+            int reserve) {
+        helper.assertTrue(energy(c.cell()) == energy && c.dust().getCount() == dust && c.reserve() == reserve,
+                when + ": cell " + energy(c.cell()) + " RE, dust " + c.dust().getCount() + ", reserve " + c.reserve()
+                        + "; expected " + energy + ", " + dust + ", " + reserve);
+    }
+
+    /** Le proprieta' {@code cell} e {@code lit} dello stato del blocco nel punto relativo sono quelle attese. */
+    private static void assertCellAndLit(GameTestHelper helper, BlockPos relative, String when, boolean cell,
+            boolean lit) {
+        BlockState state = stateAt(helper, relative);
+        helper.assertTrue(state.is(ModBlocks.CHARGER.get()) && state.getValue(ChargerBlock.CELL) == cell
+                && state.getValue(ChargerBlock.LIT) == lit, when + ": block state " + state + ", expected cell="
+                + cell + " lit=" + lit);
+    }
+
+    /** La block entity del livello e' ancora {@code c}, non rimossa, e nella struttura nulla e' a terra. */
+    private static void assertSameEntityNothingDropped(GameTestHelper helper, ChargerBlockEntity c, String when) {
+        helper.assertTrue(helper.getLevel().getBlockEntity(c.getBlockPos()) == c && !c.isRemoved(),
+                when + ": the block entity was replaced or removed");
+        helper.assertTrue(itemsIn(helper).isEmpty(), when + ": items on the ground " + itemsIn(helper));
     }
 
     /**
