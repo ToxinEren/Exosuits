@@ -87,6 +87,8 @@ public final class CellGameTests {
         add(tests, "cellSwapRefusedWithAMenuOpen", CellGameTests::cellSwapRefusedWithAMenuOpen);
         add(tests, "placedFrameSwapsCells", CellGameTests::placedFrameSwapsCells);
         add(tests, "keysHintOncePerSession", CellGameTests::keysHintOncePerSession);
+        add(tests, "cellSwapTakesTheOffhandCellAndRefusesASpectator",
+                CellGameTests::cellSwapTakesTheOffhandCellAndRefusesASpectator);
         return tests;
     }
 
@@ -226,9 +228,9 @@ public final class CellGameTests {
     }
 
     /**
-     * Un cambio cella arrivato dopo la morte (Review Focus 1): nessun record nasce dal nulla (con {@code update} al
-     * posto di {@code changeWorn} qui ne nascerebbe uno), la cella resta nell'inventario e il telaio lasciato alla
-     * morte tiene la sua.
+     * Un cambio cella arrivato dopo la morte (Review Focus 1): nessun record nasce dal nulla (il gestore si ferma
+     * senza un telaio indossato; {@code changeWorn} e' la seconda difesa), la cella resta nell'inventario e il telaio
+     * lasciato alla morte tiene la sua.
      */
     private static void cellSwapAfterDeathChangesNothing(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().survivalPlayer(helper);
@@ -454,6 +456,43 @@ public final class CellGameTests {
         helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) helper.getLevel().getEntity(id)),
                 "enter refused after the session");
         helper.assertTrue(messages(player, EntryHints.KEYS_HINT) == 2, "the keys hint not shown in a new session");
+        leaveTestFrame(player);
+        helper.succeed();
+    }
+
+    /**
+     * La sola cella migliore sta nella mano secondaria. Da spettatore il cambio si rifiuta in silenzio; tornato in
+     * sopravvivenza il cambio la prende e la vecchia torna nello stesso slot, senza toccare gli slot dell'armatura
+     * (la mano secondaria e' lo slot subito dopo). Celle e RE contati prima e dopo.
+     */
+    private static void cellSwapTakesTheOffhandCellAndRefusesASpectator(GameTestHelper helper) {
+        ServerPlayer player = Compat.gameTests().survivalPlayer(helper);
+        Inventory inventory = player.getInventory();
+        long t0 = now(helper);
+        wearScrap(helper, player, FEET, 1_000);
+        inventory.offhand.set(0, cell(9_000));
+        long[] before = cellsAndRe(player);
+        helper.assertTrue(Arrays.equals(before, new long[] {2, 10_000}), "premise: " + Arrays.toString(before));
+
+        player.setGameMode(GameType.SPECTATOR);
+        CellSwap.handle(player, t0);
+
+        helper.assertTrue(stored(player) == 1_000, "a spectator swapped the cell: " + stored(player));
+        helper.assertTrue(energy(inventory.offhand.get(0)) == 9_000,
+                "the off hand of a spectator changed: " + inventory.offhand.get(0));
+        helper.assertTrue(messages(player, CellSwap.NO_BETTER_CELL) == 0, "a spectator's swap said something");
+
+        player.setGameMode(GameType.SURVIVAL);
+        CellSwap.handle(player, t0 + 1);
+
+        helper.assertTrue(stored(player) == 9_000, "the off-hand cell not swapped in: " + stored(player));
+        ItemStack back = inventory.offhand.get(0);
+        helper.assertTrue(back.is(cellItem()) && back.getCount() == 1 && energy(back) == 1_000,
+                "the old cell is not back in the off hand: " + back);
+        assertPlaceholdersWorn(helper, player);
+        long[] after = cellsAndRe(player);
+        helper.assertTrue(Arrays.equals(before, after), "cells and RE before " + Arrays.toString(before) + ", after "
+                + Arrays.toString(after));
         leaveTestFrame(player);
         helper.succeed();
     }

@@ -5,7 +5,6 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.FrameStateAccess;
-import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
@@ -22,7 +21,6 @@ import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.Placeholders;
 import com.toxineren.exoframes.frame.SafeSpots;
-import com.toxineren.exoframes.frame.SlotGuard;
 import com.toxineren.exoframes.frame.SuitSize;
 import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
@@ -47,7 +45,6 @@ import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -56,7 +53,6 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.ItemEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -77,14 +73,15 @@ import net.minecraft.world.phys.Vec3;
  * {@code ./gradlew :<variante>:runGameTestServer} o con {@code bash tools/run_gametests.sh}.
  *
  * <p>Per aggiungere un test. I test stanno in una classe per area, in {@code gametest/}: {@code ExoframeGameTests} i
- * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, poi quelle delle parti seguenti. Ogni classe ha
- * un costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e
- * una riga {@code Compat.gameTests().register(Classe.class)} in {@code RedstoneExoframes.init()}. Un test e' un metodo
- * {@code private static void temaCaso(GameTestHelper helper)} che chiude con {@code helper.succeed()}, piu' una riga
- * {@code add(tests, "temaCaso", Classe::temaCaso);} nel generatore della sua classe ({@link #add}); i nomi sono unici
- * fra tutte le classi. tools/run_gametests.sh conta quelle righe in tutti i file di {@code gametest/} per sapere quanti
- * test aspettarsi; la lista e' la stessa sulle quattro varianti (il corpo di un test puo' dipendere dalla versione, la
- * lista no).
+ * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
+ * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, poi quelle della parte
+ * 3c-2. Ogni classe ha un costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator},
+ * {@code import static GameTestKit.*} e una riga {@code Compat.gameTests().register(Classe.class)} in
+ * {@code RedstoneExoframes.init()}. Un test e' un metodo {@code private static void temaCaso(GameTestHelper helper)}
+ * che chiude con {@code helper.succeed()}, piu' una riga {@code add(tests, "temaCaso", Classe::temaCaso);} nel
+ * generatore della sua classe ({@link #add}); i nomi sono unici fra tutte le classi. tools/run_gametests.sh conta
+ * quelle righe in tutti i file di {@code gametest/} per sapere quanti test aspettarsi; la lista e' la stessa sulle
+ * quattro varianti (il corpo di un test puo' dipendere dalla versione, la lista no).
  *
  * <p>Tutti i test girano sullo stesso server, con lo stesso dato salvato e lo stesso livello, e cominciano insieme,
  * ciascuno appena i chunk della sua struttura hanno le entita' caricate (di solito nello stesso tick; vedi
@@ -777,7 +774,10 @@ final class GameTestKit {
                 Math.max(a.getX(), b.getX()) + 1, Math.max(a.getY(), b.getY()) + 1, Math.max(a.getZ(), b.getZ()) + 1);
     }
 
-    /** Vasca: {@code fluid} fra gli angoli relativi dati (compresi), bordo di vetro, pavimento di pietra sotto. */
+    /**
+     * Vasca: {@code fluid} fra gli angoli relativi dati (compresi), bordo di vetro, pavimento di pietra sotto; bordo e
+     * pavimento (un blocco oltre gli angoli) devono stare dentro la struttura.
+     */
     static void fillPool(GameTestHelper helper, BlockPos from, BlockPos to, BlockState fluid) {
         int minX = Math.min(from.getX(), to.getX());
         int minY = Math.min(from.getY(), to.getY());

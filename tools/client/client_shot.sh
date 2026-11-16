@@ -31,7 +31,9 @@
 # Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
 # run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta, e
 # il file di config della mod (config/redstone_exoframes.json) si toglie nelle due cartelle: ogni esecuzione parte dai
-# predefiniti, che il mod riscrive all'avvio.
+# predefiniti, che il mod riscrive all'avvio. Salvo EXO_SHOT_SERVER_CONFIG: se e' impostata, il file che indica si
+# copia nella cartella del server al posto di quello tolto, e il solo server parte con quei valori (il client resta ai
+# predefiniti: cosi' si prova cio' che il client riceve dal server).
 # Una sola esecuzione per variante alla volta (lucchetto sulla cartella del server); esecuzioni su varianti diverse
 # in parallelo vogliono porte diverse (EXO_SHOT_PORT).
 #
@@ -45,12 +47,15 @@
 #   EXO_SHOT_H        altezza della finestra, default 540
 #   EXO_SHOT_USER     nome del giocatore offline, default Exo
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
+#   EXO_SHOT_SERVER_CONFIG
+#                     file di config della mod per il solo server (copiato in run-shot-server/config/); senza, i
+#                     predefiniti. Un file che non c'e' o non si legge ferma lo script prima di avviare qualunque cosa
 #
 # Uscite: 0 scatti salvati e log puliti; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato,
 # passo non riuscito, scatto, avvisi del mod fuori elenco in log-check.txt); 2 uso o ambiente sbagliati (variante,
-# passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, porta occupata, Xvfb che non parte,
-# OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa
-# non e' andato. Istruzioni complete in tools/client/README.md.
+# passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, file di EXO_SHOT_SERVER_CONFIG che
+# manca, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su
+# stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -149,6 +154,14 @@ for n in "$port" "$width" "$height" "$settle"; do
     case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_PORT, EXO_SHOT_W, EXO_SHOT_H ed EXO_SHOT_SETTLE vogliono numeri interi" ;; esac
 done
 case "$user" in '' | *[!A-Za-z0-9_]*) fatal "EXO_SHOT_USER: solo lettere, cifre e _ (nome di giocatore valido)" ;; esac
+# Config del solo server: il percorso si rende assoluto appena letto (piu' sotto lo script copia il file da un'altra
+# cartella), e un file che non c'e' ferma qui, prima di toccare la cartella degli scatti e di avviare qualunque cosa.
+server_config=${EXO_SHOT_SERVER_CONFIG:-}
+if [ -n "$server_config" ]; then
+    case "$server_config" in /*) ;; *) server_config="$PWD/$server_config" ;; esac
+    [ -f "$server_config" ] && [ -r "$server_config" ] \
+        || fatal "EXO_SHOT_SERVER_CONFIG: file non trovato o non leggibile: $server_config"
+fi
 rport=$((port + 10))
 # Password RCON nuova a ogni esecuzione: non si stampa, non va sulla riga di comando (rcon.py la legge dalla variabile
 # d'ambiente EXO_RCON_PASSWORD) e resta solo in server.properties, nella cartella del server, con permessi 600.
@@ -183,6 +196,11 @@ rm -rf "$sdir/world"
 # Config della mod ai predefiniti: le soglie degli script (999 RE sotto il 10 %, il fattore 0,85, i 2 s del cambio
 # cella) li presuppongono, e un file cambiato a mano in una di queste cartelle resterebbe da un'esecuzione all'altra.
 rm -f "$sdir/config/redstone_exoframes.json" "$cdir/config/redstone_exoframes.json"
+# EXO_SHOT_SERVER_CONFIG: il server, e solo lui, parte con il file indicato; la cartella del client resta senza file.
+if [ -n "$server_config" ]; then
+    mkdir -p "$sdir/config" && cp "$server_config" "$sdir/config/redstone_exoframes.json" \
+        || fatal "EXO_SHOT_SERVER_CONFIG: non riesco a copiare $server_config in $sdir/config/"
+fi
 echo "eula=true" >"$sdir/eula.txt"
 # Server e RCON ascoltano solo su 127.0.0.1 (server-ip vale per entrambi): l'account offline ha op e RCON esegue
 # qualunque comando, quindi nessuno da fuori deve poterli raggiungere.

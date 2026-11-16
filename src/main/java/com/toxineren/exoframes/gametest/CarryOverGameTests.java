@@ -123,9 +123,10 @@ public final class CarryOverGameTests {
                 seen[0] = true;
             }
         };
-        TickEvent.PLAYER_PRE.register(listener);
         int start = player.tickCount;
         helper.assertTrue(player.hurt(player.damageSources().cactus(), 1.0F), "spawn protection still on");
+        // registrato solo dopo l'ultima asserzione fuori dal try: un fallimento prima non lascia l'ascoltatore
+        TickEvent.PLAYER_PRE.register(listener);
         helper.runAfterDelay(5, () -> {
             try {
                 helper.assertTrue(player.tickCount == start + 5,

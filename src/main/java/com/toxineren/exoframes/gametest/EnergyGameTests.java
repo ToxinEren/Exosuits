@@ -103,6 +103,9 @@ public final class EnergyGameTests {
         add(tests, "debugEnergyClampsToTheCapacity", EnergyGameTests::debugEnergyClampsToTheCapacity);
         add(tests, "debugEnergyWithoutAFrameChangesNothing", EnergyGameTests::debugEnergyWithoutAFrameChangesNothing);
         add(tests, "debugEnergyWithoutACellSaysSo", EnergyGameTests::debugEnergyWithoutACellSaysSo);
+        add(tests, "firstEvaluationOfAnEmptyCellTellsWithoutSound",
+                EnergyGameTests::firstEvaluationOfAnEmptyCellTellsWithoutSound);
+        add(tests, "improvementFromEmptyToLowIsSilent", EnergyGameTests::improvementFromEmptyToLowIsSilent);
         return tests;
     }
 
@@ -759,6 +762,64 @@ public final class EnergyGameTests {
         Set<ResourceLocation> dirty = new HashSet<>(Compat.gameTests().attributesToSync(player));
         dirty.retainAll(MOD_ATTRIBUTES);
         return dirty;
+    }
+
+    /**
+     * La prima valutazione di un record con la cella gia' vuota (rientro nel server, rinascita) da' il messaggio
+     * dell'energia esaurita senza suono, e non quello dell'energia bassa. La cella parte da 1 RE e si svuota con
+     * {@code setStored} prima del primo tick: il registratore non vede il suono {@code ENTER} dell'ingresso.
+     */
+    private static void firstEvaluationOfAnEmptyCellTellsWithoutSound(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        wearScrap(helper, p, FEET, 1);
+        setStored(p, 0);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            SuitTick.tick(p, t0);
+            int empty = messages(p, SuitTick.ENERGY_EMPTY);
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            helper.assertTrue(empty == 1, empty + " energy-empty messages, expected 1");
+            helper.assertTrue(low == 0, low + " energy-low messages, expected 0");
+            helper.assertTrue(sounds.sounds().isEmpty(), "sounds at the first evaluation: " + sounds.sounds());
+        }
+        leaveTestFrame(p);
+        helper.succeed();
+    }
+
+    /**
+     * Da una cella vuota a una sotto il 10 % (500 RE) e' un miglioramento: ne' il messaggio ne' il suono dell'energia
+     * bassa, e nemmeno poi a 5 000 RE. Il solo messaggio e il solo suono sono quelli dello svuotamento.
+     */
+    private static void improvementFromEmptyToLowIsSilent(GameTestHelper helper) {
+        long t0 = now(helper);
+        ServerPlayer p = prepared(helper, FEET, 5_000, t0);
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            setStored(p, 0);
+            SuitTick.tick(p, t0 + 1);
+            int empty = messages(p, SuitTick.ENERGY_EMPTY);
+            helper.assertTrue(empty == 1, empty + " energy-empty messages, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_EMPTY)), "sounds: " + sounds.sounds());
+
+            setStored(p, 500);
+            SuitTick.tick(p, t0 + 2);
+            int low = messages(p, SuitTick.ENERGY_LOW);
+            empty = messages(p, SuitTick.ENERGY_EMPTY);
+            helper.assertTrue(low == 0, low + " energy-low messages from empty to low, expected 0");
+            helper.assertTrue(empty == 1, empty + " energy-empty messages from empty to low, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_EMPTY)),
+                    "sounds from empty to low: " + sounds.sounds());
+
+            setStored(p, 5_000);
+            SuitTick.tick(p, t0 + 3);
+            low = messages(p, SuitTick.ENERGY_LOW);
+            empty = messages(p, SuitTick.ENERGY_EMPTY);
+            helper.assertTrue(low == 0, low + " energy-low messages from low to normal, expected 0");
+            helper.assertTrue(empty == 1, empty + " energy-empty messages from low to normal, expected 1");
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.ENERGY_EMPTY)),
+                    "sounds from low to normal: " + sounds.sounds());
+        }
+        leaveTestFrame(p);
+        helper.succeed();
     }
 
     /**

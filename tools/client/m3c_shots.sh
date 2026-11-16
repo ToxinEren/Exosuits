@@ -117,6 +117,8 @@ steps=(
 )
 
 echo "=== $variant m3c"
+# un'uscita anticipata di client_shot.sh (uso o ambiente sbagliati) non lascia leggere il log di un'altra esecuzione
+rm -f "$out/server.log"
 bash "$here/client_shot.sh" "$variant" "$out" "${steps[@]}"
 code=$?
 # Client e server d'accordo sul movimento (acqua, gradino): il server scrive "moved wrongly" quando la posizione del
