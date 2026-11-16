@@ -3,6 +3,8 @@ package com.toxineren.exoframes;
 import com.toxineren.exoframes.command.ExoframeCommand;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.configfile.ConfigFile;
+import com.toxineren.exoframes.content.ModBlockEntities;
+import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
@@ -22,6 +24,7 @@ import com.toxineren.exoframes.frame.SuitSize;
 import com.toxineren.exoframes.frame.SuitTick;
 import com.toxineren.exoframes.gametest.CarryOverGameTests;
 import com.toxineren.exoframes.gametest.CellGameTests;
+import com.toxineren.exoframes.gametest.ChargerGameTests;
 import com.toxineren.exoframes.gametest.DamageGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
@@ -59,7 +62,9 @@ public final class RedstoneExoframes {
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
         Compat.armorMaterials().register(); // prima degli item: su 1.21.1 i pezzi usano il materiale registrato
         ModEntities.register(); // prima degli item: l'oggetto che piazza il telaio usa il tipo dell'entita'
+        ModBlocks.register(); // prima degli item: l'oggetto del caricatore usa il suo blocco
         ModItems.register();
+        ModBlockEntities.register(); // dopo i blocchi: il tipo della block entity nasce con il blocco del caricatore
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
         FrameEntry.registerNet(); // pacchetto C2S dell'uscita dal telaio, su entrambi i lati
@@ -89,6 +94,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(DamageGameTests.class);
         Compat.gameTests().register(MovementGameTests.class);
         Compat.gameTests().register(CellGameTests.class);
+        Compat.gameTests().register(ChargerGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

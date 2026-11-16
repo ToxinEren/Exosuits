@@ -55,6 +55,10 @@ public final class ModItems {
     public static final RegistrySupplier<Item> SUIT_MODEL = ITEMS.register("suit_model",
             () -> Compat.suitAssets().newSuitModelItem(new Item.Properties()));
 
+    /** L'oggetto che posa il caricatore di celle (design §12.11); il suo nome e' quello del blocco. */
+    public static final RegistrySupplier<ChargerItem> CHARGER = ITEMS.register("charger",
+            () -> new ChargerItem(ModBlocks.CHARGER.get(), new Item.Properties()));
+
     private ModItems() {
     }
 

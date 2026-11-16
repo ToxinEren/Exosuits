@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "redstone_exoframes:block/charger_top",
+    "front": "redstone_exoframes:block/charger_front_cell",
+    "side": "redstone_exoframes:block/charger_side"
+  }
+}

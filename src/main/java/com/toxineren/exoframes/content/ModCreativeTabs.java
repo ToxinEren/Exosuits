@@ -11,8 +11,8 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Tab creative del mod. L'icona e' un Supplier: l'item viene risolto solo quando la tab la chiede; gli item entrano
- * nella tab con append: l'oggetto telaio, i quattro pezzi Rottame e poi la cella carica (uno stack con dati, quindi
- * appendStack).
+ * nella tab con append: l'oggetto telaio, i quattro pezzi Rottame, la cella carica (uno stack con dati, quindi
+ * appendStack) e per ultimo il caricatore.
  */
 public final class ModCreativeTabs {
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(RedstoneExoframes.MOD_ID, Registries.CREATIVE_MODE_TAB);
@@ -31,5 +31,6 @@ public final class ModCreativeTabs {
         CreativeTabRegistry.append(MAIN, ModItems.SCRAP_HELMET, ModItems.SCRAP_TORSO, ModItems.SCRAP_ARM,
                 ModItems.SCRAP_LEG);
         CreativeTabRegistry.appendStack(MAIN, CellItem::charged);
+        CreativeTabRegistry.append(MAIN, ModItems.CHARGER);
     }
 }

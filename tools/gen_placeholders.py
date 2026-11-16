@@ -16,6 +16,7 @@ import zlib
 MAIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "main")
 ROOT = os.path.join(MAIN, "resources")
 ITEM_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "item")
+BLOCK_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "block")
 CELL_PATH = os.path.join(ITEM_DIR, "redstone_cell.png")
 ICON_PATH = os.path.join(ROOT, "icon.png")
 # Texture del layer armatura vanilla di 1.20.1 per il materiale "redstone_exoframes_frame" (nome senza namespace, con
@@ -339,6 +340,83 @@ SCRAP_ICONS = (("scrap_helmet", SCRAP_HELMET), ("scrap_torso", SCRAP_TORSO),
                ("scrap_arm", SCRAP_ARM), ("scrap_leg", SCRAP_LEG), ("exoframe", EXOFRAME))
 
 
+# Caricatore di celle (parte 3c-2): un cubo pieno, quindi cinque texture 16x16 del tutto opache. Piastra grigio ferro
+# con il bordo scuro per i lati e la sommita'; sul fronte un alloggiamento, vuoto, con la cella spenta o con la cella e
+# tre tacche rosse accese.
+PLATE = (132, 136, 142, 255)
+PLATE_LIGHT = (164, 168, 174, 255)
+PLATE_DARK = (98, 102, 110, 255)
+PLATE_EDGE = (56, 58, 66, 255)
+HOUSING = (26, 26, 32, 255)
+HOUSING_BACK = (40, 40, 48, 255)
+CHARGER_RED = (224, 32, 28, 255)
+
+
+def solid(px):
+    """Restituisce px se ogni pixel e' opaco (alfa 255); altrimenti lancia: un cubo pieno non ha buchi."""
+    for y, row in enumerate(px):
+        for x, color in enumerate(row):
+            if color[3] != 255:
+                raise ValueError("pixel %d,%d is not opaque" % (x, y))
+    return px
+
+
+def charger_plate():
+    """Piastra 16x16 grigio ferro: bordo scuro, luce in alto e a sinistra, ombra in basso e a destra, rivetti."""
+    px = canvas(16, 16)
+    rect(px, 0, 0, 15, 15, PLATE_EDGE)
+    rect(px, 1, 1, 14, 14, PLATE)
+    rect(px, 1, 1, 14, 1, PLATE_LIGHT)
+    rect(px, 1, 1, 1, 14, PLATE_LIGHT)
+    rect(px, 1, 14, 14, 14, PLATE_DARK)
+    rect(px, 14, 1, 14, 14, PLATE_DARK)
+    for x, y in ((2, 2), (13, 2), (2, 13), (13, 13)):
+        px[y][x] = PLATE_EDGE
+    return px
+
+
+def draw_charger_side():
+    """Lato del caricatore: la piastra con una scanalatura orizzontale a meta'."""
+    px = charger_plate()
+    rect(px, 2, 7, 13, 7, PLATE_DARK)
+    rect(px, 2, 8, 13, 8, PLATE_LIGHT)
+    return solid(px)
+
+
+def draw_charger_top():
+    """Sommita' del caricatore: la piastra con una botola quadrata al centro."""
+    px = charger_plate()
+    rect(px, 4, 4, 11, 11, PLATE_EDGE)
+    rect(px, 5, 5, 10, 10, PLATE_DARK)
+    rect(px, 5, 5, 10, 5, PLATE)
+    rect(px, 7, 7, 8, 8, PLATE_EDGE)
+    return solid(px)
+
+
+def charger_front(cell, lit):
+    """Fronte del caricatore: la piastra con l'alloggiamento; se cell, dentro c'e' la cella grigio-rame con tre tacche,
+    rosse se lit."""
+    px = charger_plate()
+    rect(px, 3, 2, 12, 13, PLATE_EDGE)       # cornice dell'alloggiamento
+    rect(px, 4, 3, 11, 12, HOUSING)          # alloggiamento vuoto
+    rect(px, 4, 3, 11, 3, HOUSING_BACK)
+    if cell:
+        shades = (COPPER_DARK, COPPER, COPPER_LIGHT, COPPER, COPPER_DARK, COPPER_DARK)
+        for i, color in enumerate(shades):
+            rect(px, 5 + i, 5, 5 + i, 10, color)
+        rect(px, 5, 4, 10, 4, METAL)         # tappi metallici della cella
+        rect(px, 5, 11, 10, 11, METAL_DARK)
+        for y in (6, 8, 10):                 # tre tacche: spente o di redstone accesa
+            rect(px, 6, y, 9, y, CHARGER_RED if lit else OUTLINE)
+    return solid(px)
+
+
+CHARGER_TEXTURES = (("charger_top", draw_charger_top), ("charger_side", draw_charger_side),
+                    ("charger_front", lambda: charger_front(False, False)),
+                    ("charger_front_cell", lambda: charger_front(True, False)),
+                    ("charger_front_lit", lambda: charger_front(True, True)))
+
+
 def outputs():
     """I file che il generatore scrive: (percorso nei sorgenti, larghezza, altezza, funzione che disegna)."""
     files = [(CELL_PATH, 16, 16, draw_cell), (ICON_PATH, 64, 64, draw_icon)]
@@ -346,6 +424,8 @@ def outputs():
         files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, draw))
     for name, rows in SCRAP_ICONS:
         files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, lambda rows=rows: draw_sprite(rows)))
+    for name, draw in CHARGER_TEXTURES:
+        files.append((os.path.join(BLOCK_DIR, name + ".png"), 16, 16, draw))
     for path in ARMOR_LAYER_PATHS:
         files.append((path, 64, 32, lambda: canvas(64, 32)))
     return files

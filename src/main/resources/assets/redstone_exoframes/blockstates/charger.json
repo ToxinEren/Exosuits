@@ -1,0 +1,64 @@
+{
+  "variants": {
+    "cell=false,facing=north,lit=false": {
+      "model": "redstone_exoframes:block/charger"
+    },
+    "cell=false,facing=north,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit"
+    },
+    "cell=false,facing=east,lit=false": {
+      "model": "redstone_exoframes:block/charger",
+      "y": 90
+    },
+    "cell=false,facing=east,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 90
+    },
+    "cell=false,facing=south,lit=false": {
+      "model": "redstone_exoframes:block/charger",
+      "y": 180
+    },
+    "cell=false,facing=south,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 180
+    },
+    "cell=false,facing=west,lit=false": {
+      "model": "redstone_exoframes:block/charger",
+      "y": 270
+    },
+    "cell=false,facing=west,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 270
+    },
+    "cell=true,facing=north,lit=false": {
+      "model": "redstone_exoframes:block/charger_cell"
+    },
+    "cell=true,facing=north,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit"
+    },
+    "cell=true,facing=east,lit=false": {
+      "model": "redstone_exoframes:block/charger_cell",
+      "y": 90
+    },
+    "cell=true,facing=east,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 90
+    },
+    "cell=true,facing=south,lit=false": {
+      "model": "redstone_exoframes:block/charger_cell",
+      "y": 180
+    },
+    "cell=true,facing=south,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 180
+    },
+    "cell=true,facing=west,lit=false": {
+      "model": "redstone_exoframes:block/charger_cell",
+      "y": 270
+    },
+    "cell=true,facing=west,lit=true": {
+      "model": "redstone_exoframes:block/charger_lit",
+      "y": 270
+    }
+  }
+}

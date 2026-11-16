@@ -14,6 +14,9 @@ package com.toxineren.exoframes.compat;
  * {@link #ACTIVE} e {@link #CARRY_MILLI} esistono solo nello stato del telaio. Il registro dei telai del dato salvato
  * (FrameStateSavedData) ha le sue chiavi, dalla radice del file: {@link #SCHEMA}, {@link #WORN}, {@link #PLACED} e
  * quelle dei record.
+ * <p>
+ * Le chiavi del caricatore ({@code CHARGER_*}) non stanno sotto {@link #ROOT}: stanno alla radice del tag della sua
+ * block entity, nei dati del chunk, accanto a {@code id}, {@code x}, {@code y} e {@code z} del gioco.
  */
 public final class NbtKeys {
     /** Tag radice che contiene tutti i dati della mod sullo stack. */
@@ -134,6 +137,27 @@ public final class NbtKeys {
      * sugli item.
      */
     public static final String SCHEMA = "schema";
+
+    /** Vero se nel caricatore c'e' una cella (boolean), alla radice del tag del caricatore. */
+    public static final String CHARGER_HAS_CELL = "has_cell";
+    /**
+     * Carica della cella nel caricatore (int, almeno 0; mai tagliata alla capacita' in lettura), alla radice del tag
+     * del caricatore; conta solo con {@link #CHARGER_HAS_CELL} vero.
+     */
+    public static final String CHARGER_CELL_ENERGY = "cell_energy";
+    /** Numero di polveri di redstone nel caricatore (int in [0, 64]), alla radice del tag del caricatore. */
+    public static final String CHARGER_REDSTONE = "redstone";
+    /**
+     * Riserva del caricatore: i RE della polvere che sta bruciando, non ancora passati alla cella (int in
+     * [0, ConfigValidation#MAX_RE_PER_REDSTONE]), alla radice del tag del caricatore.
+     */
+    public static final String CHARGER_RESERVE = "reserve";
+    /**
+     * Riporto della carica in millesimi di RE (int in [0, 999]), alla radice del tag del caricatore. Non e'
+     * {@link #CARRY_MILLI}, il riporto del danno nella voce di un pezzo dello stato del telaio: stesso nome sul disco,
+     * posti diversi.
+     */
+    public static final String CHARGER_CARRY_MILLI = "carry_milli";
 
     private NbtKeys() {
     }

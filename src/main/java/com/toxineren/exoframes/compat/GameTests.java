@@ -16,6 +16,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
  * Aggancio dei test in gioco (GameTest vanilla) al loader: l'unico punto con le differenze di registrazione tra
@@ -166,6 +167,22 @@ public interface GameTests {
      * nulla e non carica l'altra dimensione. Esiste solo per i test.
      */
     boolean portalsAccept(Entity entity, ServerLevel destination);
+
+    /**
+     * Il tag della block entity in quel punto come lo scrive il salvataggio del chunk ({@code saveWithFullMetadata},
+     * con i registri del livello su 1.21.1): i dati della block entity con {@code id}, {@code x}, {@code y} e
+     * {@code z}. {@link IllegalStateException} se li' non c'e' una block entity. Esiste solo per i test.
+     */
+    CompoundTag saveBlockEntity(ServerLevel level, BlockPos pos);
+
+    /**
+     * Crea una block entity nuova da {@code saved} come fa il caricamento del chunk ({@code BlockEntity.loadStatic} con
+     * lo stato del blocco in quel punto, e i registri del livello su 1.21.1), la mette nel livello al posto di quella
+     * che c'e' ({@code Level.setBlockEntity}, che segna la vecchia come rimossa) e la restituisce.
+     * {@link IllegalStateException} se da {@code saved} non nasce una block entity (id sconosciuto, o un tipo che non
+     * vale per quel blocco). Esiste solo per i test.
+     */
+    BlockEntity loadBlockEntity(ServerLevel level, BlockPos pos, CompoundTag saved);
 
     /**
      * Comincia a contare gli eventi di gioco {@code EQUIP} che arrivano entro 16 blocchi da {@code center}, finche' il

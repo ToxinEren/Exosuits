@@ -507,16 +507,6 @@ public final class CellGameTests {
         return ModItems.REDSTONE_CELL.get();
     }
 
-    /** Uno stack di cella con {@code stored} RE. */
-    private static ItemStack cell(int stored) {
-        return CellItem.fromCell(new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, stored));
-    }
-
-    /** La carica scritta nei dati dello stack. */
-    private static int energy(ItemStack stack) {
-        return Compat.itemData().cellEnergy(stack);
-    }
-
     /** La carica della cella del telaio piazzato; -1 se il record o la cella mancano. */
     private static int placedCharge(MinecraftServer server, UUID frameId) {
         return Compat.frameState().placed(server, frameId).map(p -> p.state().cell())

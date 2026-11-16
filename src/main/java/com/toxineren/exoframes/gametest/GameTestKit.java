@@ -8,6 +8,7 @@ import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
+import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.armor.Piece;
@@ -74,9 +75,10 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>Per aggiungere un test. I test stanno in una classe per area, in {@code gametest/}: {@code ExoframeGameTests} i
  * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
- * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, poi quelle della parte
- * 3c-2. Ogni classe ha un costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator},
- * {@code import static GameTestKit.*} e una riga {@code Compat.gameTests().register(Classe.class)} in
+ * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests}
+ * e le altre della parte 3c-2. Ogni classe ha un costruttore pubblico senza argomenti, un metodo
+ * {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
+ * {@code Compat.gameTests().register(Classe.class)} in
  * {@code RedstoneExoframes.init()}. Un test e' un metodo {@code private static void temaCaso(GameTestHelper helper)}
  * che chiude con {@code helper.succeed()}, piu' una riga {@code add(tests, "temaCaso", Classe::temaCaso);} nel
  * generatore della sua classe ({@link #add}); i nomi sono unici fra tutte le classi. tools/run_gametests.sh conta
@@ -764,6 +766,33 @@ final class GameTestKit {
     static int carry(ServerPlayer player, PieceSlot slot) {
         return Compat.frameState().get(player).orElseThrow(() -> new IllegalStateException("no worn frame"))
                 .damageCarryMilli().getOrDefault(slot, 0);
+    }
+
+    /** Uno stack di cella con {@code stored} RE. */
+    static ItemStack cell(int stored) {
+        return CellItem.fromCell(new EnergyCell(RedstoneExoframes.config().energy.cellCapacity, stored));
+    }
+
+    /** La carica scritta nei dati dello stack. */
+    static int energy(ItemStack stack) {
+        return Compat.itemData().cellEnergy(stack);
+    }
+
+    /**
+     * Il clic destro vero del gioco sul blocco relativo alla struttura, con la mano data e cio' che tiene: lo stesso
+     * percorso di un giocatore ({@code ServerPlayerGameMode.useItemOn}: prima il blocco, poi l'oggetto in mano), sulla
+     * faccia di sopra, al centro del blocco. Restituisce il risultato del gioco.
+     */
+    static InteractionResult clickBlock(GameTestHelper helper, ServerPlayer player, BlockPos relative,
+            InteractionHand hand) {
+        BlockPos abs = helper.absolutePos(relative);
+        return player.gameMode.useItemOn(player, helper.getLevel(), player.getItemInHand(hand), hand,
+                new BlockHitResult(Vec3.atCenterOf(abs), Direction.UP, abs, false));
+    }
+
+    /** Gli oggetti a terra dentro il riquadro della struttura del test ({@link #structureBox}). */
+    static List<ItemEntity> itemsIn(GameTestHelper helper) {
+        return helper.getLevel().getEntitiesOfClass(ItemEntity.class, structureBox(helper));
     }
 
     /** Il riquadro assoluto della struttura del test ({@value #STRUCTURE_SIZE} blocchi per lato), ruotata o no. */

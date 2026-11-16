@@ -33,6 +33,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.BlockPositionSource;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.level.gameevent.GameEventListener;
@@ -324,6 +325,33 @@ public final class GameTestsImpl implements GameTests {
         //?} else {
         /*return entity.canChangeDimensions() || TheEndGatewayBlockEntity.canEntityTeleport(entity);
         *///?}
+    }
+
+    @Override
+    public CompoundTag saveBlockEntity(ServerLevel level, BlockPos pos) {
+        BlockEntity entity = level.getBlockEntity(pos);
+        if (entity == null) {
+            throw new IllegalStateException("no block entity at " + pos);
+        }
+        //? if >=1.21 {
+        return entity.saveWithFullMetadata(level.registryAccess());
+        //?} else {
+        /*return entity.saveWithFullMetadata();
+        *///?}
+    }
+
+    @Override
+    public BlockEntity loadBlockEntity(ServerLevel level, BlockPos pos, CompoundTag saved) {
+        //? if >=1.21 {
+        BlockEntity loaded = BlockEntity.loadStatic(pos, level.getBlockState(pos), saved, level.registryAccess());
+        //?} else {
+        /*BlockEntity loaded = BlockEntity.loadStatic(pos, level.getBlockState(pos), saved);*/
+        //?}
+        if (loaded == null) {
+            throw new IllegalStateException("no block entity loaded at " + pos + " from " + saved);
+        }
+        level.setBlockEntity(loaded);
+        return loaded;
     }
 
     /**

@@ -33,7 +33,7 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
 byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva degli oggetti
-e dell'icona. Scrive tredici file:
+e dell'icona. Scrive diciotto file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -43,6 +43,9 @@ e dell'icona. Scrive tredici file:
   - `exoframe_helmet.png`, `exoframe_torso.png`, `exoframe_legs.png`, `exoframe_boots.png`: i segnaposto che
     stanno negli slot armatura di chi indossa il telaio (`exoframe_torso.png` è anche la texture dell'oggetto di
     prova `suit_model`);
+- `src/main/resources/assets/redstone_exoframes/textures/block/` (16x16, del tutto opache: il blocco è un cubo pieno):
+  `charger_top.png`, `charger_side.png` e i tre fronti del caricatore, `charger_front.png` (alloggiamento vuoto),
+  `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese);
 - `src/main/resources-mc1.20.1/assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png` e
   `_layer_2.png` (64x32), solo nei jar 1.20.1: completamente trasparenti, perché il layer armatura di vanilla non
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
@@ -53,4 +56,4 @@ qui ma da `tools/art/build.py`.
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i tredici file con quelli committati, pixel per pixel.
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciotto file con quelli committati, pixel per pixel.
