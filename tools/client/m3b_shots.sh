@@ -39,6 +39,8 @@
 # telaio. Dura circa due minuti a cache calde (misurati 115-132 s sulle quattro varianti). Le variabili d'ambiente
 # sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
 set -u
+# Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
+unset EXO_SHOT_SERVER_CONFIG
 
 here=$(cd "$(dirname "$0")" && pwd)
 
