@@ -13,6 +13,8 @@ import com.toxineren.exoframes.content.ChargerItem;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.energy.ChargerRule.Status;
+import com.toxineren.exoframes.frame.FrameSounds;
+import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -40,11 +42,15 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -63,12 +69,19 @@ public final class ChargerGameTests {
     /** Dove sta il caricatore dei test, relativo alla struttura. */
     private static final BlockPos POS = new BlockPos(3, 2, 3);
 
+    /** Dove stanno i piedi del giocatore che clicca, relativo alla struttura: due blocchi a sud del caricatore. */
+    private static final Vec3 STAND = new Vec3(3.5, 2.0, 5.5);
+
+    /** Le quattro chiavi dello stato che il clic mostra nella barra delle azioni. */
+    private static final List<String> STATUS_KEYS = List.of(ChargerBlock.STATUS_NO_CELL, ChargerBlock.STATUS_FULL,
+            ChargerBlock.STATUS_NO_REDSTONE, ChargerBlock.STATUS_CHARGING);
+
     /**
      * Le chiavi dei testi del caricatore che il codice tiene in costanti: stato nella barra delle azioni e righe del
      * suggerimento. {@code everyItemAndBlockHasANameInBothLanguages} le cerca nei due file di lingua.
      */
-    private static final List<String> CHARGER_TEXT_KEYS =
-            Stream.concat(Stream.of(ChargerBlock.STATUS_NO_CELL), ChargerItem.TOOLTIP_KEYS.stream()).toList();
+    private static final List<String> CHARGER_TEXT_KEYS = Stream.concat(STATUS_KEYS.stream(),
+            ChargerItem.TOOLTIP_KEYS.stream()).toList();
 
     /** Le cinque chiavi del caricatore nel tag della sua block entity (docs/compat.md, "Schema NBT"). */
     private static final List<String> CHARGER_NBT_KEYS = List.of(NbtKeys.CHARGER_HAS_CELL,
@@ -100,6 +113,15 @@ public final class ChargerGameTests {
         add(tests, "chargerLoadNeverThrowsAndNeverCutsACharge",
                 ChargerGameTests::chargerLoadNeverThrowsAndNeverCutsACharge);
         add(tests, "comparatorReadsTheCharge", ChargerGameTests::comparatorReadsTheCharge);
+        add(tests, "cellClickInsertsIntoAnEmptyCharger", ChargerGameTests::cellClickInsertsIntoAnEmptyCharger);
+        add(tests, "cellClickSwapsWithTheCellInside", ChargerGameTests::cellClickSwapsWithTheCellInside);
+        add(tests, "dustClickMovesWhatFits", ChargerGameTests::dustClickMovesWhatFits);
+        add(tests, "emptyHandTakesTheCellThenTheDust", ChargerGameTests::emptyHandTakesTheCellThenTheDust);
+        add(tests, "sneakingWithEmptyHandsOnlyTellsTheStatus",
+                ChargerGameTests::sneakingWithEmptyHandsOnlyTellsTheStatus);
+        add(tests, "otherItemsAndTheOffHandPass", ChargerGameTests::otherItemsAndTheOffHandPass);
+        add(tests, "creativeHandIsNotConsumed", ChargerGameTests::creativeHandIsNotConsumed);
+        add(tests, "twoPlayersOneCell", ChargerGameTests::twoPlayersOneCell);
         return tests;
     }
 
@@ -136,9 +158,8 @@ public final class ChargerGameTests {
     }
 
     /**
-     * Il primo passo del clic: a mani vuote, con la mano principale, il caricatore vuoto dice "nessuna cella" una
-     * volta; con un altro oggetto in mano e con la mano secondaria il clic passa, senza messaggi e senza toccare
-     * l'oggetto.
+     * A mani vuote, con la mano principale, il caricatore vuoto dice "nessuna cella" una volta; con un altro oggetto in
+     * mano e con la mano secondaria il clic passa, senza messaggi e senza toccare l'oggetto.
      */
     private static void emptyHandClickTellsNoCell(GameTestHelper helper) {
         charger(helper, POS);
@@ -517,6 +538,324 @@ public final class ChargerGameTests {
     }
 
     /**
+     * Con una cella in mano il clic la mette nel caricatore vuoto: la mano si svuota, il caricatore tiene la carica,
+     * suona l'inserimento e la barra delle azioni dice lo stato ("niente redstone"). Una cella con piu' della capacita'
+     * della config, entrando a mano, si taglia alla capacita' (design §12.10): e' il solo ingresso che taglia.
+     */
+    private static void cellClickInsertsIntoAnEmptyCharger(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        p.setItemInHand(InteractionHand.MAIN_HAND, cell(3_000));
+
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            InteractionResult result = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(result == InteractionResult.SUCCESS, "the click with a cell gave " + result);
+            helper.assertTrue(p.getMainHandItem().isEmpty(), "the inserted cell is still in hand: "
+                    + p.getMainHandItem());
+            helper.assertTrue(!c.cell().isEmpty() && energy(c.cell()) == 3_000,
+                    "cell in the charger: " + c.cell() + " with " + energy(c.cell()) + " RE, not 3000");
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_REDSTONE) == 1 && statusMessages(p) == 1,
+                    "status messages after the insert: " + statusMessages(p) + ", no-redstone "
+                            + messages(p, ChargerBlock.STATUS_NO_REDSTONE));
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.CHARGER_INSERT)),
+                    "the insert played " + sounds.sounds() + ", expected [CHARGER_INSERT]");
+        }
+
+        BlockPos second = new BlockPos(5, 2, 3);
+        ChargerBlockEntity c2 = charger(helper, second);
+        // cell(40_000) non si puo' scrivere: una EnergyCell non tiene piu' della sua capacita'
+        ItemStack big = cell(0);
+        Compat.itemData().setCellEnergy(big, 40_000);
+        p.setItemInHand(InteractionHand.MAIN_HAND, big);
+        helper.assertTrue(clickBlock(helper, p, second, InteractionHand.MAIN_HAND).consumesAction(),
+                "the click with the cell over the capacity was not consumed");
+        helper.assertTrue(p.getMainHandItem().isEmpty(), "the cell over the capacity is still in hand: "
+                + p.getMainHandItem());
+        helper.assertTrue(!c2.cell().isEmpty() && energy(c2.cell()) == 10_000,
+                "cell entered by hand with 40000 RE: " + c2.cell() + " with " + energy(c2.cell()) + " RE, not 10000");
+        helper.assertTrue(messages(p, ChargerBlock.STATUS_FULL) == 1,
+                "full messages after the second insert: " + messages(p, ChargerBlock.STATUS_FULL));
+
+        removeCharger(helper, POS);
+        removeCharger(helper, second);
+        helper.succeed();
+    }
+
+    /**
+     * Con una cella in mano su un caricatore che ne ha gia' una il clic le scambia: quella di dentro va in mano,
+     * quella in mano va dentro, suona l'inserimento. Due celle e 8 500 RE prima e dopo, nessuna altrove.
+     */
+    private static void cellClickSwapsWithTheCellInside(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        c.setCell(cell(8_000));
+        p.setItemInHand(InteractionHand.MAIN_HAND, cell(500));
+
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            InteractionResult result = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(result == InteractionResult.SUCCESS, "the swapping click gave " + result);
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.CHARGER_INSERT)),
+                    "the swap played " + sounds.sounds() + ", expected [CHARGER_INSERT]");
+        }
+        ItemStack held = p.getMainHandItem();
+        helper.assertTrue(held.is(ModItems.REDSTONE_CELL.get()) && held.getCount() == 1 && energy(held) == 8_000,
+                "in hand after the swap: " + held + " with " + energy(held) + " RE, not one cell with 8000");
+        helper.assertTrue(!c.cell().isEmpty() && c.cell().getCount() == 1 && energy(c.cell()) == 500,
+                "in the charger after the swap: " + c.cell() + " with " + energy(c.cell()) + " RE, not 500");
+        helper.assertTrue(countInMainInventory(p, ModItems.REDSTONE_CELL.get()) == 1 && p.getOffhandItem().isEmpty()
+                && itemsIn(helper).isEmpty(), "cells of the player after the swap: "
+                + countInMainInventory(p, ModItems.REDSTONE_CELL.get()) + " in the inventory, off hand "
+                + p.getOffhandItem() + ", on the ground " + itemsIn(helper));
+        helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_REDSTONE) == 1 && statusMessages(p) == 1,
+                "status messages after the swap: " + statusMessages(p));
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * Con la polvere in mano il clic ne sposta quante ne stanno nello slot (fino a 64), senza suono, e dice lo stato;
+     * a slot pieno un altro clic non sposta nulla e dice ancora lo stato.
+     */
+    private static void dustClickMovesWhatFits(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        c.setDust(redstone(60));
+        p.setItemInHand(InteractionHand.MAIN_HAND, redstone(10));
+
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            InteractionResult first = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(first == InteractionResult.SUCCESS, "the click that moved dust gave " + first);
+            assertDust(helper, c, p, "after the first click", 64, 6);
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_CELL) == 1 && statusMessages(p) == 1,
+                    "status messages after the first click: " + statusMessages(p));
+
+            InteractionResult second = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(second == InteractionResult.CONSUME, "the click that moved nothing gave " + second);
+            assertDust(helper, c, p, "after the second click", 64, 6);
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_CELL) == 2 && statusMessages(p) == 2,
+                    "status messages after the second click: " + statusMessages(p));
+            helper.assertTrue(sounds.sounds().isEmpty(), "the dust clicks played " + sounds.sounds());
+        }
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * A mano vuota, in piedi, il clic prende la cella (con la sua carica, e suona il ritiro); solo quando la cella non
+     * c'e' piu' prende la polvere, tutta, senza suono.
+     */
+    private static void emptyHandTakesTheCellThenTheDust(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        c.setCell(cell(10_000));
+        c.setDust(redstone(5));
+
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            InteractionResult first = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(first == InteractionResult.SUCCESS, "the click that took the cell gave " + first);
+            ItemStack held = p.getMainHandItem();
+            helper.assertTrue(held.is(ModItems.REDSTONE_CELL.get()) && held.getCount() == 1
+                    && energy(held) == 10_000, "in hand after the first click: " + held + " with " + energy(held)
+                    + " RE, not one cell with 10000");
+            helper.assertTrue(c.cell().isEmpty() && c.dust().getCount() == 5,
+                    "charger after the first click: cell " + c.cell() + ", dust " + c.dust().getCount());
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.CHARGER_TAKE)),
+                    "taking the cell played " + sounds.sounds() + ", expected [CHARGER_TAKE]");
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_CELL) == 1 && statusMessages(p) == 1,
+                    "status messages after the first click: " + statusMessages(p));
+
+            p.getInventory().items.set(5, held);
+            p.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+            InteractionResult second = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(second == InteractionResult.SUCCESS, "the click that took the dust gave " + second);
+            helper.assertTrue(p.getMainHandItem().is(Items.REDSTONE) && p.getMainHandItem().getCount() == 5,
+                    "in hand after the second click: " + p.getMainHandItem() + ", not 5 redstone");
+            helper.assertTrue(c.dust().isEmpty() && c.cell().isEmpty(),
+                    "charger after the second click: cell " + c.cell() + ", dust " + c.dust());
+            helper.assertTrue(sounds.sounds().equals(List.of(Sound.CHARGER_TAKE)),
+                    "taking the dust played a sound: " + sounds.sounds());
+            helper.assertTrue(countInMainInventory(p, ModItems.REDSTONE_CELL.get()) == 1
+                    && energy(p.getInventory().items.get(5)) == 10_000, "the taken cell left slot 5 or changed");
+        }
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * Accovacciati a mani vuote il clic non prende nulla: dice solo lo stato, uno dei quattro secondo il contenuto, con
+     * la percentuale per difetto quando e' in carica.
+     */
+    private static void sneakingWithEmptyHandsOnlyTellsTheStatus(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        c.setCell(cell(2_500));
+        c.setDust(redstone(3));
+        p.setShiftKeyDown(true);
+
+        try (FrameSounds.Recording sounds = FrameSounds.record(helper.getLevel(), structureBox(helper))) {
+            InteractionResult result = clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(result == InteractionResult.CONSUME, "the sneaking click gave " + result);
+            helper.assertTrue(energy(c.cell()) == 2_500 && c.cell().getCount() == 1 && c.dust().getCount() == 3
+                    && p.getMainHandItem().isEmpty(), "the sneaking click moved something: cell " + c.cell()
+                    + " with " + energy(c.cell()) + " RE, dust " + c.dust().getCount() + ", in hand "
+                    + p.getMainHandItem());
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_CHARGING) == 1 && statusMessages(p) == 1,
+                    "status messages while charging: " + statusMessages(p));
+            helper.assertTrue(Integer.valueOf(25).equals(lastArg(p, ChargerBlock.STATUS_CHARGING)),
+                    "charging percent " + lastArg(p, ChargerBlock.STATUS_CHARGING) + ", not 25");
+
+            c.setCell(cell(10_000));
+            clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_FULL) == 1 && statusMessages(p) == 2,
+                    "status messages with a full cell: " + statusMessages(p));
+
+            c.setCell(cell(100));
+            c.setDust(ItemStack.EMPTY);
+            clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_REDSTONE) == 1 && statusMessages(p) == 3,
+                    "status messages without redstone: " + statusMessages(p));
+            helper.assertTrue(energy(c.cell()) == 100 && p.getMainHandItem().isEmpty(),
+                    "the sneaking click took the cell: " + c.cell() + ", in hand " + p.getMainHandItem());
+
+            c.setCell(ItemStack.EMPTY);
+            clickBlock(helper, p, POS, InteractionHand.MAIN_HAND);
+            helper.assertTrue(messages(p, ChargerBlock.STATUS_NO_CELL) == 1 && statusMessages(p) == 4,
+                    "status messages without a cell: " + statusMessages(p));
+            helper.assertTrue(sounds.sounds().isEmpty(), "the sneaking clicks played " + sounds.sounds());
+        }
+
+        p.setShiftKeyDown(false);
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * Dove il design dice "passa" nulla si muove e nulla si dice: con un altro oggetto nella mano principale, con la
+     * mano secondaria (anche se tiene una cella), da spettatore.
+     */
+    private static void otherItemsAndTheOffHandPass(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, p, STAND);
+        c.setCell(cell(1_000));
+
+        p.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Items.STICK));
+        helper.assertTrue(!clickBlock(helper, p, POS, InteractionHand.MAIN_HAND).consumesAction(),
+                "the click with a stick was consumed");
+        helper.assertTrue(p.getMainHandItem().is(Items.STICK) && p.getMainHandItem().getCount() == 1,
+                "the stick changed: " + p.getMainHandItem());
+        assertUntouched(helper, c, p, "after the click with a stick");
+
+        p.setItemInHand(InteractionHand.MAIN_HAND, ItemStack.EMPTY);
+        p.setItemInHand(InteractionHand.OFF_HAND, cell(5_000));
+        helper.assertTrue(!clickBlock(helper, p, POS, InteractionHand.OFF_HAND).consumesAction(),
+                "the off-hand click with a cell was consumed");
+        helper.assertTrue(p.getMainHandItem().isEmpty() && p.getOffhandItem().getCount() == 1
+                && energy(p.getOffhandItem()) == 5_000, "hands after the off-hand click: main " + p.getMainHandItem()
+                + ", off " + p.getOffhandItem() + " with " + energy(p.getOffhandItem()) + " RE");
+        assertUntouched(helper, c, p, "after the off-hand click");
+
+        // da spettatore il gioco non arriva al blocco: qui si chiama il metodo neutro del clic
+        p.setItemInHand(InteractionHand.OFF_HAND, ItemStack.EMPTY);
+        p.setGameMode(GameType.SPECTATOR);
+        helper.assertTrue(p.isSpectator(), "premise: the mock player is not a spectator");
+        BlockPos abs = helper.absolutePos(POS);
+        InteractionResult result = ModBlocks.CHARGER.get().onClick(stateAt(helper, POS), helper.getLevel(), abs, p,
+                InteractionHand.MAIN_HAND, new BlockHitResult(Vec3.atCenterOf(abs), Direction.UP, abs, false));
+        helper.assertTrue(result == InteractionResult.PASS, "the click of a spectator gave " + result);
+        helper.assertTrue(p.getMainHandItem().isEmpty(), "the spectator took " + p.getMainHandItem());
+        assertUntouched(helper, c, p, "after the click of a spectator");
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * In creativa ({@code instabuild}) l'oggetto in mano non si consuma: la cella entra e resta anche in mano, nello
+     * scambio la cella tolta arriva comunque nell'inventario, e la polvere entra senza calare in mano.
+     */
+    private static void creativeHandIsNotConsumed(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        p.setGameMode(GameType.CREATIVE);
+        helper.assertTrue(p.getAbilities().instabuild, "premise: the creative mock player has no instabuild");
+        standFacingNorth(helper, p, STAND);
+        p.setItemInHand(InteractionHand.MAIN_HAND, cell(4_000));
+
+        helper.assertTrue(clickBlock(helper, p, POS, InteractionHand.MAIN_HAND).consumesAction(),
+                "the creative click with a cell was not consumed");
+        helper.assertTrue(!c.cell().isEmpty() && energy(c.cell()) == 4_000,
+                "cell in the charger after the creative insert: " + c.cell() + " with " + energy(c.cell()) + " RE");
+        ItemStack held = p.getMainHandItem();
+        helper.assertTrue(held.is(ModItems.REDSTONE_CELL.get()) && held.getCount() == 1 && energy(held) == 4_000,
+                "creative hand after the insert: " + held + " with " + energy(held) + " RE");
+        helper.assertTrue(held != c.cell(), "the charger holds the very stack in the creative hand");
+
+        helper.assertTrue(clickBlock(helper, p, POS, InteractionHand.MAIN_HAND).consumesAction(),
+                "the creative swapping click was not consumed");
+        helper.assertTrue(countInMainInventory(p, ModItems.REDSTONE_CELL.get()) == 2,
+                "cells of the creative player after the swap: "
+                        + countInMainInventory(p, ModItems.REDSTONE_CELL.get()) + ", not 2");
+        helper.assertTrue(p.getMainHandItem().is(ModItems.REDSTONE_CELL.get()) && energy(p.getMainHandItem()) == 4_000,
+                "creative hand after the swap: " + p.getMainHandItem());
+        helper.assertTrue(!c.cell().isEmpty() && c.cell().getCount() == 1 && energy(c.cell()) == 4_000
+                && itemsIn(helper).isEmpty(), "after the creative swap: charger " + c.cell() + ", on the ground "
+                + itemsIn(helper));
+
+        p.setItemInHand(InteractionHand.MAIN_HAND, redstone(10));
+        helper.assertTrue(c.dust().isEmpty(), "premise: the charger already holds dust");
+        helper.assertTrue(clickBlock(helper, p, POS, InteractionHand.MAIN_HAND).consumesAction(),
+                "the creative click with dust was not consumed");
+        assertDust(helper, c, p, "after the creative click with dust", 10, 10);
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
+     * Due giocatori, un caricatore: la cella che uno mette la prende l'altro, e al primo non resta nulla da prendere.
+     * Dopo ogni clic la cella e' una sola, nel caricatore o in una mano.
+     */
+    private static void twoPlayersOneCell(GameTestHelper helper) {
+        ChargerBlockEntity c = charger(helper, POS);
+        ServerPlayer a = Compat.gameTests().survivalPlayer(helper);
+        ServerPlayer b = Compat.gameTests().survivalPlayer(helper);
+        standFacingNorth(helper, a, STAND);
+        standFacingNorth(helper, b, new Vec3(2.5, 2.0, 5.5));
+        a.setItemInHand(InteractionHand.MAIN_HAND, cell(1_000));
+        assertOneCell(helper, c, a, b, "premise");
+
+        clickBlock(helper, a, POS, InteractionHand.MAIN_HAND);
+        helper.assertTrue(!c.cell().isEmpty() && energy(c.cell()) == 1_000 && a.getMainHandItem().isEmpty(),
+                "after the click of a: charger " + c.cell() + ", hand of a " + a.getMainHandItem());
+        assertOneCell(helper, c, a, b, "after the click of a");
+
+        clickBlock(helper, b, POS, InteractionHand.MAIN_HAND);
+        helper.assertTrue(c.cell().isEmpty() && b.getMainHandItem().is(ModItems.REDSTONE_CELL.get())
+                && energy(b.getMainHandItem()) == 1_000, "after the click of b: charger " + c.cell()
+                + ", hand of b " + b.getMainHandItem());
+        assertOneCell(helper, c, a, b, "after the click of b");
+
+        clickBlock(helper, a, POS, InteractionHand.MAIN_HAND);
+        helper.assertTrue(a.getMainHandItem().isEmpty() && c.cell().isEmpty(),
+                "a took something from the empty charger: " + a.getMainHandItem());
+        helper.assertTrue(messages(a, ChargerBlock.STATUS_NO_CELL) == 1,
+                "no-cell messages of a: " + messages(a, ChargerBlock.STATUS_NO_CELL));
+        assertOneCell(helper, c, a, b, "after the second click of a");
+
+        removeCharger(helper, POS);
+        helper.succeed();
+    }
+
+    /**
      * Posa un caricatore nello stato predefinito nel punto relativo alla struttura e restituisce la sua block entity,
      * letta dal livello.
      */
@@ -564,6 +903,71 @@ public final class ChargerGameTests {
         helper.assertTrue(energy(c.cell()) == energy && c.dust().getCount() == dust && c.reserve() == reserve,
                 when + ": cell " + energy(c.cell()) + " RE, dust " + c.dust().getCount() + ", reserve " + c.reserve()
                         + "; expected " + energy + ", " + dust + ", " + reserve);
+    }
+
+    /** Quanti messaggi di stato del caricatore ({@link #STATUS_KEYS}) ha avuto il giocatore finto, in tutto. */
+    private static int statusMessages(ServerPlayer p) {
+        int count = 0;
+        for (String key : STATUS_KEYS) {
+            count += messages(p, key);
+        }
+        return count;
+    }
+
+    /**
+     * Il primo argomento dell'ultimo messaggio con quella chiave arrivato al giocatore finto; null se non ne ha avuti o
+     * se l'ultimo non ha argomenti.
+     */
+    private static Object lastArg(ServerPlayer p, String key) {
+        Object arg = null;
+        for (Component message : Compat.gameTests().messagesTo(p)) {
+            if (message.getContents() instanceof TranslatableContents contents && contents.getKey().equals(key)) {
+                arg = contents.getArgs().length > 0 ? contents.getArgs()[0] : null;
+            }
+        }
+        return arg;
+    }
+
+    /** Le polveri nel caricatore e quelle nella mano principale del giocatore sono quelle attese. */
+    private static void assertDust(GameTestHelper helper, ChargerBlockEntity c, ServerPlayer p, String when,
+            int inCharger, int inHand) {
+        ItemStack held = p.getMainHandItem();
+        helper.assertTrue(c.dust().getCount() == inCharger && held.is(Items.REDSTONE) && held.getCount() == inHand,
+                when + ": dust in the charger " + c.dust().getCount() + ", in hand " + held + "; expected "
+                        + inCharger + " and " + inHand);
+    }
+
+    /**
+     * Il clic e' passato senza toccare nulla: il caricatore tiene ancora la sua cella da 1 000 RE e nessuna polvere, il
+     * giocatore non ha avuto nessun messaggio di stato e nulla e' a terra.
+     */
+    private static void assertUntouched(GameTestHelper helper, ChargerBlockEntity c, ServerPlayer p, String when) {
+        helper.assertTrue(!c.cell().isEmpty() && c.cell().getCount() == 1 && energy(c.cell()) == 1_000
+                && c.dust().isEmpty(), when + ": charger cell " + c.cell() + " with " + energy(c.cell())
+                + " RE, dust " + c.dust());
+        helper.assertTrue(statusMessages(p) == 0, when + ": status messages " + statusMessages(p));
+        helper.assertTrue(itemsIn(helper).isEmpty(), when + ": items on the ground " + itemsIn(helper));
+    }
+
+    /**
+     * Fra il caricatore, i due giocatori (inventario principale e mano secondaria) e il terreno della struttura c'e'
+     * una cella sola.
+     */
+    private static void assertOneCell(GameTestHelper helper, ChargerBlockEntity c, ServerPlayer a, ServerPlayer b,
+            String when) {
+        int cells = c.cell().isEmpty() ? 0 : c.cell().getCount();
+        for (ServerPlayer player : List.of(a, b)) {
+            cells += countInMainInventory(player, ModItems.REDSTONE_CELL.get());
+            if (player.getOffhandItem().is(ModItems.REDSTONE_CELL.get())) {
+                cells += player.getOffhandItem().getCount();
+            }
+        }
+        for (ItemEntity dropped : itemsIn(helper)) {
+            if (dropped.getItem().is(ModItems.REDSTONE_CELL.get())) {
+                cells += dropped.getItem().getCount();
+            }
+        }
+        helper.assertTrue(cells == 1, when + ": " + cells + " cells among the charger and the two players, not 1");
     }
 
     /** Le proprieta' {@code cell} e {@code lit} dello stato del blocco nel punto relativo sono quelle attese. */

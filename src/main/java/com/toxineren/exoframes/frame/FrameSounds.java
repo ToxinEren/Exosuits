@@ -12,18 +12,21 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * I suoni delle azioni del telaio (design §12.13): un suono del gioco base ciascuna, volume 1 e tono 1, tutti dal
- * server con {@code level.playSound(null, ...)}. Con {@code null} come giocatore escluso li sentono tutti quelli
- * vicini, il giocatore che agisce compreso; {@code player.playSound(...)} sul server escluderebbe proprio lui, e un
- * suono suonato da un client non lo sentirebbe nessun altro. Solo costanti di {@code SoundEvents} che sono un
+ * I suoni delle azioni del telaio e del caricatore (design §12.13): un suono del gioco base ciascuna, volume 1 e tono
+ * 1, tutti dal server con {@code level.playSound(null, ...)}. Con {@code null} come giocatore escluso li sentono tutti
+ * quelli vicini, il giocatore che agisce compreso; {@code player.playSound(...)} sul server escluderebbe proprio lui,
+ * e un suono suonato da un client non lo sentirebbe nessun altro. Solo costanti di {@code SoundEvents} che sono un
  * {@link SoundEvent} semplice sulle due versioni (non quelle che su 1.21.1 sono un {@code Holder}, come
  * {@code ARMOR_EQUIP_*}): nessuna cucitura.
  * <p>
  * La tabella: piazzare {@code METAL_PLACE} ({@code BLOCKS}); montare un pezzo o la cella {@code IRON_TRAPDOOR_CLOSE};
  * smontarli {@code IRON_TRAPDOOR_OPEN}; entrare {@code PISTON_CONTRACT}; uscire {@code PISTON_EXTEND}; cambio cella
  * {@code RESPAWN_ANCHOR_CHARGE}; pezzo rotto {@code ITEM_BREAK}; energia bassa {@code BEACON_DEACTIVATE}; energia
- * esaurita {@code REDSTONE_TORCH_BURNOUT} (tutti {@code PLAYERS} tranne il primo). Gli slot armatura continuano a
- * cambiare in silenzio: i suoni di ingresso e uscita sono questi, non quelli dell'armatura indossata.
+ * esaurita {@code REDSTONE_TORCH_BURNOUT} (tutti {@code PLAYERS} tranne il primo); cella inserita nel caricatore, o
+ * scambiata con quella dentro, {@code ITEM_FRAME_ADD_ITEM}; cella ritirata dal caricatore
+ * {@code ITEM_FRAME_REMOVE_ITEM} (tutti e due {@code BLOCKS}, al centro del blocco). Polvere aggiunta al caricatore e
+ * tramogge: nessun suono. Gli slot armatura continuano a cambiare in silenzio: i suoni di ingresso e uscita sono
+ * questi, non quelli dell'armatura indossata.
  * <p>
  * Il registratore ({@link #record}) serve solo ai test in mondo, per controllare quale suono fa ogni azione: senza
  * registrazioni aperte {@link #play} suona e basta.
@@ -42,7 +45,9 @@ public final class FrameSounds {
         CELL_SWAP(SoundEvents.RESPAWN_ANCHOR_CHARGE, SoundSource.PLAYERS),
         PIECE_BROKEN(SoundEvents.ITEM_BREAK, SoundSource.PLAYERS),
         ENERGY_LOW(SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS),
-        ENERGY_EMPTY(SoundEvents.REDSTONE_TORCH_BURNOUT, SoundSource.PLAYERS);
+        ENERGY_EMPTY(SoundEvents.REDSTONE_TORCH_BURNOUT, SoundSource.PLAYERS),
+        CHARGER_INSERT(SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS),
+        CHARGER_TAKE(SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS);
 
         private final SoundEvent event;
         private final SoundSource source;
