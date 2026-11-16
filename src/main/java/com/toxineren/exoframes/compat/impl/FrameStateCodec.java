@@ -29,9 +29,10 @@ import net.minecraft.nbt.Tag;
  * {@link NbtKeys#DURABILITY}, {@link NbtKeys#MAX_DURABILITY}, {@link NbtKeys#MODULES}, l'aspetto
  * ({@link NbtKeys#COLOR_PRIMARY}, {@link NbtKeys#COLOR_SECONDARY}, {@link NbtKeys#DECALS}) e
  * {@link NbtKeys#CARRY_MILLI}; {@link NbtKeys#CELL} con {@link NbtKeys#ENERGY} e {@link NbtKeys#CAPACITY} (assente
- * = nessuna cella; {@link NbtKeys#CAPACITY} si scrive ancora per compatibilita' con i registri della 3b, ma il
- * caricamento sul server non la legge: la capacita' della cella e' sempre quella della config di chi carica, design
- * §12.10); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED}; {@link NbtKeys#OWNER} (assente = nessun
+ * = nessuna cella; {@link NbtKeys#CAPACITY} si scrive ancora per compatibilita' con i registri della 3b, e il
+ * caricamento sul server la legge solo per una cella che tiene piu' della capacita' della config di chi carica: le
+ * altre prendono quella della config, design §12.10); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED};
+ * {@link NbtKeys#OWNER} (assente = nessun
  * proprietario); {@link NbtKeys#UNLOCKED}. L'armatura stivata ({@link NbtKeys#STOWED}) non fa parte dello stato: la
  * scrive e la legge il registro dei telai ({@link FrameStateSavedData}), accanto allo stato di ogni record.
  * <p>
@@ -84,8 +85,11 @@ final class FrameStateCodec {
      * un avviso. E' la lettura del caricamento sul server. Ordine: pezzi montati, poi i loro moduli, i riporti del
      * danno e gli aspetti (montare un pezzo azzera riporto e aspetto e toglie moduli e toggle dello slot), infine i
      * toggle accesi dei moduli toggle installati. La cella prende la capacita' della config di chi legge
-     * ({@code energy.cellCapacity}) e la carica si taglia a quella: la chiave {@link NbtKeys#CAPACITY} non si legge,
-     * quindi una cella con la capacita' assente, zero o negativa non si scarta (design §12.10).
+     * ({@code energy.cellCapacity}) se la sua carica salvata ci sta; una cella che tiene di piu' non perde nulla: tiene
+     * la capacita' scritta ({@link NbtKeys#CAPACITY}) e la sua carica, e se la capacita' scritta manca, non e' positiva
+     * o e' piu' piccola della carica, la capacita' diventa la carica stessa. Cosi' un avvio con la config rovinata (che
+     * vale i predefiniti) non distrugge l'energia salvata; la carica si taglia solo quando la cella entra in un telaio,
+     * in un cambio o in un caricatore. Una cella non si scarta mai per la sua capacita' (design §12.10).
      */
     static FrameState read(CompoundTag root, ExoframesConfig cfg) {
         return read(root, cfg, false);
@@ -149,9 +153,12 @@ final class FrameStateCodec {
                             "Dropping frame cell with invalid capacity {}", capacity);
                 }
             } else {
-                // una sola capacita' (design §12.10): quella della config di chi carica; la chiave del file non conta
-                int capacity = cfg.energy.cellCapacity;
-                state.insertCell(new EnergyCell(capacity, Math.min(capacity, PieceTags.readEnergy(cellTag))));
+                // una sola capacita' (design §12.10): quella della config di chi carica, se la carica ci sta; una
+                // carica piu' grande non si taglia al caricamento (nulla si perde), la cella tiene la sua capacita'
+                int stored = PieceTags.readEnergy(cellTag);
+                int configured = cfg.energy.cellCapacity;
+                int capacity = stored <= configured ? configured : Math.max(stored, cellTag.getInt(NbtKeys.CAPACITY));
+                state.insertCell(new EnergyCell(capacity, stored));
             }
         }
         ListTag active = root.getList(NbtKeys.ACTIVE, Tag.TAG_STRING);

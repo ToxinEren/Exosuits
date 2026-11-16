@@ -86,9 +86,10 @@ final class FrameRegistryFormat {
      * legge nulla e dice {@link Outcome#READ_ONLY}: tenere il tag letto tocca a chi chiama. Un tag senza marcatore di
      * schema e senza alcuna delle sezioni (conta la presenza delle chiavi, di qualunque tipo, non il loro essere vuote;
      * {@code orphaned} da sola non basta, perche' {@link #write} scrive sempre lo schema) non e' un registro: nessuna
-     * riga di log, nulla letto, e l'esito e' {@link Outcome#WITHOUT_SECTIONS}. Un'eccezione che uscisse da qui
-     * varrebbe come un file illeggibile (vedi {@link FrameStateSavedData#afterUnreadFile}): la copia precedente o la
-     * sola lettura, mai il registro vuoto.
+     * riga di log, nulla letto, e l'esito e' {@link Outcome#WITHOUT_SECTIONS}. Se alcune celle lette tengono piu'
+     * della capacita' della config, e per questo hanno tenuto la loro, un solo WARN ne dice il numero (design
+     * §12.10). Un'eccezione che uscisse da qui varrebbe come un file illeggibile (vedi
+     * {@link FrameStateSavedData#afterUnreadFile}): la copia precedente o la sola lettura, mai il registro vuoto.
      */
     static Outcome read(CompoundTag tag, BiFunction<CompoundTag, ExoframesConfig, FrameState> reader,
             FrameRegistry into) {
@@ -189,7 +190,33 @@ final class FrameRegistryFormat {
                         + "unread: {}", e.toString());
             }
         }
+        int overCapacity = cellsOverCapacity(into, config.energy.cellCapacity);
+        if (overCapacity > 0) {
+            RedstoneExoframes.LOGGER.warn("{} cell(s) in the frame registry hold more than the configured capacity "
+                    + "({} RE): they keep their own capacity until they are swapped or drained", overCapacity,
+                    config.energy.cellCapacity);
+        }
         return Outcome.READ;
+    }
+
+    /**
+     * Quante celle dei record letti hanno una capacita' piu' grande di quella della config: sono quelle che al
+     * caricamento tenevano piu' di {@code configured} RE e hanno tenuto la loro capacita' ({@link FrameStateCodec#read},
+     * design §12.10).
+     */
+    private static int cellsOverCapacity(FrameRegistry registry, int configured) {
+        int count = 0;
+        for (FrameRecord record : registry.worn.values()) {
+            count += overCapacity(record.state(), configured);
+        }
+        for (FrameRegistry.Placed entry : registry.placed.values()) {
+            count += overCapacity(entry.record().state(), configured);
+        }
+        return count;
+    }
+
+    private static int overCapacity(FrameState state, int configured) {
+        return state.cell() != null && state.cell().capacity() > configured ? 1 : 0;
     }
 
     /**

@@ -209,18 +209,66 @@ class FrameStateCodecTest {
         return FrameStateCodec.write(state);
     }
 
+    /**
+     * Una cella la cui carica salvata sta nella capacita' della config prende quella capacita' (design §12.10), anche
+     * se la capacita' scritta e' piu' grande o manca.
+     */
     @Test
-    void readCutsTheCellToTheConfigCapacity() {
-        CompoundTag tag = bigCellTag();
+    void readGivesTheConfigCapacityToACellWhoseChargeFits() {
+        CompoundTag tag = cellTag(50_000, 4_000);
         EnergyCell cell = FrameStateCodec.read(tag, cfg).cell();
         assertEquals(10_000, cell.capacity());
-        assertEquals(10_000, cell.stored());
+        assertEquals(4_000, cell.stored());
 
         tag.getCompound(NbtKeys.CELL).remove(NbtKeys.CAPACITY);
         tag.getCompound(NbtKeys.CELL).putInt(NbtKeys.ENERGY, 3_000);
         EnergyCell withoutCapacity = FrameStateCodec.read(tag, cfg).cell();
         assertEquals(10_000, withoutCapacity.capacity());
         assertEquals(3_000, withoutCapacity.stored());
+    }
+
+    /**
+     * Una cella che tiene piu' della capacita' della config non perde nulla al caricamento: tiene la capacita' scritta
+     * e la sua carica (design §12.10, un avvio con la config rovinata non distrugge l'energia salvata).
+     */
+    @Test
+    void readNeverCutsAChargeAboveTheConfigCapacity() {
+        EnergyCell cell = FrameStateCodec.read(cellTag(50_000, 40_000), cfg).cell();
+        assertEquals(50_000, cell.capacity());
+        assertEquals(40_000, cell.stored());
+
+        EnergyCell big = FrameStateCodec.read(bigCellTag(), cfg).cell();
+        assertEquals(20_000, big.capacity());
+        assertEquals(15_000, big.stored());
+    }
+
+    /**
+     * Senza una capacita' scritta valida (assente, zero, negativa o piu' piccola della carica) la cella che tiene piu'
+     * della config prende come capacita' la carica stessa.
+     */
+    @Test
+    void readUsesTheChargeAsCapacityWithoutAValidWrittenOne() {
+        for (int written : new int[] {0, -5, 30_000}) {
+            CompoundTag tag = cellTag(written, 40_000);
+            EnergyCell cell = FrameStateCodec.read(tag, cfg).cell();
+            assertEquals(40_000, cell.capacity(), "written capacity " + written);
+            assertEquals(40_000, cell.stored(), "written capacity " + written);
+        }
+        CompoundTag missing = cellTag(50_000, 40_000);
+        missing.getCompound(NbtKeys.CELL).remove(NbtKeys.CAPACITY);
+        EnergyCell cell = FrameStateCodec.read(missing, cfg).cell();
+        assertEquals(40_000, cell.capacity());
+        assertEquals(40_000, cell.stored());
+    }
+
+    /** Lo stato con la sola cella, scritta a mano: capacita' {@code capacity} e carica {@code energy}. */
+    private CompoundTag cellTag(int capacity, int energy) {
+        CompoundTag tag = FrameStateCodec.write(new FrameState(cfg));
+        CompoundTag cell = new CompoundTag();
+        cell.putInt(NbtKeys.ENERGY, energy);
+        cell.putInt(NbtKeys.CAPACITY, capacity);
+        tag.put(NbtKeys.CELL, cell);
+        return tag;
     }
 
     @Test

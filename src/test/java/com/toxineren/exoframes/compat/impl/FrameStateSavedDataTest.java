@@ -14,6 +14,7 @@ import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
 import java.util.Arrays;
 import java.util.List;
@@ -152,6 +153,41 @@ class FrameStateSavedDataTest {
         assertEquals(stateTag(), FrameStateCodec.write(again.placed(FRAME_B).state()));
         assertEquals(OVERWORLD_SPOT, again.spot(FRAME_B));
         assertEquals(written, again.write(new CompoundTag()));
+    }
+
+    /**
+     * Il giro che tagliava la carica per sempre: un registro scritto con celle da 50 000, letto con la capacita' della
+     * config a 10 000 (un avvio con la config ai predefiniti), salvato e riletto. La cella con 40 000 RE resta 40 000 di
+     * 50 000 a ogni giro; quella con 4 000 RE, che ci sta, prende la capacita' della config (design §12.10).
+     */
+    @Test
+    void loadAndSaveNeverCutAChargeAboveTheConfigCapacity() {
+        ExoframesConfig big = ExoframesConfig.defaults();
+        big.energy.cellCapacity = 50_000;
+        ExoframesConfig small = ExoframesConfig.defaults();
+        assertEquals(10_000, small.energy.cellCapacity);
+        FrameStateSavedData data = empty();
+        data.getOrCreateWorn(GOOD, () -> {
+            FrameState state = new FrameState(big);
+            state.insertCell(new EnergyCell(50_000, 40_000));
+            return state;
+        });
+        FrameState placedState = new FrameState(big);
+        placedState.insertCell(new EnergyCell(50_000, 4_000));
+        data.place(new FrameRecord(FRAME_B, placedState), OVERWORLD_SPOT);
+
+        CompoundTag written = data.write(new CompoundTag());
+        for (int round = 1; round <= 2; round++) {
+            FrameStateSavedData again = FrameStateSavedData.load(written,
+                    (tag, config) -> FrameStateCodec.read(tag, small));
+            EnergyCell worn = again.worn(GOOD).state().cell();
+            assertEquals(50_000, worn.capacity(), "round " + round);
+            assertEquals(40_000, worn.stored(), "round " + round);
+            EnergyCell placed = again.placed(FRAME_B).state().cell();
+            assertEquals(10_000, placed.capacity(), "round " + round);
+            assertEquals(4_000, placed.stored(), "round " + round);
+            written = again.write(new CompoundTag());
+        }
     }
 
     @Test
