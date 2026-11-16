@@ -1,12 +1,14 @@
 # tools
 
-Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio in `tools/art/README.md`,
-per il client senza schermo in `tools/client/README.md`.
+Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio (`tools/art/build.py`) in
+`tools/art/README.md`; per il client senza schermo (`tools/client/client_shot.sh` e le sequenze `m3a_shots.sh`,
+`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`) in `tools/client/README.md`.
 
 | Strumento | Che cosa fa |
 |---|---|
 | `bash tools/check_sources.sh` | regole sui sorgenti (separazione di `core/`, direttive di Stonecutter, codice client): `OK sources` |
 | `bash tools/check_jars.sh` | controlli sui quattro jar in `build/libs/all` (metadati, mixin, risorse, dati della sola versione del jar, privacy): `OK jars`; serve Python 3.11 o più recente |
+| `python3 tools/check_jar_privacy.py <jar>...` | il controllo di privacy sui jar, chiamato da `check_jars.sh`: percorsi locali di un computer, e-mail, `Built-By` nel manifest, metadati di immagini e suoni, autore nelle strutture, e le parole di `EXOFRAMES_PRIVATE_WORDS` |
 | `bash tools/check_art.sh` | prove negative del generatore della grafica, poi rigenera la grafica del telaio e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
 | `bash tools/check_data.sh` | prove negative del generatore dei dati, poi rigenera ricette, sblocchi, bottino e tag in una cartella temporanea e li confronta con quelli committati; i due alberi per versione contengono solo i file generati: `OK data` |
 | `bash tools/run_gametests.sh [variante...]` | test in gioco sulle varianti (di default tutte e quattro); conta le righe `add(tests,` di tutti i file di `gametest/`; una variante passa se tutti i test elencati sono passati e il log non ha avvisi del mod fuori elenco, ciascuno il numero di volte che l'elenco ammette per il suo loader; prima di ogni variante toglie `versions/<variante>/run-gametest/config/redstone_exoframes.json`, che la mod riscrive con i predefiniti all'avvio (i test contano sui predefiniti) |
