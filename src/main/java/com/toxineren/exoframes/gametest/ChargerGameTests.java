@@ -1036,7 +1036,8 @@ public final class ChargerGameTests {
 
     /**
      * Facce e slot, senza tick: sopra e sotto lo slot 0, ai lati lo slot 1. Entra solo una cella da sopra nello slot 0
-     * vuoto e solo polvere di redstone dai lati nello slot 1; esce solo da sotto la cella piena.
+     * vuoto e solo polvere di redstone dai lati nello slot 1, finche' lo slot ne tiene meno di 64 (con 63 entra, con
+     * 64 no); esce solo da sotto la cella piena.
      */
     private static void facesAcceptOnlyWhatTheyShould(GameTestHelper helper) {
         ChargerBlockEntity c = charger(helper, POS);
@@ -1080,6 +1081,19 @@ public final class ChargerGameTests {
         c.setDust(redstone(5));
         helper.assertTrue(!c.canTakeItemThroughFace(1, c.dust(), Direction.DOWN), "dust can be taken from below");
         helper.assertTrue(!c.canTakeItemThroughFace(1, c.dust(), Direction.NORTH), "dust can be taken from a side");
+
+        c.setDust(redstone(63));
+        helper.assertTrue(c.canPlaceItem(1, dust), "dust refused by a dust slot that holds 63");
+        for (Direction side : sides) {
+            helper.assertTrue(c.canPlaceItemThroughFace(1, dust, side), "dust refused from " + side
+                    + " with 63 inside");
+        }
+        c.setDust(redstone(64));
+        helper.assertTrue(!c.canPlaceItem(1, dust), "dust accepted by a dust slot that holds 64");
+        for (Direction side : sides) {
+            helper.assertTrue(!c.canPlaceItemThroughFace(1, dust, side), "dust accepted from " + side
+                    + " with 64 inside");
+        }
 
         removeCharger(helper, POS);
         helper.succeed();

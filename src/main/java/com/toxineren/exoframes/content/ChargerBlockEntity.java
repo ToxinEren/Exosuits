@@ -55,10 +55,11 @@ import net.minecraft.world.phys.Vec3;
  * <p>
  * <b>Tramogge.</b> Il caricatore e' un {@link WorldlyContainer} del gioco base, senza codice per loader: slot 0 la
  * cella, slot 1 la polvere. Da sopra entra una cella nello slot 0, solo se e' vuoto; dai lati entra la polvere di
- * redstone nello slot 1; da sotto esce la cella, solo quando e' piena (carica almeno pari alla capacita' della
- * config). Ogni altro passaggio e' rifiutato. I limiti stanno in {@link #canPlaceItem} e nelle facce
- * ({@link #canPlaceItemThroughFace}, {@link #canTakeItemThroughFace}), mai in {@code getMaxStackSize()}, che qui non
- * si ridefinisce: le tramogge ignorano la dimensione massima di un contenitore. Due fatti delle tramogge decidono il
+ * redstone nello slot 1, finche' ne tiene meno di {@link #MAX_DUST}; da sotto esce la cella, solo quando e' piena
+ * (carica almeno pari alla capacita' della config). Ogni altro passaggio e' rifiutato. I limiti stanno in
+ * {@link #canPlaceItem} e nelle facce ({@link #canPlaceItemThroughFace}, {@link #canTakeItemThroughFace}), mai in
+ * {@code getMaxStackSize()}, che qui non si ridefinisce: le tramogge ignorano la dimensione massima di un
+ * contenitore. Due fatti delle tramogge decidono il
  * resto: quella che spinge in uno slot non vuoto fa crescere sul posto lo stack avuto da {@link #getItem} (per questo
  * mai una copia); quella che tira e non ha dove mettere la cella l'ha gia' tolta con {@link #removeItem} e la rimette
  * con {@link #setItem}, a ogni tick finche' non trova posto (per questo {@link #setItem}, come {@link #setCell}, non
@@ -307,14 +308,15 @@ public final class ChargerBlockEntity extends CompatBlockEntity implements World
 
     /**
      * Che cosa puo' entrare in uno slot, da qualunque parte arrivi. Slot 0: una sola cella, e solo se lo slot e' vuoto
-     * (uno stack di due celle no). Slot 1: polvere di redstone. Ogni altro slot: nulla. I limiti stanno qui e nelle
-     * facce, non in {@code getMaxStackSize()}.
+     * (uno stack di due celle no). Slot 1: polvere di redstone, e solo finche' lo slot ne tiene meno di
+     * {@link #MAX_DUST}: il limite non si affida al massimo dello stack della polvere, che su 1.21.1 e' un dato
+     * dell'oggetto. Ogni altro slot: nulla. I limiti stanno qui e nelle facce, non in {@code getMaxStackSize()}.
      */
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
         return switch (slot) {
             case SLOT_CELL -> stack.getItem() instanceof CellItem && stack.getCount() == 1 && cell.isEmpty();
-            case SLOT_DUST -> stack.is(Items.REDSTONE);
+            case SLOT_DUST -> stack.is(Items.REDSTONE) && dust.getCount() < MAX_DUST;
             default -> false;
         };
     }
@@ -327,7 +329,8 @@ public final class ChargerBlockEntity extends CompatBlockEntity implements World
 
     /**
      * Da sopra entra solo cio' che {@link #canPlaceItem} accetta nello slot 0 (una cella, a slot vuoto); da un lato
-     * solo cio' che accetta nello slot 1 (polvere di redstone). Da sotto, o senza una faccia ({@code null}), nulla.
+     * solo cio' che accetta nello slot 1 (polvere di redstone, finche' ne tiene meno di {@link #MAX_DUST}). Da sotto,
+     * o senza una faccia ({@code null}), nulla.
      */
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, Direction face) {
