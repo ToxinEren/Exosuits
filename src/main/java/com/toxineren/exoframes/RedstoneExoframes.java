@@ -30,6 +30,7 @@ import com.toxineren.exoframes.gametest.DataGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import com.toxineren.exoframes.gametest.MovementGameTests;
+import com.toxineren.exoframes.gametest.SurvivalGameTests;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.TickEvent;
@@ -97,6 +98,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(CellGameTests.class);
         Compat.gameTests().register(ChargerGameTests.class);
         Compat.gameTests().register(DataGameTests.class);
+        Compat.gameTests().register(SurvivalGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

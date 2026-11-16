@@ -75,9 +75,9 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>Per aggiungere un test. I test stanno in una classe per area, in {@code gametest/}: {@code ExoframeGameTests} i
  * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
- * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests}
- * e le altre della parte 3c-2. Ogni classe ha un costruttore pubblico senza argomenti, un metodo
- * {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
+ * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests},
+ * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2. Ogni classe ha un costruttore pubblico senza
+ * argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
  * {@code Compat.gameTests().register(Classe.class)} in
  * {@code RedstoneExoframes.init()}. Un test e' un metodo {@code private static void temaCaso(GameTestHelper helper)}
  * che chiude con {@code helper.succeed()}, piu' una riga {@code add(tests, "temaCaso", Classe::temaCaso);} nel
