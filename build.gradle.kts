@@ -114,10 +114,12 @@ if (loader == "forge") {
 }
 
 // Mondo nuovo a ogni esecuzione: su Forge 1.20.1 il server GameTest usa il mondo normale della cartella, che
-// altrimenti resta tra un'esecuzione e l'altra.
+// altrimenti resta tra un'esecuzione e l'altra. Via anche il file di config della mod, come fa tools/run_gametests.sh:
+// i numeri attesi dei test sono quelli dei predefiniti, e la mod lo riscrive con i predefiniti all'avvio.
 val cleanGameTestWorld = tasks.register<Delete>("cleanGameTestWorld") {
-    description = "Cancella il mondo del server GameTest."
+    description = "Cancella il mondo del server GameTest e il file di config della mod."
     delete(layout.projectDirectory.dir("$gameTestRunDir/world"))
+    delete(layout.projectDirectory.file("$gameTestRunDir/config/redstone_exoframes.json"))
 }
 tasks.matching { it.name == "runGameTestServer" }.configureEach { dependsOn(cleanGameTestWorld) }
 

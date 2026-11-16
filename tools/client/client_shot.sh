@@ -29,7 +29,9 @@
 # giocatore e cosa tiene in mano si decide con comandi del server (tp, item replace) fra un passo e l'altro.
 #
 # Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
-# run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta.
+# run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta, e
+# il file di config della mod (config/redstone_exoframes.json) si toglie nelle due cartelle: ogni esecuzione parte dai
+# predefiniti, che il mod riscrive all'avvio.
 # Una sola esecuzione per variante alla volta (lucchetto sulla cartella del server); esecuzioni su varianti diverse
 # in parallelo vogliono porte diverse (EXO_SHOT_PORT).
 #
@@ -178,6 +180,9 @@ log() { echo "[$(($(date +%s) - t0))s] $*"; }
 
 # --- cartelle di esecuzione -----------------------------------------------------------------------------------------
 rm -rf "$sdir/world"
+# Config della mod ai predefiniti: le soglie degli script (999 RE sotto il 10 %, il fattore 0,85, i 2 s del cambio
+# cella) li presuppongono, e un file cambiato a mano in una di queste cartelle resterebbe da un'esecuzione all'altra.
+rm -f "$sdir/config/redstone_exoframes.json" "$cdir/config/redstone_exoframes.json"
 echo "eula=true" >"$sdir/eula.txt"
 # Server e RCON ascoltano solo su 127.0.0.1 (server-ip vale per entrambi): l'account offline ha op e RCON esegue
 # qualunque comando, quindi nessuno da fuori deve poterli raggiungere.

@@ -38,9 +38,11 @@
 #
 # La riga dell'energia sta in alto a sinistra (Task 22). Alla fine il giocatore torna in 0,5 -60 -5,5 per i tre scatti
 # di client_shot.sh. Gli avvisi "moved too quickly" del server dopo un tp sono un artefatto noto della ricognizione;
-# "moved wrongly" non deve comparire in server.log. Dura circa due minuti a cache calde (misurati 116-127 s sulle
-# quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni
-# in tools/client/README.md.
+# "moved wrongly" non deve comparire in server.log: se compare (client e server non d'accordo sul movimento della
+# tuta, per esempio in acqua) lo script scrive una riga ERRORE ed esce con 1, anche se client_shot.sh e' uscito con 0
+# (la riga e' del gioco e non nomina la mod, quindi check_log.py non la vede). Dura circa due minuti a cache calde
+# (misurati 116-127 s sulle quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA
+# obbligatoria). Istruzioni in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -117,10 +119,20 @@ steps=(
 echo "=== $variant m3c"
 bash "$here/client_shot.sh" "$variant" "$out" "${steps[@]}"
 code=$?
+# Client e server d'accordo sul movimento (acqua, gradino): il server scrive "moved wrongly" quando la posizione del
+# client non e' quella che calcola lui. server.log c'e' anche dopo un errore (lo copia la chiusura di client_shot.sh).
+wrong=$(grep -c 'moved wrongly' "$out/server.log" 2>/dev/null)
+wrong=${wrong:-0}
+if [ "$wrong" -gt 0 ]; then
+    echo "ERRORE: $wrong righe 'moved wrongly' in $out/server.log: client e server non sono d'accordo sul movimento della tuta" >&2
+    [ "$code" -eq 0 ] && code=1
+fi
 if [ "$code" -eq 0 ]; then
     echo "OK $variant: scatti in $out"
 elif [ -s "$out/log-check.txt" ]; then
     echo "FAIL $variant: avvisi del mod fuori elenco in $out/log-check.txt" >&2
+elif [ "$wrong" -gt 0 ]; then
+    echo "FAIL $variant: moved wrongly in $out/server.log" >&2
 else
     echo "FAIL $variant: client_shot.sh e' uscito con $code" >&2
 fi
