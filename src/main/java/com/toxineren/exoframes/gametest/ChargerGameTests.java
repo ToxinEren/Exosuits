@@ -56,6 +56,7 @@ import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.HopperBlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
@@ -97,6 +98,13 @@ public final class ChargerGameTests {
     private static final List<String> CHARGER_NBT_KEYS = List.of(NbtKeys.CHARGER_HAS_CELL,
             NbtKeys.CHARGER_CELL_ENERGY, NbtKeys.CHARGER_REDSTONE, NbtKeys.CHARGER_RESERVE,
             NbtKeys.CHARGER_CARRY_MILLI);
+
+    /**
+     * Gli stessi cinque nomi come stanno sul disco, scritti alla lettera e non con le costanti di {@link NbtKeys}: una
+     * costante a cui cambia la stringa farebbe leggere vuoto ogni caricatore gia' salvato, e deve far fallire un test.
+     */
+    private static final List<String> CHARGER_NAMES_ON_DISK = List.of("has_cell", "cell_energy", "redstone",
+            "reserve", "carry_milli");
 
     /** I due file di lingua della mod, come risorse del jar. */
     private static final List<String> LANG_FILES = List.of("en_us.json", "it_it.json");
@@ -440,14 +448,25 @@ public final class ChargerGameTests {
     /**
      * Il contenuto passa dal salvataggio del chunk: cinque chiavi, tutte numeri (nessuno stack nell'NBT), con i valori
      * di cella, polvere, riserva e riporto; la block entity letta da quel tag li ha uguali e riprende a caricare dal
-     * riporto salvato (il tick dopo sposta 3 RE, non 2).
+     * riporto salvato (il tick dopo sposta 3 RE, non 2). Le cinque chiavi si guardano anche con i nomi che hanno sul
+     * disco, scritti alla lettera, e oltre a {@code id}, {@code x}, {@code y}, {@code z} il tag non ne ha altre.
+     * <p>
+     * Prima ancora, un cambio di contenuto segna il chunk come da salvare ({@code setChanged()}): senza quel segno una
+     * cella messa in un caricatore che non sta caricando si perde quando il chunk si scarica. Il test toglie il segno
+     * e lo ritrova messo dopo {@code setCell} e dopo {@code setDust}, tutto dentro lo stesso tick: il chunk non resta
+     * mai senza.
      */
     private static void chargerSavesAndLoadsItsContents(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos abs = helper.absolutePos(POS);
         ChargerBlockEntity c = charger(helper, POS);
+        LevelChunk chunk = level.getChunkAt(abs);
+        chunk.setUnsaved(false);
         c.setCell(cell(1_234));
+        helper.assertTrue(chunk.isUnsaved(), "setCell did not mark the chunk for saving");
+        chunk.setUnsaved(false);
         c.setDust(redstone(7));
+        helper.assertTrue(chunk.isUnsaved(), "setDust did not mark the chunk for saving");
         tick(helper, c, 1);
         assertContents(helper, c, "before saving", 1_236, 6, 498);
         helper.assertTrue(c.carryMilli() == 500, "carry before saving " + c.carryMilli() + ", not 500");
@@ -461,6 +480,13 @@ public final class ChargerGameTests {
             helper.assertTrue(saved.contains(key, Tag.TAG_ANY_NUMERIC), "saved key '" + key + "' is not a number: "
                     + saved);
         }
+        helper.assertTrue(saved.getBoolean("has_cell") && saved.getInt("cell_energy") == 1_236
+                && saved.getInt("redstone") == 6 && saved.getInt("reserve") == 498
+                && saved.getInt("carry_milli") == 500, "saved charger read by its on-disk names: " + saved);
+        TreeSet<String> own = new TreeSet<>(saved.getAllKeys());
+        own.removeAll(List.of("id", "x", "y", "z"));
+        helper.assertTrue(own.equals(new TreeSet<>(CHARGER_NAMES_ON_DISK)), "keys of a saved charger besides id, x, y"
+                + " and z: " + own + ", expected " + new TreeSet<>(CHARGER_NAMES_ON_DISK));
 
         ChargerBlockEntity loaded = (ChargerBlockEntity) Compat.gameTests().loadBlockEntity(level, abs, saved);
         helper.assertTrue(loaded != c && !loaded.cell().isEmpty(), "loaded charger has no cell, or is the saved one");
