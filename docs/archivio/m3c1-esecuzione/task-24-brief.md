@@ -1,0 +1,59 @@
+### Task 24: Client vero, testi e documenti della 3c-1, verifica finale
+
+**Files:**
+- Create: `tools/client/m3c_shots.sh`, `docs/test-in-gioco/m3c-screenshot/` (scatti scelti, senza metadati)
+- Modify: `tools/client/README.md`, `README.md`, `docs/compat.md`, `docs/superpowers/specs/2026-11-13-m3-telaio-design.md` (solo dove un fatto dell'esecuzione contraddice il testo di §11 o di §12)
+
+**Interfaces:**
+- Consumes: `tools/client/client_shot.sh <variante> <cartella> [comando | @passo]…` (Task 2: `autoJump:false`, `+` nei nomi dei tasti; un comando del server passa da `execute store success`, e uno che non riesce ferma l'esecuzione; obiettivo `exo_shot` già creato dallo script; il giocatore `Exo` è operatore e nasce in creativa in 0,5 −60 0,5 su un mondo piatto); lo schema di `tools/client/m3b_shots.sh` (scelta del formato dei dati per variante, `steps=(…)`, riga finale `OK`/`FAIL`); `/exoframe debug wear rottame`, `/exoframe debug energy [<re>]` (Task 23: il risultato di `show` è la carica); i dati degli oggetti: cella `{exoframes:{energy:N}}`, pezzo `{exoframes:{tier:"scrap",durability:D,max_durability:M}}` (chiavi di `NbtKeys`: `ROOT`, `ENERGY`, `TIER`, `DURABILITY`, `MAX_DURABILITY`), come tag su 1.20.1 e nel componente `minecraft:custom_data` su 1.21.1; le soglie della ricognizione `docs/superpowers/specs/ricognizioni/2026-11-15-m3c-movimento-e-dati.md`.
+- Produces: `tools/client/m3c_shots.sh <variante> <cartella>` (commento di testa come `m3b_shots.sh`: uso, che cosa fa ogni passo, scatti, durata misurata), un'esecuzione di `client_shot.sh` con, in ordine:
+  ```bash
+  u=${EXO_SHOT_USER:-Exo}
+  case "$variant" in
+      1.20.1-*) cell='redstone_exoframes:redstone_cell{exoframes:{energy:5000}}'
+                piece='redstone_exoframes:scrap_helmet{exoframes:{tier:"scrap",durability:90,max_durability:180}}' ;;
+      *) cell='redstone_exoframes:redstone_cell[minecraft:custom_data={exoframes:{energy:5000}}]'
+         piece='redstone_exoframes:scrap_helmet[minecraft:custom_data={exoframes:{tier:"scrap",durability:90,max_durability:180}}]' ;;
+  esac
+  P="data get entity $u Pos"
+  at() { echo "execute if entity @a[name=$u,x=$1,y=$2,z=$3,distance=..$4]"; }      # entro r dal punto
+  beyond() { echo "execute unless entity @a[name=$u,x=$1,y=$2,z=$3,distance=..$4]"; } # oltre r dal punto
+  energy() { echo "execute store result score #$1 exo_shot run execute as $u run exoframe debug energy"; }
+  ```
+  passi: `gamemode survival $u`; costruzioni della ricognizione (`fill 9 -60 -3 15 -57 13 glass`, `fill 10 -60 -2 14 -57 12 air`, `fill 10 -60 -2 14 -58 12 water`: vasca profonda 3; `fill 20 -61 -2 24 -61 12 water`: acqua profonda 1; `setblock 40 -60 -20 water`: corrente; `fill -6 -60 3 -3 -60 10 stone`: scalino alto 1), `@attendi 3`, `execute as $u run exoframe debug wear rottame`, `@attendi 2`; poi:
+  1. affondare: `tp $u 12.5 -58 0.5 0 0`, `@attendi 1.5`, `$P`, `$(at 12.5 -60 0.5 0.1)`;
+  2. Spazio sul fondo: `tp $u 12.5 -60 0.5 0 0`, `@attendi 1`, `@tieni space 3 vasca-spazio 2`, `$P`, `$(at 12.5 -60 0.5 0.1)` (senza la regola dell'acqua −57,5);
+  3. avanti sul fondo: `tp $u 12.5 -60 0.5 0 0`, `@attendi 1`, `@tieni w 2`, `$P`, `$(beyond 12.5 -60 0.5 6)` (velocità di terra della tuta, circa 7,2: 8,5 della ricognizione × 0,85);
+  4. acqua profonda 1: `tp $u 22.5 -61 0.5 0 0`, `@attendi 1`, `@tieni space 2`, `$P`, `$(at 22.5 -61 0.5 0.1)`; poi l'uscita dalla sponda alta 1 (design §12.5, §12.6, §7 punto 35): `tp $u 22.5 -61 0.5 -90 0`, `@attendi 1`, `@tieni w 1.5`, `$P`, `$(at 28 -60 0.5 1.2)` (Y −60, X fra 26,8 e 29,2: la ricognizione misura X 28,68-28,93 senza il fattore 0,85, circa 27,7-28 con; senza gradino la tuta resta a Y −61, X 24,70, a più di 3,4 da quel punto);
+  5. corrente: `tp $u 42.5 -60 -19.5 0 0`, `@attendi 0.2`, `@attendi 3`, `$P`, `$(at 42.5 -60 -19.5 0.05)`;
+  6. scalino (le quattro varianti): `tp $u -4.5 -60 0.5 0 0`, `@attendi 1`, `@tieni w 1.5`, `$P`, `$(at -4.5 -59 6.8 1.5)` (Y +1; senza gradino il giocatore resta a −60 contro lo scalino, a più di 3,9 da quel punto);
+  7. corsa: `execute as $u run exoframe debug energy 999`, `tp $u 0.5 -60 -5.5 180 0`, `@attendi 1`, `@tieni ctrl+w 2`, `$P`, `$(at 0.5 -60 -5.5 8.2)`, `$(beyond 0.5 -60 -5.5 6)`; `… debug energy 5000`, stesso `tp`, `@attendi 1`, `@tieni ctrl+w 2`, `$P`, `$(beyond 0.5 -60 -5.5 8.6)` (soglie del Task 23 Step 5);
+  8. riga dell'energia: `$(energy prima)`, `tp $u 0.5 -60 -5.5 180 0`, `@attendi 1`, `@tieni w 5`, `$(energy dopo)`, `execute if score #dopo exo_shot < #prima exo_shot`, `@scatto riga-energia`; `… debug energy 500`, `@attendi 1`, `@scatto riga-energia-bassa`; `… debug energy 0`, `@attendi 1`, `@scatto riga-energia-esaurita`; `… debug energy 5000`;
+  9. barre: `give $u $cell`, `give $u $piece`, `@attendi 1`, `@tieni e 0.2`, `@attendi 1`, `@scatto barre-inventario`, `@tieni Escape 0.2`;
+  10. cambio cella: `execute as $u run exoframe debug energy 1000`, `@attendi 1`, `@tieni r 3 cambio-cella-tenuto 1`, `@attendi 1`, `$(energy cella)`, `execute if score #cella exo_shot matches 4900..5000` (installata la cella da 5 000, meno il consumo da fermi), `execute store result score #celle exo_shot run clear $u redstone_exoframes:redstone_cell 0`, `execute if score #celle exo_shot matches 1` (la vecchia è tornata nell'inventario al posto della nuova: una cella sola), `@scatto cambio-cella-fatto`;
+  11. alla fine `tp $u 0.5 -60 -5.5 0 15` per i tre scatti di `client_shot.sh`.
+  Riga finale come `m3b_shots.sh`: `=== $variant m3c` prima, `OK $variant: scatti in $out` o `FAIL …` dopo.
+- Documenti:
+  - `tools/client/README.md`: la riga d'uso di `m3c_shots.sh` accanto a quella di `m3b_shots.sh` e un paragrafo "**`m3c_shots.sh`**": la sequenza della 3c-1 in sopravvivenza, che cosa controlla ogni passo con le soglie (dalla ricognizione, le distanze moltiplicate per 0,85, il `frame.baseSpeedPenalty` che la tuta applica dal Task 14 e che la ricognizione non aveva), quali scatti lascia, che la corsa e la riga dell'energia usano `/exoframe debug energy`, durata misurata; che cosa non prova (doppio W e scatto a interruttore, suoni, suggerimenti al passaggio del mouse: checklist della 3c-2).
+  - `README.md`: "Stato" (fatta la parte 3c-1 "consumare": energia, usura e caduta, acqua e scatto, gradino, cambio cella, riga dell'energia, config da file; la 3c-2 con caricatore e ricette è la prossima); riga 33 con `m3c_shots.sh`; il paragrafo dei test in gioco con il numero di oggi (172, o quello misurato); "Documenti": gli scatti in `docs/test-in-gioco/m3c-screenshot/` e "Piani di implementazione (M1, M2a, M2b, M3a, M3b, M3c-1)".
+  - `docs/compat.md`: rilettura contro il codice di tutte le cuciture della 3c-1 (`FrameIndicators`, `changeWorn`, `clientIndicators`, `onSynced`, formato di `frame_state_sync`, `client_rules` e `cell_swap` in `Net`, `FrameAttributes` idempotente con `frame_step` e `localStep`, la regola `damages_helmet` di `DamageClassifier`, gli aiuti nuovi di `GameTests`, `CompatItem`, `addHudRenderer`, `configDir()` usato, i due mixin): ogni voce c'è e dice il vero; "Limiti noti" (`:273-278`): `:273` la config ora si legge da file, il ripristino dei moduli senza i controlli dell'installatore resta per M4 (design §12.14); `:274` destinazione M4/M5 (design §12.14); `:275` già chiusa dal Task 20; `:278` chiusa: la regola di sincronizzazione di design §12.4 (subito ai cambi strutturali e di effetti, energia o condizioni, altrimenti al più ogni 5 tick finché c'è qualcosa da mandare).
+  - Design: §12.14 (firma a cinque argomenti di `WornState.changed`, quarto esito `REFUSED` di `/exoframe debug energy`), §12.10 (con i due tasti giù vince l'uscita e il conteggio del cambio riparte) e §12.9 (mappa scritta solo in parte) dicono già queste cose: qui si controlla soltanto che il codice le rispetti. Il resto di §11 e §12 si tocca solo dove un fatto dell'esecuzione contraddice il testo, con un rimando al task; ogni correzione del genere va detta nel rapporto, come scelta del costruttore.
+
+- [ ] **Step 1:** scrivere `tools/client/m3c_shots.sh` come in "Produces" (`chmod +x`); `bash -n tools/client/m3c_shots.sh` — Expected: nessuna uscita.
+- [ ] **Step 2: client vero** — `EXO_ACCEPT_EULA=true bash tools/client/m3c_shots.sh <variante> <cartella>` sulle quattro varianti, una alla volta (`1.20.1-forge`, `1.20.1-fabric`, `1.21.1-fabric`, `1.21.1-neoforge`) — Expected: per ciascuna `OK <variante>: scatti in <cartella>`, uscita 0, `log-check.txt` vuoto, nessun `moved wrongly` in `server.log` (`grep -c 'moved wrongly' <cartella>/server.log` → 0; gli avvisi `moved too quickly` dopo un `tp` sono un artefatto noto della ricognizione e non contano); le posizioni in `rcon.log`. Guardare gli scatti uno per uno: `vasca-spazio` (sott'acqua sul fondo, niente posa a nuoto), `riga-energia` (verde, in basso a destra, numero sotto 5 000), `riga-energia-bassa` (gialla, 5 %), `riga-energia-esaurita` (rossa, 0 %), `barre-inventario` (cella con la barra rossa a metà, elmo con la barra di durata gialla a metà), `cambio-cella-tenuto` (avanzamento sulla barra delle azioni), `cambio-cella-fatto` (riga dell'energia a 5 000 circa). Annotare la durata di ogni esecuzione.
+- [ ] **Step 3: scatti di riferimento** — almeno uno per versione di ciascuno fra `riga-energia`, `barre-inventario`, `cambio-cella-tenuto`, `vasca-spazio`, copiati senza metadati: `convert <cartella>/<scatto>.png -strip -define png:exclude-chunks=date,time docs/test-in-gioco/m3c-screenshot/<variante>-<scatto>.png` — Expected: nessuna uscita da
+  ```bash
+  python3 -I -c 'import struct, sys
+  for f in sys.argv[1:]:
+      d = open(f, "rb").read(); i = 8; kinds = []
+      while i < len(d):
+          n = struct.unpack(">I", d[i:i + 4])[0]; kinds.append(d[i + 4:i + 8]); i += 12 + n
+      bad = [k for k in kinds if k in (b"tEXt", b"iTXt", b"zTXt", b"eXIf", b"tIME")]
+      assert not bad, (f, bad)' docs/test-in-gioco/m3c-screenshot/*.png
+  ```
+  (gli stessi blocchi di testo che `tools/check_jar_privacy.py` cerca nei jar, più la data).
+- [ ] **Step 4: server dedicato** avviato e fermato sulle quattro varianti, una alla volta (`eula=true` in `versions/<v>/run/eula.txt`, `./gradlew --console=plain :<v>:runServer` fino a `Done (`, poi `stop`) — Expected: arriva a `Done (`; `python3 -I tools/check_log.py client --variant <v> versions/<v>/run/logs/latest.log` → nessuna uscita, uscita 0 (l'ambito client ammette la sola `No data fixer registered for exoframe`, esattamente una volta su Fabric e mai su Forge e NeoForge): un server dedicato non carica `client/` (riga dell'energia, tasto `R`).
+- [ ] **Step 5: documenti** come in "Produces".
+- [ ] **Step 6: verifiche di fine task** — `./gradlew --console=plain :1.20.1-forge:build :1.20.1-fabric:build :1.21.1-fabric:build :1.21.1-neoforge:build :1.20.1-forge:collectJar :1.20.1-fabric:collectJar :1.21.1-fabric:collectJar :1.21.1-neoforge:collectJar` → `BUILD SUCCESSFUL`; `bash tools/check_sources.sh` → `OK sources`; `bash tools/check_jars.sh` → `OK jars` (anche il controllo (g) dei dati personali); `bash tools/check_art.sh` → `OK art`; `bash tools/run_gametests.sh` → quattro righe `OK <variante>: 172 test obbligatori passati, nessun avviso fuori elenco` (uno in più per ciascun ripiego dei Task 11-12); `python3 -I -c 'import json; a=json.load(open("src/main/resources/assets/redstone_exoframes/lang/en_us.json")); b=json.load(open("src/main/resources/assets/redstone_exoframes/lang/it_it.json")); assert list(a)==list(b), "lang keys differ"'` → nessuna uscita (stesse chiavi, stesso ordine); `grep -rn 'isCreative()' src/main/java/com/toxineren/exoframes/frame src/main/java/com/toxineren/exoframes/core src/main/java/com/toxineren/exoframes/client | grep -vE ':[0-9]+:[[:space:]]*(\*|//|/\*)'` → solo righe di codice della 3b, nessuna nei file nuovi della 3c-1.
+- [ ] **Step 7: commit** `test: prova della 3c-1 nel client vero; documenti`. La checklist per il PC è della 3c-2 (design §12.15).
+
