@@ -32,9 +32,9 @@ import net.minecraft.nbt.Tag;
  * = nessuna cella; {@link NbtKeys#CAPACITY} si scrive ancora per compatibilita' con i registri della 3b, e il
  * caricamento sul server la legge solo per una cella che tiene piu' della capacita' della config di chi carica: le
  * altre prendono quella della config, design §12.10); {@link NbtKeys#ACTIVE}; {@link NbtKeys#REINFORCED};
- * {@link NbtKeys#OWNER} (assente = nessun
- * proprietario); {@link NbtKeys#UNLOCKED}. L'armatura stivata ({@link NbtKeys#STOWED}) non fa parte dello stato: la
- * scrive e la legge il registro dei telai ({@link FrameStateSavedData}), accanto allo stato di ogni record.
+ * {@link NbtKeys#OWNER} (assente = nessun proprietario); {@link NbtKeys#UNLOCKED}. L'armatura stivata
+ * ({@link NbtKeys#STOWED}) non fa parte dello stato: la scrive e la legge il registro dei telai
+ * ({@link FrameStateSavedData}), accanto allo stato di ogni record.
  * <p>
  * La lettura e' tollerante: id sconosciuti di slot, livello o modulo vengono ignorati con un solo avviso per id
  * (conversioni condivise con gli item in {@link SchemaIds}); un proprietario malformato vale assente;
