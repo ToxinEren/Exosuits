@@ -185,6 +185,24 @@ public interface GameTests {
     BlockEntity loadBlockEntity(ServerLevel level, BlockPos pos, CompoundTag saved);
 
     /**
+     * Il risultato (una copia) della ricetta con quella chiave nel gestore delle ricette del server, come lo mostra il
+     * libro delle ricette ({@code Recipe.getResultItem} con i registri del server); vuoto se il server non ha una
+     * ricetta con quella chiave. Esiste solo per i test.
+     */
+    Optional<ItemStack> recipeResult(MinecraftServer server, ResourceLocation id);
+
+    /**
+     * Cio' che il banco da lavoro darebbe per quella griglia: la prima ricetta di tipo {@code RecipeType.CRAFTING} del
+     * livello che corrisponde, assemblata; {@link ItemStack#EMPTY} se nessuna corrisponde. {@code grid} ha
+     * {@code width * height} stack, per righe, vuoti dove la casella e' vuota ({@link IllegalArgumentException} se il
+     * numero non torna); gli stack della griglia non vengono cambiati. Esiste solo per i test.
+     */
+    ItemStack craft(ServerLevel level, int width, int height, List<ItemStack> grid);
+
+    /** Vero se il server ha caricato un avanzamento con quell'id. Esiste solo per i test. */
+    boolean hasAdvancement(MinecraftServer server, ResourceLocation id);
+
+    /**
      * Comincia a contare gli eventi di gioco {@code EQUIP} che arrivano entro 16 blocchi da {@code center}, finche' il
      * contatore non si chiude. {@code LivingEntity.onEquipItem} emette quell'evento nello stesso ramo in cui suona
      * l'equipaggiamento: zero eventi dopo un cambio degli slot armatura vuol dire nessun suono. Esiste solo per i test.

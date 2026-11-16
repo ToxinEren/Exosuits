@@ -32,6 +32,7 @@ import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.RecipeType;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.gameevent.BlockPositionSource;
@@ -45,9 +46,14 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.Holder;
 import net.minecraft.server.level.ClientInformation;
 import net.minecraft.server.network.CommonListenerCookie;
+import net.minecraft.world.item.crafting.CraftingInput;
 //?}
 //? if <1.21 {
 /*import java.nio.charset.StandardCharsets;
+import net.minecraft.core.NonNullList;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.TransientCraftingContainer;
 import net.minecraft.world.level.block.entity.TheEndGatewayBlockEntity;
 *///?}
 //? if fabric {
@@ -352,6 +358,60 @@ public final class GameTestsImpl implements GameTests {
         }
         level.setBlockEntity(loaded);
         return loaded;
+    }
+
+    @Override
+    public Optional<ItemStack> recipeResult(MinecraftServer server, ResourceLocation id) {
+        //? if >=1.21 {
+        return server.getRecipeManager().byKey(id)
+                .map(holder -> holder.value().getResultItem(server.registryAccess()).copy());
+        //?} else {
+        /*return server.getRecipeManager().byKey(id)
+                .map(recipe -> recipe.getResultItem(server.registryAccess()).copy());
+        *///?}
+    }
+
+    /**
+     * Su 1.21.1 la griglia e' un {@code CraftingInput}; su 1.20.1 un {@code TransientCraftingContainer}, che vuole un
+     * menu: uno anonimo senza slot e mai valido, che nessuno chiama perche' la griglia nasce gia' piena.
+     */
+    @Override
+    public ItemStack craft(ServerLevel level, int width, int height, List<ItemStack> grid) {
+        if (width < 1 || height < 1 || grid.size() != width * height) {
+            throw new IllegalArgumentException("a " + width + "x" + height + " grid cannot hold " + grid.size()
+                    + " stacks");
+        }
+        //? if >=1.21 {
+        CraftingInput input = CraftingInput.of(width, height, grid);
+        return level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, level)
+                .map(holder -> holder.value().assemble(input, level.registryAccess())).orElse(ItemStack.EMPTY);
+        //?} else {
+        /*AbstractContainerMenu menu = new AbstractContainerMenu(null, -1) {
+            @Override
+            public ItemStack quickMoveStack(Player player, int index) {
+                return ItemStack.EMPTY;
+            }
+
+            @Override
+            public boolean stillValid(Player player) {
+                return false;
+            }
+        };
+        NonNullList<ItemStack> items = NonNullList.create();
+        items.addAll(grid);
+        TransientCraftingContainer container = new TransientCraftingContainer(menu, width, height, items);
+        return level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, container, level)
+                .map(recipe -> recipe.assemble(container, level.registryAccess())).orElse(ItemStack.EMPTY);
+        *///?}
+    }
+
+    @Override
+    public boolean hasAdvancement(MinecraftServer server, ResourceLocation id) {
+        //? if >=1.21 {
+        return server.getAdvancements().get(id) != null;
+        //?} else {
+        /*return server.getAdvancements().getAdvancement(id) != null;
+        *///?}
     }
 
     /**

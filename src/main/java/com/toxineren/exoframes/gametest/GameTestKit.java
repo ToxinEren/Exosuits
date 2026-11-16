@@ -125,6 +125,8 @@ final class GameTestKit {
     static final int DATA_VERSION_1_20_1 = 3465;
     static final List<EquipmentSlot> ARMOR_SLOTS =
             List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
+    /** Lato della griglia del banco da lavoro, in caselle. */
+    static final int CRAFTING_GRID_SIDE = 3;
 
     /** Solo aiuti statici: nessuna istanza. */
     private GameTestKit() {
@@ -801,6 +803,40 @@ final class GameTestKit {
         BlockPos b = helper.absolutePos(new BlockPos(STRUCTURE_SIZE - 1, STRUCTURE_SIZE - 1, STRUCTURE_SIZE - 1));
         return new AABB(Math.min(a.getX(), b.getX()), Math.min(a.getY(), b.getY()), Math.min(a.getZ(), b.getZ()),
                 Math.max(a.getX(), b.getX()) + 1, Math.max(a.getY(), b.getY()) + 1, Math.max(a.getZ(), b.getZ()) + 1);
+    }
+
+    /**
+     * Nove stack per una griglia 3x3 del banco da lavoro, per righe, in una lista nuova che chi chiama puo' cambiare:
+     * al piu' tre righe, ciascuna da uno a tre caratteri, riempite a destra e in basso con il vuoto. {@code I} lingotto
+     * di ferro, {@code C} lingotto di rame, {@code R} blocco di redstone, {@code r} polvere di redstone, {@code Q}
+     * quarzo, {@code _} vuoto: le lettere delle forme di design §12.12. {@link IllegalArgumentException} per un altro
+     * carattere, per una riga vuota o troppo lunga e per piu' di tre righe.
+     */
+    static List<ItemStack> craftingGrid(String... rows) {
+        if (rows.length > CRAFTING_GRID_SIDE) {
+            throw new IllegalArgumentException(rows.length + " rows do not fit a crafting grid");
+        }
+        List<ItemStack> grid = new ArrayList<>();
+        for (int row = 0; row < CRAFTING_GRID_SIDE; row++) {
+            String cells = row < rows.length ? rows[row] : "_";
+            if (cells.isEmpty() || cells.length() > CRAFTING_GRID_SIDE) {
+                throw new IllegalArgumentException("crafting row '" + cells + "' is not one to three characters");
+            }
+            for (int column = 0; column < CRAFTING_GRID_SIDE; column++) {
+                char letter = column < cells.length() ? cells.charAt(column) : '_';
+                grid.add(switch (letter) {
+                    case 'I' -> new ItemStack(Items.IRON_INGOT);
+                    case 'C' -> new ItemStack(Items.COPPER_INGOT);
+                    case 'R' -> new ItemStack(Items.REDSTONE_BLOCK);
+                    case 'r' -> new ItemStack(Items.REDSTONE);
+                    case 'Q' -> new ItemStack(Items.QUARTZ);
+                    case '_' -> ItemStack.EMPTY;
+                    default -> throw new IllegalArgumentException("unknown crafting letter '" + letter + "' in '"
+                            + cells + "'");
+                });
+            }
+        }
+        return grid;
     }
 
     /**

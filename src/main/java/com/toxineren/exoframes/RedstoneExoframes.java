@@ -26,6 +26,7 @@ import com.toxineren.exoframes.gametest.CarryOverGameTests;
 import com.toxineren.exoframes.gametest.CellGameTests;
 import com.toxineren.exoframes.gametest.ChargerGameTests;
 import com.toxineren.exoframes.gametest.DamageGameTests;
+import com.toxineren.exoframes.gametest.DataGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import com.toxineren.exoframes.gametest.MovementGameTests;
@@ -95,6 +96,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(MovementGameTests.class);
         Compat.gameTests().register(CellGameTests.class);
         Compat.gameTests().register(ChargerGameTests.class);
+        Compat.gameTests().register(DataGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */
