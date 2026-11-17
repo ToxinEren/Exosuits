@@ -1,0 +1,30 @@
+# Re-review of the final fix wave: m3d-braccio (ffe2ab2..b82a8da)
+
+### Finding Verdicts
+
+- **FF-1 "clear of the hotbar" stated without the 960x540 condition** — ADDRESSED. `docs/test-in-gioco/m3d-braccio.md:69` (step 3) now says the forearm reaches about where the base arm reached at step 2, stays clear at 960x540, and may end under the last slot at other sizes (854x480 named) or scales, "non e' un errore"; `:68` (step 2) asks the tester to note where the base arm reaches; `:48` says 16:9, that the hand position is a calculation, and that the hotbar grows in steps with the GUI scale ("Automatica" = the largest allowed); `:18` adds "nella finestra di prova (960x540)"; `README.md:9` "fuori dal mirino e, a 960x540, dalla barra degli oggetti". SCALE and SIDE_SHIFT_PX untouched.
+- **FF-2 half-updated PilotPose class Javadoc** — ADDRESSED. `src/main/java/com/toxineren/exoframes/client/PilotPose.java:28-33`: "La logica del pilota sta qui"; the pilot hooks (two of PlayerRendererMixin, two of ItemInHandLayerMixin) call the on... methods; the third PlayerRendererMixin hook calls FirstPersonArm. Checked against the mixins: PlayerRendererMixin.java:40-66 (scale, render -> PilotPose; renderHand -> FirstPersonArm), ItemInHandLayerMixin.java:28-48 (two PilotPose calls).
+- **FF-3 step 7 omits the yellow second HUD line** — ADDRESSED. `m3d-braccio.md:73`: second yellow line, piece name followed by "in stato critico" ("critical"), from part 3c, expected. Matches `it_it.json:62`/`en_us.json:62` (`condition...critical`), `it_it.json:65` (`hud...worst` "%s %s") and `EnergyHud.java:83` (LOW_COLOR 0xFFFF55 when critical).
+- **FF-4 mobs may wear the real frame's arm piece** — ADDRESSED. `m3d-braccio.md:68` (step 2): `/difficulty peaceful` right after entering, with the reason. Peaceful also removes already spawned slimes; no step needs mobs or hunger; step E (`:58`) sets no difficulty, so nothing contradicts it; the LAN world of step 18 keeps it.
+- **T1-F2 SuitLayer.suitView Javadoc names PilotPose only** — ADDRESSED. `src/main/java/com/toxineren/exoframes/client/SuitLayer.java:66-68` names PilotPose and FirstPersonArm, and that null leaves the arm to the base game (same package, link resolves).
+- **T1-F3 SuitRenderer class Javadoc omits the first-person use** — ADDRESSED. `src/main/java/com/toxineren/exoframes/compat/client/SuitRenderer.java:10-15` names `{@link #renderArm}` (declared at :46) and that it is called inside the first-person hand draw; no reference from compat/client to client/.
+- **T2-F5 Italian shell identifiers esito and mis** — ADDRESSED. `tools/client/m3d_shots.sh:206` `take_measure`, `:223-224` `verdict`; `grep -w 'mis\|esito'` finds nothing left; 39 occurrences of the new names; `bash -n` passes; strings and the `misura-non-riuscita` sentinel unchanged. The four real runs (`/home/user/m3d-scatti/*.controlli.txt`: 14 ok each, OK line; all eight `log-check.txt` 0 bytes) were made with this code.
+- **T3-F1 "Personalizzazione skin..." instead of "Aspetto..."** — ADDRESSED. `m3d-braccio.md:17` and `:78` "Opzioni... -> Aspetto... -> Mano principale"; no "Personalizzazione skin" left in the file.
+- **T3-F2 step 16 Italian path and GUI scales 3/4 not offered in the window** — ADDRESSED. `m3d-braccio.md:85`: "Opzioni... -> Grafica... -> Scala", FOV slider named "Campo visivo", F11 first, scales 1/3/4 in fullscreen, "se un valore non c'e', annota il massimo che il gioco offre", then back to window.
+- **T3-F3 "uguali al pixel" overstated** — ADDRESSED. `m3d-braccio.md:46`: measures equal save two (third-person magenta; inventory magenta, 1.20.1 about 1.75 times 1.21.1: 18802/10782 = 1.74 in the new runs); `:48`: "le stesse misure e scatti uguali a occhio", "finestra 16:9", "e' un calcolo: altre misure non sono state provate".
+- **T3-F4 step 18 "lui vede la tua tuta intera"** — ADDRESSED. `m3d-braccio.md:87`: the second player sees the step-14 frame, whole (head, torso, two arms, two legs), with only the Braccio Rottame on the side where it was mounted; step 14 (`:80`) mounts one Braccio Rottame and the cell, and 15-17 do not change it.
+- **T3-F5 stale figures in the m3d_shots.sh head comment** — ADDRESSED. `tools/client/m3d_shots.sh:62-68`: 207-225 s (111-119 / 76-86, 232 s once after a build), third-person 23538-23745, Forge 170-174 from x 320-321 / 18796-18830, Fabric 166-174 from x 319-323 / 18712-18810. Agrees with `tools/client/README.md:135` ("fra 166 e 174") and `:186`, and with the on-disk results of this wave (third person 23739/23665/23538/23745; inventory 172x202+320+66 18802, 174x202+319+66 18810, 98x140+356+120 10782/10804).
+
+### New Breakage in the Fix Diff
+
+- **FW-1 (Minor) `tools/client/m3d_shots.sh:111-112` now contradicts the rewritten head comment.** The INVENTORY_MIN_W comment still says the 1.20.1 inventory width is "fra 166 e 172"; the head comment as rewritten by this wave (`:67-68`) says Forge 170-174 and Fabric 166-174, and `tools/client/README.md:135` says "fra 166 e 174". At ffe2ab2 the head comment (170-172, 166-168) and :112 agreed with each other; the wave updated one figure and not the other, so the file now states two ranges for the same measure (174 measured in this wave: `/home/user/m3d-scatti/1.20.1-fabric.controlli.txt`, 174x202+319+66). One number; the threshold (70) and every check are unaffected.
+
+Otherwise clean. Added Java/shell lines are ASCII-only (Javadoc rule "apostrofi ASCII"); `bash -n` passes; no doc in tools/, docs/ or README.md names the old functions `mis`/`esito`; only Javadoc changed in the mod sources, so skipping the game tests is consistent. Run provenance checked: 64660a0 committed 14:48, the result files are dated 14:53-15:05, b82a8da 15:06, and `git diff 64660a0..b82a8da -- tools/client/m3d_shots.sh` touches only comment lines. The checklist has no leftover "Personalizzazione", "uguali al pixel" or unconditional hotbar expectation (remaining hotbar mentions at :27/:33 describe the 960x540 shots, :85 and :108 are consistent with step 3).
+
+### Out-of-Scope Observations
+
+None.
+
+### Verdict
+
+**Fix round:** All findings addressed, no new Critical/Important breakage (one Minor, FW-1).
