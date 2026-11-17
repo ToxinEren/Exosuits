@@ -50,12 +50,17 @@
 #   EXO_SHOT_SERVER_CONFIG
 #                     file di config della mod per il solo server (copiato in run-shot-server/config/); senza, i
 #                     predefiniti. Un file che non c'e' o non si legge ferma lo script prima di avviare qualunque cosa
+#   EXO_SHOT_MAIN_HAND
+#                     left o right, default right: la mano principale del giocatore (mainHand in options.txt del
+#                     client); con left il gioco disegna a sinistra il braccio della prima persona. Un altro valore
+#                     ferma lo script prima di avviare qualunque cosa
 #
 # Uscite: 0 scatti salvati e log puliti; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato,
 # passo non riuscito, scatto, avvisi del mod fuori elenco in log-check.txt); 2 uso o ambiente sbagliati (variante,
 # passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, file di EXO_SHOT_SERVER_CONFIG che
-# manca, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su
-# stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni complete in tools/client/README.md.
+# manca, EXO_SHOT_MAIN_HAND che non e' left ne' right, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente);
+# 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni
+# complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -154,6 +159,13 @@ for n in "$port" "$width" "$height" "$settle"; do
     case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_PORT, EXO_SHOT_W, EXO_SHOT_H ed EXO_SHOT_SETTLE vogliono numeri interi" ;; esac
 done
 case "$user" in '' | *[!A-Za-z0-9_]*) fatal "EXO_SHOT_USER: solo lettere, cifre e _ (nome di giocatore valido)" ;; esac
+# Mano principale del giocatore: finisce in options.txt, e un valore che il gioco non conosce varrebbe "right" in
+# silenzio.
+main_hand=${EXO_SHOT_MAIN_HAND:-right}
+case "$main_hand" in
+    left | right) ;;
+    *) fatal "EXO_SHOT_MAIN_HAND: si scrive left oppure right, non '$main_hand'" ;;
+esac
 # Config del solo server: il percorso si rende assoluto appena letto (piu' sotto lo script copia il file da un'altra
 # cartella), e un file che non c'e' ferma qui, prima di toccare la cartella degli scatti e di avviare qualunque cosa.
 server_config=${EXO_SHOT_SERVER_CONFIG:-}
@@ -227,7 +239,8 @@ motd=exo-shot
 EOF
 # options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica "Dettagliata"
 # (graphicsMode:1; 0 sarebbe "Rapida"), distanza di rendering 4 e 30 fps per il rendering software, mouse non grezzo
-# (xdotool muove il puntatore per lo scatto a tre quarti), salto automatico spento (un gradino non diventa un salto).
+# (xdotool muove il puntatore per lo scatto a tre quarti), salto automatico spento (un gradino non diventa un salto),
+# la mano principale di EXO_SHOT_MAIN_HAND (il valore fra virgolette, come lo scrive il gioco).
 cat >"$cdir/options.txt" <<EOF
 onboardAccessibility:false
 narrator:0
@@ -246,6 +259,7 @@ fov:0.0
 soundCategory_master:0.0
 rawMouseInput:false
 autoJump:false
+mainHand:"$main_hand"
 EOF
 
 # --- chiusura -------------------------------------------------------------------------------------------------------

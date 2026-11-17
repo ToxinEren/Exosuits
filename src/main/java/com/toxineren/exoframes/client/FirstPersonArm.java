@@ -39,19 +39,38 @@ import org.joml.Quaternionf;
  */
 public final class FirstPersonArm {
     /**
-     * K: quante volte la sua misura di modello e' grande il braccio in prima persona. Parte dalla scala della terza
-     * persona ({@link SuitScale#S}); i candidati sono 1,65, 1,3 e 1,0 e si sceglie nel client vero il piu' grande che
-     * soddisfa i criteri di design, par. 13.
+     * K: quante volte la sua misura di modello e' grande il braccio in prima persona. Scelto nel client vero
+     * (1.21.1-neoforge, 960x540, a riposo; le misure del valore scelto sono uguali al pixel sulle quattro varianti)
+     * fra 1,65 (la scala della terza persona, {@link SuitScale#S}), 1,3 e 1,0: il piu' grande che soddisfa i criteri
+     * di design, par. 13, cioe' (a) la mano intera sullo schermo con un tratto di avambraccio, nel quarto in basso a
+     * destra, (b) nessun pixel nel mirino, nella barra degli oggetti e nella riga dell'energia, (c) fra il 3 % e il
+     * 14 % dello schermo. Le misure sono di {@code tools/client/arm_measure.sh sagoma}, il braccio con i sei pezzi e,
+     * fra parentesi, il telaio nudo; il riquadro e' quello con i pezzi.
+     * <ul>
+     * <li>Con il palmo sul centro della mano di base ({@link #SIDE_SHIFT_PX} 0) nessun K passa, perche' l'avambraccio
+     * finisce dietro la barra degli oggetti: 1,65 copertura 13,26 (11,87), barra 13175 (7965), riquadro
+     * 469x237+491+303; 1,3 copertura 9,61 (8,55), barra 8468 (4469), riquadro 406x205+554+335; 1,0 copertura 7,05
+     * (6,00), barra 4868 (1877), riquadro 358x177+602+363.</li>
+     * <li>1,65 scartato anche con lo spostamento: quello minimo che libera la barra e' 6,5 (a 6,0 barra 731 con i
+     * pezzi; a 6,5 barra 0, copertura 10,33 (9,10), riquadro 288x237+672+303), e li' il bordo destro dello schermo
+     * taglia la mano: il palmo arriva al bordo e il pollice resta fuori, quindi (a) non vale.</li>
+     * <li>1,3 scelto, con lo spostamento 4,5: barra 0 (0), mirino 0, energia 0, copertura 8,77 (7,72), riquadro
+     * 286x205+674+335 (260x205+700+335), la mano intera a 80 pixel dal bordo destro.</li>
+     * <li>1,0 con lo spostamento non si e' misurato: 1,3 e' piu' grande e passa.</li>
+     * </ul>
      */
-    static final float SCALE = SuitScale.S;
+    static final float SCALE = 1.3f;
 
     /**
      * Di quanti pixel del modello il palmo si sposta dal centro della mano del gioco base lungo
-     * {@link #sideDirection}: un multiplo di 0,5 fra 0 e 8. Zero: il palmo sta sul centro della mano di base; diverso
-     * da zero solo se a nessun K il braccio resta fuori da mirino, barra degli oggetti e riga dell'energia (design,
-     * par. 13, secondo giro).
+     * {@link #sideDirection}: un multiplo di 0,5 fra 0 e 8, il minimo che a K = {@link #SCALE} tiene il braccio fuori
+     * dalla barra degli oggetti (design, par. 13, secondo giro: a spostamento zero non ci riesce nessun K, vedi
+     * {@link #SCALE}). A K 1,3, misurato nel client vero: con 4,0 l'avambraccio con i pezzi entra ancora nel
+     * rettangolo della barra (barra 634, riquadro 298x205+662+335); con 4,5 ne resta fuori di 4 pixel (barra 0,
+     * riquadro 286x205+674+335; il rettangolo finisce a x 670). Mezzo pixel di modello sposta il braccio di circa 12
+     * pixel dello schermo.
      */
-    static final float SIDE_SHIFT_PX = 0f;
+    static final float SIDE_SHIFT_PX = 4.5f;
 
     /**
      * Centro della mano del gioco base verso l'esterno, in pixel dal perno: la scatola del braccio classico va in x da
