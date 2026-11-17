@@ -60,14 +60,14 @@
 # client). Uscita 2: uso sbagliato.
 #
 # Dura circa tre minuti e mezzo a cache calde (misurati 207-225 s sulle quattro varianti: 111-119 s l'esecuzione A,
-# 76-86 s la B). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto),
-# salvo due, che cambiano di poco anche fra due esecuzioni della stessa variante: il magenta della terza persona
-# (fra 23593 e 23745, sempre nel riquadro 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1
-# ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e 1.20.1 no (su Forge largo 170-174 pixel da
-# x 320-321, magenta 18796-18830; su Fabric 166-170 da x 321-323, magenta 18712-18786; alto 202 da y 66). Le variabili
-# d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script
-# per tutte e due le esecuzioni, qualunque valore abbia nell'ambiente di chi lo chiama. Istruzioni in
-# tools/client/README.md.
+# 76-86 s la B; 232 s una volta, la prima sequenza dopo una build). Le misure sono uguali al pixel sulle quattro
+# varianti (i valori accanto alle soglie, piu' sotto), salvo due, che cambiano di poco anche fra due esecuzioni della
+# stessa variante: il magenta della terza persona (fra 23538 e 23745, sempre nel riquadro 318x312+321+221) e quello
+# dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e
+# 1.20.1 no (su Forge largo 170-174 pixel da x 320-321, magenta 18796-18830; su Fabric 166-174 da x 319-323, magenta
+# 18712-18810; alto 202 da y 66). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria);
+# EXO_SHOT_MAIN_HAND la imposta questo script per tutte e due le esecuzioni, qualunque valore abbia nell'ambiente di chi
+# lo chiama. Istruzioni in tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
