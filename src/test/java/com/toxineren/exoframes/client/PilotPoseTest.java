@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 class PilotPoseTest {
 
     /** La geometria generata della tuta. */
-    private static final String GEO = "/assets/redstone_exoframes/geo/exoframe.geo.json";
+    static final String GEO = "/assets/redstone_exoframes/geo/exoframe.geo.json";
 
     /**
      * Punto d'impugnatura del gioco base dal perno del braccio, in pixel del modello (y verso il basso):
@@ -138,7 +138,7 @@ class PilotPoseTest {
     }
 
     /** I cubi della mano di un osso del telaio: quelli che finiscono sotto il polso (y <= 11,25). */
-    private static List<double[]> handCubes(String bone) throws IOException {
+    static List<double[]> handCubes(String bone) throws IOException {
         List<double[]> cubes = new ArrayList<>();
         try (InputStream in = PilotPoseTest.class.getResourceAsStream(GEO)) {
             assertNotNull(in, "risorsa assente: " + GEO);

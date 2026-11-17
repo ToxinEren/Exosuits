@@ -17,6 +17,10 @@ import java.util.Objects;
  * visivo del pezzo montato nel loro slot; per uno slot senza pezzo nessuna. Le ossa delle decalcomanie restano nascoste
  * (design §5.1). Si colorano solo le regioni primaria ({@code _p1}) e secondaria ({@code _p2}) delle ossa dei pezzi,
  * con i colori del pezzo del loro slot; la regione neutra ({@code _n}) e ogni altro osso restano bianchi.
+ * <p>
+ * Il disegno di un braccio solo (la prima persona, design §13) mostra soltanto le ossa di quel braccio: l'osso di
+ * primo livello, l'osso del telaio e, del pezzo di quel lato, le ossa che mostra la tuta intera
+ * ({@link #visibleForArm}).
  */
 public final class SuitBoneRules {
     /** La regione di colore di un osso. */
@@ -95,6 +99,35 @@ public final class SuitBoneRules {
                 PieceView piece = view.pieces().get(entry.slot());
                 yield piece != null && piece.state() == entry.state();
             }
+        };
+    }
+
+    /**
+     * True se l'osso si vede quando della tuta si disegna il solo braccio {@code arm} ({@link PieceSlot#RIGHT_ARM} o
+     * {@link PieceSlot#LEFT_ARM}): l'osso di primo livello e l'osso del telaio di quel braccio sempre; delle ossa del
+     * pezzo di quello slot quelle che mostra {@link #visible}, cioe' le tre dello stato del pezzo montato. Ogni altro
+     * osso e' nascosto: le altre ossa di primo livello e del telaio, i pezzi degli altri slot (anche dell'altro
+     * braccio), le decalcomanie. Non mostra mai un osso che {@link #visible} nasconde.
+     *
+     * @throws IllegalArgumentException se {@code arm} non e' uno dei due bracci, o se l'osso non e' uno di
+     *     {@link #BONES}
+     */
+    public static boolean visibleForArm(String bone, SuitView view, PieceSlot arm) {
+        Objects.requireNonNull(view, "view must not be null");
+        Objects.requireNonNull(arm, "arm must not be null");
+        boolean right = arm == PieceSlot.RIGHT_ARM;
+        if (!right && arm != PieceSlot.LEFT_ARM) {
+            throw new IllegalArgumentException("not an arm slot: " + arm);
+        }
+        Bone entry = KINDS.get(bone);
+        if (entry == null) {
+            throw new IllegalArgumentException("unknown suit bone: " + bone);
+        }
+        return switch (entry.kind()) {
+            case ALWAYS_VISIBLE -> bone.equals(right ? SuitBones.ARMOR_RIGHT_ARM : SuitBones.ARMOR_LEFT_ARM)
+                    || bone.equals(SuitBones.frame(right ? "RightArm" : "LeftArm"));
+            case HIDDEN -> false;
+            case PIECE -> entry.slot() == arm && visible(bone, view);
         };
     }
 

@@ -1,5 +1,6 @@
 package com.toxineren.exoframes.compat.client;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -11,6 +12,7 @@ import com.toxineren.exoframes.compat.client.SuitView.PieceView;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -19,6 +21,9 @@ import org.junit.jupiter.api.Test;
 class SuitBoneRulesTest {
 
     private static final SuitView BARE = new SuitView(Map.of());
+
+    /** I due slot che il disegno di un braccio solo accetta. */
+    private static final List<PieceSlot> ARMS = List.of(PieceSlot.RIGHT_ARM, PieceSlot.LEFT_ARM);
 
     /** Tutti e sei i pezzi intatti, con colori diversi per slot. */
     private static SuitView full() {
@@ -124,5 +129,119 @@ class SuitBoneRulesTest {
             assertTrue(SuitBoneRules.visible(SuitBoneRules.BONES.get(i), BARE), SuitBoneRules.BONES.get(i));
         }
         assertThrows(IllegalArgumentException.class, () -> SuitBoneRules.visible("someOtherBone", BARE));
+    }
+
+    // --- Il disegno di un braccio solo (design, par. 13). ---
+
+    /** Il braccio destro nello stato 2 e il sinistro nello stato 1, con colori diversi. */
+    private static SuitView twoStates() {
+        return new SuitView(Map.of(PieceSlot.RIGHT_ARM, new PieceView(2, 0xAA0000, 0x00BB00),
+                PieceSlot.LEFT_ARM, new PieceView(1, 0x0000CC, 0x00DD00)));
+    }
+
+    /** Le ossa di {@link SuitBoneRules#BONES} che il disegno di quel braccio mostra. */
+    private static Set<String> shownForArm(SuitView view, PieceSlot arm) {
+        Set<String> shown = new HashSet<>();
+        for (String bone : SuitBoneRules.BONES) {
+            if (SuitBoneRules.visibleForArm(bone, view, arm)) {
+                shown.add(bone);
+            }
+        }
+        return shown;
+    }
+
+    /** L'osso di primo livello e l'osso del telaio di quel braccio. */
+    private static Set<String> armBones(PieceSlot arm) {
+        return arm == PieceSlot.RIGHT_ARM ? Set.of(SuitBones.ARMOR_RIGHT_ARM, SuitBones.frame("RightArm"))
+                : Set.of(SuitBones.ARMOR_LEFT_ARM, SuitBones.frame("LeftArm"));
+    }
+
+    @Test
+    void armDrawShowsOnlyTheBonesOfThatArm() {
+        for (PieceSlot arm : ARMS) {
+            Set<String> expected = new HashSet<>(armBones(arm));
+            for (String region : SuitBones.REGIONS) {
+                expected.add(SuitBones.piece(arm, 0, region));
+            }
+            assertEquals(5, expected.size());
+            assertEquals(expected, shownForArm(full(), arm), arm.name());
+            assertFalse(SuitBoneRules.visibleForArm(SuitBones.ARMOR_BODY, full(), arm), arm.name());
+            assertFalse(SuitBoneRules.visibleForArm(SuitBones.frame("Body"), full(), arm), arm.name());
+            assertFalse(SuitBoneRules.visibleForArm(SuitBones.piece(PieceSlot.TORSO, 0, SuitBones.PRIMARY), full(),
+                    arm), arm.name());
+        }
+    }
+
+    @Test
+    void armDrawWithoutTheArmPieceShowsTheFrameArmOnly() {
+        for (PieceSlot arm : ARMS) {
+            assertEquals(armBones(arm), shownForArm(BARE, arm), arm.name());
+            // i cinque pezzi tranne quello del braccio: nemmeno il pezzo dell'altro braccio si vede
+            Map<PieceSlot, PieceView> pieces = new EnumMap<>(full().pieces());
+            pieces.remove(arm);
+            assertEquals(5, pieces.size());
+            assertEquals(armBones(arm), shownForArm(new SuitView(pieces), arm), arm.name());
+        }
+    }
+
+    @Test
+    void armDrawFollowsTheStateOfItsOwnPiece() {
+        SuitView view = twoStates();
+
+        for (String region : SuitBones.REGIONS) {
+            assertTrue(SuitBoneRules.visibleForArm(SuitBones.piece(PieceSlot.RIGHT_ARM, 2, region), view,
+                    PieceSlot.RIGHT_ARM), region);
+            for (int state : new int[] {0, 1, 3}) {
+                String bone = SuitBones.piece(PieceSlot.RIGHT_ARM, state, region);
+                assertFalse(SuitBoneRules.visibleForArm(bone, view, PieceSlot.RIGHT_ARM), bone);
+            }
+        }
+        assertFalse(SuitBoneRules.visibleForArm("pieceLeftArm_s1_p1", view, PieceSlot.RIGHT_ARM));
+
+        for (String region : SuitBones.REGIONS) {
+            assertTrue(SuitBoneRules.visibleForArm(SuitBones.piece(PieceSlot.LEFT_ARM, 1, region), view,
+                    PieceSlot.LEFT_ARM), region);
+        }
+        assertFalse(SuitBoneRules.visibleForArm("pieceRightArm_s2_p1", view, PieceSlot.LEFT_ARM));
+    }
+
+    @Test
+    void armDrawKeepsDecalsHidden() {
+        for (PieceSlot arm : ARMS) {
+            for (SuitView view : new SuitView[] {full(), BARE}) {
+                assertFalse(SuitBoneRules.visibleForArm(SuitBones.decal(PieceSlot.LEFT_ARM), view, arm), arm.name());
+                assertFalse(SuitBoneRules.visibleForArm(SuitBones.decal(PieceSlot.TORSO), view, arm), arm.name());
+            }
+        }
+    }
+
+    @Test
+    void armDrawRejectsOtherSlotsAndUnknownBones() {
+        for (PieceSlot slot : new PieceSlot[] {PieceSlot.HELMET, PieceSlot.TORSO, PieceSlot.LEFT_LEG,
+                PieceSlot.RIGHT_LEG}) {
+            assertThrows(IllegalArgumentException.class,
+                    () -> SuitBoneRules.visibleForArm(SuitBones.ARMOR_RIGHT_ARM, BARE, slot), slot.name());
+        }
+        assertThrows(IllegalArgumentException.class,
+                () -> SuitBoneRules.visibleForArm("someOtherBone", BARE, PieceSlot.RIGHT_ARM));
+        assertThrows(NullPointerException.class,
+                () -> SuitBoneRules.visibleForArm(SuitBones.ARMOR_RIGHT_ARM, null, PieceSlot.RIGHT_ARM));
+        assertThrows(NullPointerException.class,
+                () -> SuitBoneRules.visibleForArm(SuitBones.ARMOR_RIGHT_ARM, BARE, null));
+    }
+
+    /** Design, par. 13: il braccio mostra esattamente cio' che mostra la terza persona, mai un osso in piu'. */
+    @Test
+    void armDrawShowsNothingTheWholeDrawHides() {
+        for (SuitView view : new SuitView[] {BARE, full(), twoStates()}) {
+            for (PieceSlot arm : ARMS) {
+                for (String bone : SuitBoneRules.BONES) {
+                    boolean shown = assertDoesNotThrow(() -> SuitBoneRules.visibleForArm(bone, view, arm), bone);
+                    if (shown) {
+                        assertTrue(SuitBoneRules.visible(bone, view), bone);
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.toxineren.exoframes.compat.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.toxineren.exoframes.core.armor.PieceSlot;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Entity;
@@ -29,4 +30,17 @@ public interface SuitRenderer {
      */
     void render(Entity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers, int packedLight,
             float partialTick, SuitView view);
+
+    /**
+     * Disegna un braccio solo della tuta (la prima persona, design §13). Come {@link #render}: stessa posa (l'osso
+     * del braccio segue perno e rotazione del braccio di {@code base}), stesso spazio, stessa entita' non animabile
+     * di GeckoLib; ma si vedono le sole ossa che {@link SuitBoneRules#visibleForArm} mostra per {@code arm}, con i
+     * colori di {@code view}. Dopo la chiamata non resta nulla di impostato: il {@link #render} successivo disegna la
+     * tuta intera.
+     *
+     * @param arm {@link PieceSlot#RIGHT_ARM} o {@link PieceSlot#LEFT_ARM}
+     * @throws IllegalArgumentException se {@code arm} non e' uno dei due bracci, prima di toccare qualunque cosa
+     */
+    void renderArm(Entity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers, int packedLight,
+            float partialTick, SuitView view, PieceSlot arm);
 }

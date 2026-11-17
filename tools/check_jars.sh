@@ -120,8 +120,9 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
     #      quattro classi ammesse (CLIENT qui sotto, in qualunque ordine); ogni classe elencata e' nel jar con i nomi
     #      nello spazio del loader (intermediary su Fabric, SRG su Forge, Mojang su NeoForge), riconosciuti dai nomi
     #      Mojang dei bersagli; la grandezza, il culling, PlayerSuitMixin e lo scatto portano esattamente i nomi
-    #      attesi dei loro bersagli per loader e versione; i metadati del loader la dichiarano (fabric.mod.json
-    #      "mixins", MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
+    #      attesi dei loro bersagli per loader e versione, e cosi' il braccio in prima persona (PlayerRendererMixin)
+    #      quelli dei suoi due bersagli, renderHand e PlayerModel.setupAnim; i metadati del loader la dichiarano
+    #      (fabric.mod.json "mixins", MixinConfigs nel manifest su Forge, [[mixins]] in neoforge.mods.toml).
     mixins=redstone_exoframes.mixins.json
     case "$mc" in
         1.20.1) level=JAVA_17; size_mixin=PlayerSize120Mixin; other_size_mixin=PlayerSize121Mixin ;;
@@ -138,33 +139,36 @@ for value in json.load(sys.stdin).get("entrypoints", {}).values():
         problems=$(python3 - "$jar" "$mixins" "$level" "$names" "$size_mixin" "$other_size_mixin" "$loader" "$mc" <<'PY'
 import json, re, sys, zipfile
 jar, cfg_name, level, names, size_mixin, other_size_mixin, loader, mc = sys.argv[1:]
-# Nomi esatti dei bersagli della grandezza reale, del culling, degli agganci comuni su Player e dello scatto nel jar,
-# per loader e versione (dopo remapJar).
+# Nomi esatti dei bersagli della grandezza reale, del culling, degli agganci comuni su Player, dello scatto e del
+# braccio in prima persona (renderHand e PlayerModel.setupAnim) nel jar, per loader e versione (dopo remapJar).
 CULLING = "client.LivingEntityCullingMixin"
+RENDERER = "client.PlayerRendererMixin"
 SPRINT = "client.LocalPlayerSprintMixin"  # uguale al nome nel json: "mixin not in common + client" confronta quelli
 # Le sole classi ammesse nella sezione client (lato client soltanto: un server dedicato non le carica).
-CLIENT = sorted(["client.ItemInHandLayerMixin", CULLING, "client.PlayerRendererMixin", SPRINT])
+CLIENT = sorted(["client.ItemInHandLayerMixin", CULLING, RENDERER, SPRINT])
 TARGETS = {
     ("neoforge", "1.21.1"): {"PlayerSize121Mixin": [b"getDefaultDimensions("], CULLING: [b"getBoundingBoxForCulling("],
                              "PlayerSuitMixin": [b"hurtArmor(", b"isAffectedByFluids(", b"isPushedByFluid(",
                                                  b"updateSwimming("],
-                             SPRINT: [b"hasEnoughFoodToStartSprinting("]},
+                             SPRINT: [b"hasEnoughFoodToStartSprinting("],
+                             RENDERER: [b"renderHand(", b"setupAnim("]},
     ("forge", "1.20.1"): {"PlayerSize120Mixin": [b"m_6972_(", b"m_6431_("], CULLING: [b"m_6921_("],
                           "PlayerSuitMixin": [b"m_6472_(", b"m_6129_(", b"m_6063_(", b"m_5844_("],
-                          SPRINT: [b"m_255269_("]},
+                          SPRINT: [b"m_255269_("], RENDERER: [b"m_117775_(", b"m_6973_("]},
     ("fabric", "1.20.1"): {"PlayerSize120Mixin": [b"method_18377(", b"method_18394("], CULLING: [b"method_5830("],
                            "PlayerSuitMixin": [b"method_6105(", b"method_29920(", b"method_5675(", b"method_5790("],
-                           SPRINT: [b"method_46743("]},
+                           SPRINT: [b"method_46743("], RENDERER: [b"method_23205(", b"method_17087("]},
     ("fabric", "1.21.1"): {"PlayerSize121Mixin": [b"method_55694("], CULLING: [b"method_5830("],
                            "PlayerSuitMixin": [b"method_6105(", b"method_29920(", b"method_5675(", b"method_5790("],
-                           SPRINT: [b"method_46743("]},
+                           SPRINT: [b"method_46743("], RENDERER: [b"method_23205(", b"method_17087("]},
 }
 # Nomi Mojang dei bersagli dei mixin: nel jar restano solo su NeoForge, altrove li sostituisce remapJar. I marcatori
 # che finiscono con "(" li fa scattare solo la stringa dell'annotazione (nome e descrittore attaccati), non i nomi dei
 # gestori o dei metodi chiamati.
 MOJANG = (b"setModelProperties", b"renderArmWithItem", b"getDimensions(", b"getStandingEyeHeight(",
           b"getDefaultDimensions(", b"getBoundingBoxForCulling(", b"hurtArmor(", b"isAffectedByFluids(",
-          b"isPushedByFluid(", b"updateSwimming(", b"hasEnoughFoodToStartSprinting(")
+          b"isPushedByFluid(", b"updateSwimming(", b"hasEnoughFoodToStartSprinting(", b"renderHand(",
+          b"setupAnim(")
 with zipfile.ZipFile(jar) as z:
     files = set(z.namelist())
     try:

@@ -27,7 +27,8 @@ import net.minecraft.world.entity.LivingEntity;
  * <p>
  * Tutta la logica sta qui. I due mixin client ({@code mixin/client/PlayerRendererMixin} e
  * {@code mixin/client/ItemInHandLayerMixin}) non hanno stato e fanno una sola chiamata per aggancio ai metodi
- * {@code on...} di questa classe; nessuno di questi lancia. La prima persona non cambia.
+ * {@code on...} di questa classe; nessuno di questi lancia. In prima persona il braccio lo disegna
+ * {@link FirstPersonArm} (design, par. 13).
  */
 public final class PilotPose {
     /**

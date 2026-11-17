@@ -7,6 +7,7 @@ import com.toxineren.exoframes.compat.client.SuitRenderer;
 import com.toxineren.exoframes.compat.client.SuitView;
 import com.toxineren.exoframes.compat.impl.SuitModelItem;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.core.armor.PieceSlot;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -38,6 +39,9 @@ import software.bernie.geckolib.renderer.DyeableGeoArmorRenderer;
  * {@link SuitBoneRules}, qui solo applicati: ossa di primo livello e del telaio sempre visibili, del pezzo di ogni
  * slot solo le tre dello stato dato, decalcomanie nascoste; {@code _p1} e {@code _p2} con i colori del pezzo,
  * {@code _n} bianca. Un osso che la geometria non ha si salta, e il suo nome va nel log una volta sola per sessione.
+ * {@link #renderArm} passa dallo stesso disegno con la regola di un braccio solo
+ * ({@link SuitBoneRules#visibleForArm}); la visibilita' si decide a ogni disegno per tutte le ossa di
+ * {@link SuitBoneRules#BONES}, quindi nessun disegno eredita ossa accese o spente da quello di prima.
  * <p>
  * Differenze chiuse: il package di {@code DyeableGeoArmorRenderer} e di {@code Color} ({@code renderer} e
  * {@code core.object} in GeckoLib 4.8, {@code renderer.specialty} e {@code util} in 4.9); {@code prepForRender} a 4
@@ -50,6 +54,7 @@ public final class SuitRendererImpl extends DyeableGeoArmorRenderer<SuitModelIte
     private final ItemStack stack;
     private final Set<String> reportedMissing = new HashSet<>();
     private SuitView view = BARE;
+    private PieceSlot arm; // null: la tuta intera
 
     public SuitRendererImpl() {
         super(new SuitModel());
@@ -59,9 +64,25 @@ public final class SuitRendererImpl extends DyeableGeoArmorRenderer<SuitModelIte
     @Override
     public void render(Entity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers,
             int packedLight, float partialTick, SuitView view) {
+        draw(entity, base, pose, buffers, packedLight, partialTick, view, null);
+    }
+
+    @Override
+    public void renderArm(Entity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers,
+            int packedLight, float partialTick, SuitView view, PieceSlot arm) {
+        if (arm != PieceSlot.RIGHT_ARM && arm != PieceSlot.LEFT_ARM) {
+            throw new IllegalArgumentException("not an arm slot: " + arm);
+        }
+        draw(entity, base, pose, buffers, packedLight, partialTick, view, arm);
+    }
+
+    /** Il disegno comune: la tuta intera se {@code arm} e' null, altrimenti le sole ossa di quel braccio. */
+    private void draw(Entity entity, HumanoidModel<?> base, PoseStack pose, MultiBufferSource buffers,
+            int packedLight, float partialTick, SuitView view, PieceSlot arm) {
         Objects.requireNonNull(entity, "entity must not be null");
         Objects.requireNonNull(base, "base model must not be null");
         this.view = Objects.requireNonNull(view, "view must not be null");
+        this.arm = arm;
         try {
             // Va ripreparato prima di ogni disegno: GeckoLib azzera questi campi dopo il disegno (non su Forge 4.8).
             //? if >=1.21 {
@@ -72,6 +93,7 @@ public final class SuitRendererImpl extends DyeableGeoArmorRenderer<SuitModelIte
             defaultRender(pose, getAnimatable(), buffers, null, null, 0f, partialTick, packedLight);
         } finally {
             this.view = BARE;
+            this.arm = null;
             // Su Forge 1.20.1 GeckoLib non azzera i campi dopo il disegno: senza questo il renderer terrebbe
             // l'ultima entita' disegnata (e con lei il livello) anche dopo l'uscita dal mondo.
             this.baseModel = null;
@@ -85,13 +107,16 @@ public final class SuitRendererImpl extends DyeableGeoArmorRenderer<SuitModelIte
     /**
      * Visibilita' delle ossa dalla vista del disegno in corso. GeckoLib chiama questo metodo in {@code preRender} per
      * ogni entita' che non e' un animatable GeckoLib (giocatori, umanoidi vanilla, il telaio piazzato) al posto della
-     * visibilita' per slot, che leggerebbe i flag {@code visible} del modello di base: qui non si leggono.
+     * visibilita' per slot, che leggerebbe i flag {@code visible} del modello di base: qui non si leggono. Ogni osso
+     * di {@link SuitBoneRules#BONES} si decide a ogni disegno, per la tuta intera come per un braccio solo: nulla
+     * resta com'era dal disegno precedente.
      */
     @Override
     protected void applyBoneVisibilityBySlot(EquipmentSlot currentSlot) {
         List<String> missing = new ArrayList<>(0);
         for (String name : SuitBoneRules.BONES) {
-            setVisible(name, SuitBoneRules.visible(name, view), missing);
+            setVisible(name, arm == null ? SuitBoneRules.visible(name, view)
+                    : SuitBoneRules.visibleForArm(name, view, arm), missing);
         }
         if (!missing.isEmpty()) {
             RedstoneExoframes.LOGGER.warn("Suit geometry has no bones named {}: skipped (logged once per session)",
