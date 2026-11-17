@@ -39,41 +39,50 @@ import org.joml.Quaternionf;
  */
 public final class FirstPersonArm {
     /**
-     * K: quante volte la sua misura di modello e' grande il braccio in prima persona, da scegliere nel client vero
-     * (1.21.1-neoforge, 960x540, a riposo) fra 1,65 (la scala della terza persona, {@link SuitScale#S}), 1,3 e 1,0: il
-     * piu' grande che soddisfa i criteri di design, par. 13, cioe' (a) la mano intera sullo schermo (il palmo
-     * d'acciaio, le nocche d'ottone, le tre dita e il pollice, nessuno tagliato dal bordo) con un tratto di
-     * avambraccio, nel quarto in basso a destra, (b) nessun pixel nel mirino, nella barra degli oggetti e nella riga
-     * dell'energia, (c) fra il 3 % e il 14 % dello schermo. <b>Nessun candidato passa</b>: 1,0 con lo spostamento zero
-     * e' il valore provvisorio che il piano da' per questo caso, in attesa di una decisione su che cosa chiede (a) (con
-     * questi valori l'avambraccio passa dietro la barra degli oggetti). Le misure sono di
+     * K: quante volte la sua misura di modello e' grande il braccio in prima persona. Misurati nel client vero
+     * (1.21.1-neoforge, 960x540, a riposo; le misure del valore scelto sono uguali al pixel sulle quattro varianti) i
+     * candidati 1,65 (la scala della terza persona, {@link SuitScale#S}), 1,3 e 1,0 contro i criteri di design, par.
+     * 13: (a) le nocche e le dita del pugno della tuta intere sullo schermo e un tratto di avambraccio in vista, nel
+     * quarto in basso a destra; il palmo e l'avambraccio possono uscire dal bordo destro o da quello in basso, come il
+     * braccio del gioco base esce dal bordo in basso, e il pollice non serve (a ogni grandezza resta dietro il palmo);
+     * (b) nessun pixel nel mirino, nella barra degli oggetti e nella riga dell'energia; (c) fra il 3 % e il 14 % dello
+     * schermo. Cosi' (a) l'ha decisa chi coordina, dopo aver visto che nessuna grandezza tiene il palmo lontano dal
+     * bordo destro senza passare dietro la barra. <b>1,3 con lo spostamento 4,5 l'ha scelto chi coordina, guardando gli
+     * scatti</b>, fra le grandezze che passano, e non "il K piu' grande". Le misure sono di
      * {@code tools/client/arm_measure.sh sagoma}, il braccio con i sei pezzi e, fra parentesi, il telaio nudo; il
-     * riquadro e' quello con i pezzi; "bordo da y" e' la prima riga in cui il braccio tocca le colonne x 952-959.
+     * riquadro e' quello con i pezzi; "bordo da y" e' la prima riga in cui lo scatto differisce da quello senza braccio
+     * nelle colonne x 952-959.
      * <ul>
      * <li>Con il palmo sul centro della mano di base ({@link #SIDE_SHIFT_PX} 0) nessun K passa (b), perche'
      * l'avambraccio finisce dietro la barra degli oggetti: 1,65 copertura 13,26 (11,87), barra 13175 (7965), riquadro
      * 469x237+491+303; 1,3 copertura 9,61 (8,55), barra 8468 (4469), riquadro 406x205+554+335; 1,0 copertura 7,05
-     * (6,00), barra 4868 (1877), riquadro 358x177+602+363, e il solo in cui il telaio nudo non tocca il bordo destro
-     * (con i pezzi: bordo da y 514).</li>
-     * <li>Con lo spostamento minimo che libera la barra (b) e (c) valgono, (a) no: il blocco d'acciaio del palmo
-     * arriva al bordo destro dello schermo, e il pollice non si distingue. 1,65 con 6,5 (a 6,0 barra 731): copertura
-     * 10,33 (9,10), riquadro 288x237+672+303, bordo da y 336 (361). 1,3 con 4,5 (a 4,0 barra 634): copertura 8,77
-     * (7,72), riquadro 286x205+674+335, bordo da y 407 (418); delle dita il punto piu' a destra e' a x 886 circa, ma
-     * il palmo va oltre. 1,0 con 3,0 (a 2,5 barra 14): copertura 6,85 (6,17), riquadro 279x177+681+363, bordo da y 463
-     * (465).</li>
+     * (6,00), barra 4868 (1877), riquadro 358x177+602+363 (il telaio nudo non tocca il bordo destro; con i pezzi
+     * bordo da y 514).</li>
+     * <li>1,3 con 4,5, scelto: barra 0 (0), mirino 0, energia 0, copertura 8,77 (7,72), riquadro 286x205+674+335
+     * (260x205+700+335). Si vedono intere la fila di nocche d'ottone e le tre dita scure, che arrivano a x 886; il
+     * palmo d'acciaio e' al bordo destro da y 420 circa (bordo da y 407 (418): con i pezzi e' la piastra del dorso che
+     * lo copre), e sotto l'avambraccio esce dal bordo destro e da quello in basso. Il pollice non si vede.</li>
+     * <li>1,65 con 6,5 (a 6,0 barra 731): passa, copertura 10,33 (9,10), riquadro 288x237+672+303; nocche e dita
+     * sullo schermo, ma il braccio copre un decimo dello schermo con il palmo contro il bordo destro da meta' altezza
+     * (bordo da y 336 (361)).</li>
+     * <li>1,0 con 3,0 (a 2,5 barra 14 con i pezzi, riquadro 291x177+669+363): passa, copertura 6,85 (6,17), riquadro
+     * 279x177+681+363; nocche e dita sullo schermo, il palmo al bordo destro piu' in basso (bordo da y 463
+     * (465)).</li>
      * </ul>
      */
-    static final float SCALE = 1.0f;
+    static final float SCALE = 1.3f;
 
     /**
      * Di quanti pixel del modello il palmo si sposta dal centro della mano del gioco base lungo
-     * {@link #sideDirection}: un multiplo di 0,5 fra 0 e 8 (design, par. 13, secondo giro). Zero e' il valore
-     * provvisorio del caso "nessun candidato passa" (vedi {@link #SCALE}), non uno spostamento che libera la barra.
-     * Misurati nel client vero, gli spostamenti minimi che tengono fuori dalla barra degli oggetti l'avambraccio con i
-     * pezzi: 6,5 a K 1,65, 4,5 a K 1,3, 3,0 a K 1,0 (mezzo pixel meno: barra 731, 634, 14). Mezzo pixel di modello
-     * sposta il braccio di circa 12 pixel dello schermo.
+     * {@link #sideDirection}: un multiplo di 0,5 fra 0 e 8, il minimo che a K = {@link #SCALE} tiene il braccio fuori
+     * dalla barra degli oggetti (design, par. 13, secondo giro: a spostamento zero non ci riesce nessun K, vedi
+     * {@link #SCALE}). A K 1,3, misurato nel client vero: con 4,0 l'avambraccio con i pezzi entra ancora nel
+     * rettangolo della barra (barra 634, riquadro 298x205+662+335); con 4,5 ne resta fuori di 4 pixel (barra 0,
+     * riquadro 286x205+674+335; il rettangolo finisce a x 670). Gli spostamenti minimi degli altri due K, misurati
+     * allo stesso modo: 6,5 a K 1,65 e 3,0 a K 1,0 (mezzo pixel meno: barra 731 e 14). Mezzo pixel di modello sposta
+     * il braccio di circa 12 pixel dello schermo.
      */
-    static final float SIDE_SHIFT_PX = 0f;
+    static final float SIDE_SHIFT_PX = 4.5f;
 
     /**
      * Centro della mano del gioco base verso l'esterno, in pixel dal perno: la scatola del braccio classico va in x da

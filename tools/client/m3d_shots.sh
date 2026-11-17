@@ -59,14 +59,15 @@
 # due esecuzioni e rifa' i controlli sugli scatti che la cartella ha gia' (per fissare le soglie senza riavviare il
 # client). Uscita 2: uso sbagliato.
 #
-# Dura circa tre minuti e mezzo a cache calde (misurati 210-224 s sulle quattro varianti: 114-120 s l'esecuzione A,
+# Dura circa tre minuti e mezzo a cache calde (misurati 208-226 s sulle quattro varianti: 112-121 s l'esecuzione A,
 # 76-85 s la B). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto),
 # salvo due, che cambiano di poco anche fra due esecuzioni della stessa variante: il magenta della terza persona
 # (fra 23595 e 23745, sempre nel riquadro 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1
-# ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e 1.20.1 no (172x202+320+66 su Forge, magenta
-# 18816; 168x202+322+66 su Fabric, magenta 18778). Le variabili d'ambiente sono quelle di client_shot.sh
-# (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script per tutte e due le esecuzioni, qualunque
-# valore abbia nell'ambiente di chi lo chiama. Istruzioni in tools/client/README.md.
+# ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e 1.20.1 no (su Forge largo 170-172 pixel da
+# x 320-321, magenta 18796-18816; su Fabric 166-168 da x 322-323, magenta 18712-18778; alto 202 da y 66). Le variabili
+# d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script
+# per tutte e due le esecuzioni, qualunque valore abbia nell'ambiente di chi lo chiama. Istruzioni in
+# tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
@@ -108,7 +109,7 @@ MAP_MIN_HALF=300
 # "un braccio solo". In terza persona, da dietro, il magenta della tuta e' largo 318 pixel.
 THIRD_PERSON_MIN_W=130
 # Nell'anteprima dell'inventario il magenta della tuta e' largo 98 pixel (su 1.21.1 e' la larghezza del riquadro
-# dell'anteprima, che ritaglia la tuta; su 1.20.1, che non ritaglia, 168 e 172). Il rettangolo misurato e' la meta'
+# dell'anteprima, che ritaglia la tuta; su 1.20.1, che non ritaglia, fra 166 e 172). Il rettangolo misurato e' la meta'
 # sinistra della finestra dell'inventario, dalla sua cima fino a sopra le caselle: non contiene ne' il braccio in
 # basso a destra ne' la riga in chat.
 INVENTORY_RECT=216x210+304+60

@@ -132,7 +132,7 @@ Scatti dell'esecuzione A, in `<cartella>`: `base-prima` e `base-senza` (senza tu
 | `bastone` | `magenta bastone` | nessun pixel magenta: con un oggetto in mano nessun braccio |
 | `mappa` | `magenta mappa` nella metà sinistra e nella metà destra | almeno 300 ciascuna (misurati 28 407 e 28 977): le due braccia della tuta |
 | `terza-persona` | `magenta terza-persona` | riquadro largo almeno 130 (misurato 318): la tuta intera, non un braccio solo |
-| `inventario` | `magenta inventario 216x210+304+60` | riquadro largo almeno 70 (misurati 98 su 1.21.1, che ritaglia l'anteprima nel suo riquadro, 168 e 172 su 1.20.1): la tuta intera nell'anteprima |
+| `inventario` | `magenta inventario 216x210+304+60` | riquadro largo almeno 70 (misurati 98 su 1.21.1, che ritaglia l'anteprima nel suo riquadro, fra 166 e 172 su 1.20.1): la tuta intera nell'anteprima |
 | `senza-tuta` | `sagoma base-dopo base-prima` | al più 200 pixel diversi (misurati 0): tolta la tuta, lo scatto di prima |
 | `telaio-piazzato` | `sagoma telaio-piazzato braccio-rottame`; `magenta telaio-piazzato` | riquadro largo almeno 120 (misurato 258): il telaio piazzato è intero; magenta fra il 90 % e il 110 % di quello di `braccio-rottame` (misurato il 100 %): il braccio non ha perso né preso pezzi |
 | `mancino-controllo` | `sagoma mancino/base-mancino mancino/base-senza` | almeno 10 000 pixel e riquadro tutto nella metà sinistra: l'opzione `mainHand` ha avuto effetto (se non torna è un problema dello strumento) |
@@ -183,7 +183,7 @@ Uno scatto non si salva se il client non è più vivo o il giocatore ha lasciato
 
 ## Quanto dura
 
-Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 8,5-10 minuti per variante (misurati 503-589 s sulle quattro varianti); la sequenza di `m3b_shots.sh` circa due minuti (misurati 115-132 s), quella di `m3c_shots.sh` altrettanto (misurati 116-127 s), quella di `m3c_rules_shots.sh` poco meno (misurati 95-128 s), quella di `m3c2_shots.sh` circa un minuto e mezzo (misurati 80-100 s), quella di `m3d_shots.sh`, che fa due esecuzioni, circa tre minuti e mezzo (misurati 210-224 s: 114-120 s la prima, 76-85 s quella del mancino). `arm_measure.sh` impiega meno di un secondo per `sagoma` e `uguali`, circa un secondo per `magenta`; il suo `--selftest` circa 4 s. La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
+Misurato nella sessione cloud (4 processori, 15 GB), a cache calde: circa un minuto per esecuzione, di cui 15-35 s per il server e 25-50 s perché il client entri. L'insieme standard di `m3a_shots.sh` dura circa 8,5-10 minuti per variante (misurati 503-589 s sulle quattro varianti); la sequenza di `m3b_shots.sh` circa due minuti (misurati 115-132 s), quella di `m3c_shots.sh` altrettanto (misurati 116-127 s), quella di `m3c_rules_shots.sh` poco meno (misurati 95-128 s), quella di `m3c2_shots.sh` circa un minuto e mezzo (misurati 80-100 s), quella di `m3d_shots.sh`, che fa due esecuzioni, circa tre minuti e mezzo (misurati 208-226 s: 112-121 s la prima, 76-85 s quella del mancino). `arm_measure.sh` impiega meno di un secondo per `sagoma` e `uguali`, circa un secondo per `magenta`; il suo `--selftest` circa 4 s. La prima esecuzione in assoluto scarica circa 800 MB di risorse del gioco e compila la variante: qualche minuto in più.
 
 ## Cosa non copre
 
