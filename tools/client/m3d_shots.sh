@@ -59,12 +59,12 @@
 # due esecuzioni e rifa' i controlli sugli scatti che la cartella ha gia' (per fissare le soglie senza riavviare il
 # client). Uscita 2: uso sbagliato.
 #
-# Dura circa tre minuti e mezzo a cache calde (misurati 208-226 s sulle quattro varianti: 112-121 s l'esecuzione A,
-# 76-85 s la B). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto),
+# Dura circa tre minuti e mezzo a cache calde (misurati 207-225 s sulle quattro varianti: 111-119 s l'esecuzione A,
+# 76-86 s la B). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto),
 # salvo due, che cambiano di poco anche fra due esecuzioni della stessa variante: il magenta della terza persona
-# (fra 23595 e 23745, sempre nel riquadro 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1
-# ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e 1.20.1 no (su Forge largo 170-172 pixel da
-# x 320-321, magenta 18796-18816; su Fabric 166-168 da x 322-323, magenta 18712-18778; alto 202 da y 66). Le variabili
+# (fra 23593 e 23745, sempre nel riquadro 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1
+# ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e 1.20.1 no (su Forge largo 170-174 pixel da
+# x 320-321, magenta 18796-18830; su Fabric 166-170 da x 321-323, magenta 18712-18786; alto 202 da y 66). Le variabili
 # d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script
 # per tutte e due le esecuzioni, qualunque valore abbia nell'ambiente di chi lo chiama. Istruzioni in
 # tools/client/README.md.
@@ -203,7 +203,7 @@ a="$out"
 b="$out/mancino"
 failed=() # i controlli falliti, per nome
 # Una misura di arm_measure.sh: la sua riga, oppure una parola che fa fallire il controllo che la usa.
-mis() { bash "$measure" "$@" 2>/dev/null || echo "misura-non-riuscita"; }
+take_measure() { bash "$measure" "$@" 2>/dev/null || echo "misura-non-riuscita"; }
 # val <riga> <nome>: il valore dopo "<nome>=" nella riga di una misura; -1 se non c'e'.
 val() {
     local w
@@ -220,8 +220,8 @@ box() {
     [[ "$BL" =~ ^[0-9]+$ && "$BA" =~ ^[0-9]+$ && "$BX" =~ ^[0-9]+$ && "$BY" =~ ^[0-9]+$ ]] && return 0
     BL=0 BA=0 BX=0 BY=0
 }
-# esito <nome> <0 se vale> <misure> <atteso>: la riga del controllo; una misura non riuscita lo fa fallire comunque.
-esito() {
+# verdict <nome> <0 se vale> <misure> <atteso>: la riga del controllo; una misura non riuscita lo fa fallire comunque.
+verdict() {
     local good=$2
     case "$3" in *misura-non-riuscita*) good=1 ;; esac
     if [ "$good" -eq 0 ]; then
@@ -254,69 +254,69 @@ SAME="uguali x $SAME_FACTOR <= sagoma"
 checks() {
     local m1 m2 m3 good pct w ref want
 
-    m1=$(mis sagoma "$a/base-prima.png" "$a/base-senza.png")
+    m1=$(take_measure sagoma "$a/base-prima.png" "$a/base-senza.png")
     good=1
     [ "$(val "$m1" pixel)" -ge "$CONTROL_MIN_PIXEL" ] && [ "$(val "$m1" mirino)" -eq 0 ] \
         && [ "$(val "$m1" barra)" -eq 0 ] && [ "$(val "$m1" energia)" -eq 0 ] && lower_right "$m1" && good=0
     want="pixel >= $CONTROL_MIN_PIXEL, mirino=0 barra=0 energia=0, $RIGHT: se non e' cosi' e' sbagliato lo strumento"
-    esito controllo "$good" "$m1" "$want o lo scatto senza braccio, non la mod"
+    verdict controllo "$good" "$m1" "$want o lo scatto senza braccio, non la mod"
 
-    m1=$(mis magenta "$a/braccio-rottame.png")
-    m2=$(mis magenta "$a/braccio-rottame.png" 480x540+0+0)
+    m1=$(take_measure magenta "$a/braccio-rottame.png")
+    m2=$(take_measure magenta "$a/braccio-rottame.png" 480x540+0+0)
     good=1
     [ "$(val "$m1" magenta)" -ge "$MAGENTA_MIN" ] && [ "$(val "$m2" magenta)" -eq 0 ] && good=0
-    esito dipinto "$good" "$m1; meta' sinistra $m2" "magenta >= $MAGENTA_MIN, e 0 nella meta' sinistra"
+    verdict dipinto "$good" "$m1; meta' sinistra $m2" "magenta >= $MAGENTA_MIN, e 0 nella meta' sinistra"
 
-    m1=$(mis sagoma "$a/braccio-rottame.png" "$a/tuta-senza.png")
+    m1=$(take_measure sagoma "$a/braccio-rottame.png" "$a/tuta-senza.png")
     good=1
     criteria_bc "$m1" && lower_right "$m1" && good=0
-    esito criteri "$good" "$m1" "$CRITERIA, $RIGHT"
+    verdict criteri "$good" "$m1" "$CRITERIA, $RIGHT"
 
-    m1=$(mis uguali "$a/base-prima.png" "$a/braccio-rottame.png" "$a/base-senza.png")
+    m1=$(take_measure uguali "$a/base-prima.png" "$a/braccio-rottame.png" "$a/base-senza.png")
     good=1
     not_base_arm "$m1" && good=0
-    esito solo-tuta "$good" "$m1" "$SAME: il braccio del gioco non si disegna insieme a quello della tuta"
+    verdict solo-tuta "$good" "$m1" "$SAME: il braccio del gioco non si disegna insieme a quello della tuta"
 
-    m1=$(mis magenta "$a/braccio-nudo.png")
-    m2=$(mis sagoma "$a/braccio-nudo.png" "$a/tuta-senza.png")
-    m3=$(mis uguali "$a/base-prima.png" "$a/braccio-nudo.png" "$a/base-senza.png")
+    m1=$(take_measure magenta "$a/braccio-nudo.png")
+    m2=$(take_measure sagoma "$a/braccio-nudo.png" "$a/tuta-senza.png")
+    m3=$(take_measure uguali "$a/base-prima.png" "$a/braccio-nudo.png" "$a/base-senza.png")
     good=1
     [ "$(val "$m1" magenta)" -eq 0 ] && criteria_bc "$m2" && lower_right "$m2" && not_base_arm "$m3" && good=0
-    esito nudo "$good" "$m1; $m2; $m3" "magenta=0; $CRITERIA, $RIGHT; $SAME"
+    verdict nudo "$good" "$m1; $m2; $m3" "magenta=0; $CRITERIA, $RIGHT; $SAME"
 
-    m1=$(mis magenta "$a/bastone.png")
+    m1=$(take_measure magenta "$a/bastone.png")
     good=1
     [ "$(val "$m1" magenta)" -eq 0 ] && good=0
-    esito bastone "$good" "$m1" "magenta=0: con un oggetto in mano nessun braccio"
+    verdict bastone "$good" "$m1" "magenta=0: con un oggetto in mano nessun braccio"
 
-    m1=$(mis magenta "$a/mappa.png" 480x540+0+0)
-    m2=$(mis magenta "$a/mappa.png" 480x540+480+0)
+    m1=$(take_measure magenta "$a/mappa.png" 480x540+0+0)
+    m2=$(take_measure magenta "$a/mappa.png" 480x540+480+0)
     good=1
     [ "$(val "$m1" magenta)" -ge "$MAP_MIN_HALF" ] && [ "$(val "$m2" magenta)" -ge "$MAP_MIN_HALF" ] && good=0
     want="magenta >= $MAP_MIN_HALF in ciascuna meta': le due braccia della tuta"
-    esito mappa "$good" "sinistra $m1; destra $m2" "$want"
+    verdict mappa "$good" "sinistra $m1; destra $m2" "$want"
 
-    m1=$(mis magenta "$a/terza-persona.png")
+    m1=$(take_measure magenta "$a/terza-persona.png")
     box "$m1"
     good=1
     [ "$BL" -ge "$THIRD_PERSON_MIN_W" ] && good=0
-    esito terza-persona "$good" "$m1" "riquadro largo >= $THIRD_PERSON_MIN_W: la tuta intera, non un braccio solo"
+    verdict terza-persona "$good" "$m1" "riquadro largo >= $THIRD_PERSON_MIN_W: la tuta intera, non un braccio solo"
 
-    m1=$(mis magenta "$a/inventario.png" "$INVENTORY_RECT")
+    m1=$(take_measure magenta "$a/inventario.png" "$INVENTORY_RECT")
     box "$m1"
     good=1
     [ "$BL" -ge "$INVENTORY_MIN_W" ] && good=0
     want="riquadro largo >= $INVENTORY_MIN_W dentro $INVENTORY_RECT: la tuta intera nell'anteprima"
-    esito inventario "$good" "$m1" "$want"
+    verdict inventario "$good" "$m1" "$want"
 
-    m1=$(mis sagoma "$a/base-dopo.png" "$a/base-prima.png")
+    m1=$(take_measure sagoma "$a/base-dopo.png" "$a/base-prima.png")
     good=1
     [ "$(val "$m1" pixel)" -ge 0 ] && [ "$(val "$m1" pixel)" -le "$NO_SUIT_MAX_PIXEL" ] && good=0
-    esito senza-tuta "$good" "$m1" "pixel <= $NO_SUIT_MAX_PIXEL: tolta la tuta, lo scatto di prima"
+    verdict senza-tuta "$good" "$m1" "pixel <= $NO_SUIT_MAX_PIXEL: tolta la tuta, lo scatto di prima"
 
-    m1=$(mis sagoma "$a/telaio-piazzato.png" "$a/braccio-rottame.png")
-    m2=$(mis magenta "$a/telaio-piazzato.png")
-    ref=$(val "$(mis magenta "$a/braccio-rottame.png")" magenta)
+    m1=$(take_measure sagoma "$a/telaio-piazzato.png" "$a/braccio-rottame.png")
+    m2=$(take_measure magenta "$a/telaio-piazzato.png")
+    ref=$(val "$(take_measure magenta "$a/braccio-rottame.png")" magenta)
     box "$m1"
     w=$BL
     pct=-1
@@ -325,25 +325,25 @@ checks() {
     [ "$w" -ge "$PLACED_MIN_W" ] && [ "$pct" -ge "$PLACED_MAGENTA_MIN_PCT" ] \
         && [ "$pct" -le "$PLACED_MAGENTA_MAX_PCT" ] && good=0
     want="riquadro largo >= $PLACED_MIN_W; magenta fra il $PLACED_MAGENTA_MIN_PCT % e il $PLACED_MAGENTA_MAX_PCT %"
-    esito telaio-piazzato "$good" "$m1; $m2, il $pct % di braccio-rottame" "$want di quello di braccio-rottame"
+    verdict telaio-piazzato "$good" "$m1; $m2, il $pct % di braccio-rottame" "$want di quello di braccio-rottame"
 
-    m1=$(mis sagoma "$b/base-mancino.png" "$b/base-senza.png")
+    m1=$(take_measure sagoma "$b/base-mancino.png" "$b/base-senza.png")
     box "$m1"
     good=1
     [ "$(val "$m1" pixel)" -ge "$CONTROL_MIN_PIXEL" ] && [ $((BX + BL)) -le 480 ] && good=0
     want="pixel >= $CONTROL_MIN_PIXEL e riquadro nella meta' sinistra (X + L <= 480): se non e' cosi' l'opzione"
     want+=" mainHand non ha avuto effetto, un problema dello strumento e non della mod"
-    esito mancino-controllo "$good" "$m1" "$want"
+    verdict mancino-controllo "$good" "$m1" "$want"
 
-    m1=$(mis magenta "$b/braccio-mancino.png" 480x540+480+0)
-    m2=$(mis sagoma "$b/braccio-mancino.png" "$b/tuta-senza.png")
+    m1=$(take_measure magenta "$b/braccio-mancino.png" 480x540+480+0)
+    m2=$(take_measure sagoma "$b/braccio-mancino.png" "$b/tuta-senza.png")
     good=1
     [ "$(val "$m1" magenta)" -eq 0 ] && criteria_bc "$m2" && lower_left "$m2" && good=0
     want="magenta=0 nella meta' destra; $CRITERIA, riquadro con X + L <= 480 e Y >= 270"
-    esito mancino "$good" "meta' destra $m1; $m2" "$want"
+    verdict mancino "$good" "meta' destra $m1; $m2" "$want"
 
-    m1=$(mis magenta "$b/braccio-mancino.png")
-    m2=$(mis magenta "$a/braccio-rottame.png")
+    m1=$(take_measure magenta "$b/braccio-mancino.png")
+    m2=$(take_measure magenta "$a/braccio-rottame.png")
     ref=$(val "$m2" magenta)
     pct=-1
     [ "$ref" -gt 0 ] && pct=$(($(val "$m1" magenta) * 100 / ref))
@@ -361,7 +361,7 @@ checks() {
         && [ "${db#-}" -le "$MIRROR_TOL" ] && good=0
     m3="riquadro specchiato ${BL}x${BA}+${mx}+${BY}, scarti sinistra $dx alto $dy destra $dr basso $db"
     want="magenta fra il $MIRROR_MIN_PCT % e il $MIRROR_MAX_PCT % di quello del destro"
-    esito specchio "$good" "mancino $m1, il $pct % del destro ($m2); $m3" \
+    verdict specchio "$good" "mancino $m1, il $pct % del destro ($m2); $m3" \
         "$want; ogni lato del riquadro specchiato entro $MIRROR_TOL pixel"
 }
 
