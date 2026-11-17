@@ -25,9 +25,11 @@ import net.minecraft.world.entity.LivingEntity;
  * spazio e il sollevamento non la sposta: la porta sopra la testa della tuta la grandezza reale
  * ({@link com.toxineren.exoframes.frame.SuitSize}), perche' sta all'altezza dell'ingombro piu' 0,5, cioe' a 3,47.
  * <p>
- * Tutta la logica sta qui. I due mixin client ({@code mixin/client/PlayerRendererMixin} e
- * {@code mixin/client/ItemInHandLayerMixin}) non hanno stato e fanno una sola chiamata per aggancio ai metodi
- * {@code on...} di questa classe; nessuno di questi lancia. In prima persona il braccio lo disegna
+ * La logica del pilota sta qui. I due mixin client ({@code mixin/client/PlayerRendererMixin} e
+ * {@code mixin/client/ItemInHandLayerMixin}) non hanno stato e fanno una sola chiamata per aggancio: gli agganci del
+ * pilota (i due di {@code PlayerRendererMixin} sulla scala e sul modello in posa, i due di
+ * {@code ItemInHandLayerMixin} sull'oggetto impugnato) chiamano i metodi {@code on...} di questa classe, e nessuno di
+ * questi lancia; il terzo aggancio di {@code PlayerRendererMixin}, il braccio in prima persona, chiama
  * {@link FirstPersonArm} (design, par. 13).
  */
 public final class PilotPose {

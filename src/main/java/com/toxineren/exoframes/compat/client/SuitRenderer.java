@@ -8,9 +8,11 @@ import net.minecraft.world.entity.Entity;
 
 /**
  * Disegna la tuta (telaio e pezzi): l'unica cucitura che conosce GeckoLib. La usano sia la tuta indossata da un
- * giocatore sia il telaio piazzato, che non e' un {@code LivingEntity}: lo stesso oggetto sullo schermo. Solo client,
- * da chiamare sul thread di rendering dentro il disegno dell'entita' (per esempio da un {@code RenderLayer} o da un
- * {@code EntityRenderer}), mai prima che i modelli delle entita' siano caricati.
+ * giocatore sia il telaio piazzato, che non e' un {@code LivingEntity}: lo stesso oggetto sullo schermo; e, con
+ * {@link #renderArm}, il braccio della tuta in prima persona. Solo client, da chiamare sul thread di rendering dentro
+ * il disegno dell'entita' (per esempio da un {@code RenderLayer} o da un {@code EntityRenderer}) o, per
+ * {@link #renderArm}, dentro il disegno della mano in prima persona; mai prima che i modelli delle entita' siano
+ * caricati.
  * <p>
  * Contratto: l'entita' non e' un animabile di GeckoLib ({@code GeoAnimatable}). Solo per queste GeckoLib chiama
  * l'aggancio da cui l'implementazione applica la visibilita' delle ossa ({@code applyBoneVisibilityBySlot}); per un

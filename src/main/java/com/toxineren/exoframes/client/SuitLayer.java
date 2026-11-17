@@ -64,7 +64,8 @@ public final class SuitLayer extends RenderLayer<AbstractClientPlayer, PlayerMod
 
     /**
      * La vista in cache del giocatore, o null se la sua tuta non va disegnata (vedi {@link #wearsSuit}). Non lancia
-     * mai: un errore vale null. Per {@link PilotPose}, che non decodifica il riassunto una seconda volta.
+     * mai: un errore vale null. Per {@link PilotPose} e {@link FirstPersonArm}, che non decodificano il riassunto una
+     * seconda volta; per {@link FirstPersonArm} null vuol dire lasciare il braccio al gioco base.
      */
     static SuitView suitView(Player player) {
         try {
