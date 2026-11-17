@@ -1,8 +1,9 @@
 # tools
 
 Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio (`tools/art/build.py`) in
-`tools/art/README.md`; per il client senza schermo (`tools/client/client_shot.sh` e le sequenze `m3a_shots.sh`,
-`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`) in `tools/client/README.md`.
+`tools/art/README.md`; per il client senza schermo (`tools/client/client_shot.sh`, le sequenze `m3a_shots.sh`,
+`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`, `m3d_shots.sh` e lo strumento di misura degli
+scatti del braccio in prima persona, `arm_measure.sh`) in `tools/client/README.md`.
 
 | Strumento | Che cosa fa |
 |---|---|
