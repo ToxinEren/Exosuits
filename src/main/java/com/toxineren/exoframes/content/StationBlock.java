@@ -152,6 +152,21 @@ public final class StationBlock extends CompatBlock {
      * principale, che in creativa o senza attrezzo non fa cadere nulla, la laterale diventa aria senza bottino.
      * (Togliere per prima la laterale quando si rompe la principale farebbe invece diventare aria la principale per
      * {@link #updateShape}, con il bottino.)
+     * <p>
+     * Due limiti accettati (decisione P13), perche' e' la stessa regola delle porte del gioco base 1.21.1
+     * ({@code DoorBlock.playerWillDestroy}: creativa, o {@code hasCorrectToolForDrops} a un argomento falso) e
+     * correggerli vorrebbe una cucitura diversa per loader:
+     * <ul>
+     * <li>Su Forge 1.20.1 questa chiamata arriva dopo che la rottura ha consumato l'attrezzo (docs/compat.md, alla voce
+     * {@code playerWillDestroy} di {@code CompatBlock}): se il piccone si rompe proprio sul colpo che rompe la
+     * laterale, qui la mano e' gia' vuota e la stazione si perde, perche' la principale se ne va senza bottino e la
+     * laterale non ne ha.</li>
+     * <li>Su NeoForge {@code hasCorrectToolForDrops} a un argomento non manda {@code PlayerEvent.HarvestCheck}, che
+     * NeoForge manda dalle chiamate con livello e posizione (la rottura lo chiede con {@code canHarvestBlock}, e la sua
+     * porta con {@code hasCorrectToolForDrops} a tre argomenti): una mod che con quell'evento cambia che cosa si
+     * raccoglie non e' sentita da questa regola, e la stazione allora puo' perdersi o cadere contro la decisione di
+     * quella mod, ma mai due volte.</li>
+     * </ul>
      */
     @Override
     public void onPlayerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
