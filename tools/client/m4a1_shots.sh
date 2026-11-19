@@ -18,9 +18,10 @@
 #                   ricette sbloccate sparisca prima del primo scatto misurato
 #   3. posa         con la stazione in mano e il mirino sul pavimento davanti (inclinazione 55) un clic destro la posa
 #                   con l'oggetto: "execute if block" vuole la principale in 0 -60 1 e la laterale in -1 -60 1, con
-#                   il fronte a nord; la mano torna vuota; scatto stazione-posata, da guardare: due blocchi affiancati
-#                   con le texture segnaposto, il fronte verso il giocatore, nessun blocco viola e nero (un modello o
-#                   una texture mancante)
+#                   il fronte a nord; la mano torna vuota, e dopo un secondo, quando l'oggetto che scende non copre piu'
+#                   la laterale, scatto stazione-posata, da guardare: le due meta' affiancate e scoperte, con le
+#                   texture segnaposto e i fronti verso il giocatore (l'estremo ovest della laterale esce dal bordo
+#                   destro dello scatto), nessun blocco viola e nero (un modello o una texture mancante)
 #   4. apertura     con l'inclinazione 60 il mirino sta sul fianco nord della principale: un clic destro la apre, con i
 #                   dati extra; la schermata si apre solo se il tipo del menu porta i dati e la schermata e' registrata
 #                   (su NeoForge un errore della registrazione sarebbe silenzioso); il puntatore nel punto neutro
@@ -58,7 +59,7 @@
 # schermata con altre scale dell'interfaccia e altre misure della finestra; una ricarica delle risorse (F3+T) con la
 # schermata aperta; un'esplosione vera. Sono nella checklist per il PC della parte.
 #
-# Dura circa due minuti a cache calde: misurati 123 s su 1.21.1-neoforge, di cui 118 s l'esecuzione di client_shot.sh
+# Dura circa due minuti a cache calde: misurati 126 s su 1.21.1-neoforge, di cui 121 s l'esecuzione di client_shot.sh
 # (senza la ricetta, la posa con l'oggetto e la rottura la sequenza misurava 88-107 s sulle quattro varianti, di cui
 # 83-102 s client_shot.sh). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu'
 # sotto; le stesse nell'esecuzione con le fasi nuove su 1.21.1-neoforge), e cosi' il ritaglio dell'anteprima: la scala
@@ -117,7 +118,7 @@ steps=(
     "@click destro" "@attendi 1"
     "execute if block 0 -60 1 redstone_exoframes:station[facing=north,part=main]"
     "execute if block -1 -60 1 redstone_exoframes:station[facing=north,part=side]"
-    "item replace entity $u weapon.mainhand with minecraft:air" "@scatto stazione-posata"
+    "item replace entity $u weapon.mainhand with minecraft:air" "@attendi 1" "@scatto stazione-posata"
     # 4. apertura: il mirino sul fianco nord della principale
     "tp $u 0.5 -60 0.5 0 60" "@attendi 1" "@click destro" "@attendi 2" "$NEUTRAL" "@attendi 1"
     "@scatto stazione-aperta"
