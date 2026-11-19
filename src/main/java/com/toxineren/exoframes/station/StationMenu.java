@@ -1,9 +1,15 @@
 package com.toxineren.exoframes.station;
 
 import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.compat.Compat;
+import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModMenus;
+import com.toxineren.exoframes.core.station.StationReach;
+import com.toxineren.exoframes.frame.FramePermissions;
 import dev.architectury.registry.menu.MenuRegistry;
+import java.util.Optional;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.network.chat.Component;
@@ -20,14 +26,17 @@ import net.minecraft.world.item.ItemStack;
 
 /**
  * Il menu della stazione di manutenzione (design §5.2 e §5.6), del tipo {@link ModMenus#STATION}. Nasce dal clic sulla
- * stazione ({@link #open}) con i dati extra di Architectury ({@link StationOpening}), uguali sulle due versioni. Nel
- * menu non vive nessun oggetto: non ha slot e non ridefinisce {@code removed}.
+ * stazione ({@link #open}) con i dati extra di Architectury ({@link StationOpening}), uguali sulle due versioni, e ha
+ * sempre un telaio: quello che la ricerca ({@link StationFinder#find}) ha scelto all'apertura, fissato per tutta la
+ * vita del menu ({@link #frameId}). Nel menu non vive nessun oggetto: non ha slot e non ridefinisce {@code removed}.
  * <p>
- * Ha due costruttori: quello del server, con il livello della stazione, e quello del client, la fabbrica del tipo, che
- * legge subito i dati extra e non tiene il buffer. Il gioco chiama {@link #stillValid} solo sul server, a ogni tick del
- * giocatore e prima di ogni pulsante. Il pulsante di prova ({@link #TEST_BUTTON}) va al server con il pacchetto dei
- * pulsanti del gioco base, e il numero delle pressioni confermate ({@link #testPresses}) torna al client con la
- * sincronizzazione dei dati del menu del gioco base: il cambio che la schermata mostra viene dal server.
+ * Ha due costruttori: quello del server, con il livello della stazione, che calcola una volta l'impronta della
+ * stazione; e quello del client, la fabbrica del tipo, che legge subito i dati extra e non tiene il buffer. Il gioco
+ * chiama {@link #stillValid} solo sul server, a ogni tick del giocatore e prima di ogni pulsante: il menu resta aperto
+ * finche' il giocatore puo' stare alla stazione e il telaio resta piazzato, a portata e usabile da lui. Il pulsante di
+ * prova ({@link #TEST_BUTTON}) va al server con il pacchetto dei pulsanti del gioco base, e il numero delle pressioni
+ * confermate ({@link #testPresses}) torna al client con la sincronizzazione dei dati del menu del gioco base: il cambio
+ * che la schermata mostra viene dal server.
  */
 public final class StationMenu extends AbstractContainerMenu {
     /**
@@ -39,33 +48,49 @@ public final class StationMenu extends AbstractContainerMenu {
     /** La chiave del titolo della schermata. */
     public static final String TITLE_KEY = "container." + RedstoneExoframes.MOD_ID + ".station";
 
+    /** Il messaggio sulla barra delle azioni quando il menu si chiude perche' il suo telaio non e' piu' disponibile. */
+    public static final String FRAME_GONE = "message." + RedstoneExoframes.MOD_ID + ".station.frame_gone";
+
     private final BlockPos stationPos;
+    /** Il telaio su cui il menu si e' aperto. */
+    private final UUID frameId;
     /** Il livello della stazione sul server; null nel menu del client, che non lo conosce. */
     private final ServerLevel level;
     private final ContainerLevelAccess access;
+    /** L'impronta della stazione, calcolata una volta all'apertura sul server; null nel menu del client. */
+    private final StationReach.Footprint footprint;
     /** Le pressioni del pulsante di prova confermate dal server, che il gioco base sincronizza con il client. */
     private final DataSlot testPresses = DataSlot.standalone();
     /** Vero dopo la prima eccezione di {@link #stillValid}, scritta nel log una volta sola per menu. */
     private boolean checkFailureLogged;
+    /** Vero dopo che il telaio ha smesso di essere disponibile: il messaggio e' stato detto e il menu non vale piu'. */
+    private boolean frameGone;
 
     /**
      * Il menu del client, la fabbrica del tipo: legge subito l'apertura dai dati extra e non tiene il buffer (su Fabric
      * 1.21.1 si rilascia appena il costruttore torna).
      */
     public StationMenu(int containerId, Inventory inventory, FriendlyByteBuf extraData) {
-        this(containerId, null, ContainerLevelAccess.NULL, StationOpening.read(extraData));
+        this(containerId, null, ContainerLevelAccess.NULL, null, StationOpening.read(extraData));
     }
 
-    /** Il menu del server, per la stazione dell'apertura nel livello dato. */
+    /**
+     * Il menu del server, per la stazione e il telaio dell'apertura nel livello dato. La meta' principale della
+     * stazione deve esserci ancora, come dopo la ricerca del clic, perche' l'impronta si calcola qui dal suo stato.
+     */
     public StationMenu(int containerId, Inventory inventory, ServerLevel level, StationOpening opening) {
-        this(containerId, level, ContainerLevelAccess.create(level, opening.main()), opening);
+        this(containerId, level, ContainerLevelAccess.create(level, opening.main()),
+                StationFinder.footprint(opening.main(), level.getBlockState(opening.main())), opening);
     }
 
-    private StationMenu(int containerId, ServerLevel level, ContainerLevelAccess access, StationOpening opening) {
+    private StationMenu(int containerId, ServerLevel level, ContainerLevelAccess access,
+            StationReach.Footprint footprint, StationOpening opening) {
         super(ModMenus.STATION.get(), containerId);
         this.level = level;
         this.access = access;
+        this.footprint = footprint;
         this.stationPos = opening.main();
+        this.frameId = opening.frameId();
         addDataSlot(testPresses);
     }
 
@@ -80,9 +105,22 @@ public final class StationMenu extends AbstractContainerMenu {
         MenuRegistry.openExtendedMenu(player, provider(player.serverLevel(), opening), opening::write);
     }
 
+    /**
+     * L'apertura della stazione con la meta' principale in {@code main} sul telaio piazzato {@code frame}, quello che
+     * la ricerca ha scelto per il giocatore.
+     */
+    public static StationOpening opening(ServerPlayer player, BlockPos main, PlacedFrame frame) {
+        return new StationOpening(main, frame.frameId());
+    }
+
     /** La posizione della meta' principale della stazione. */
     public BlockPos stationPos() {
         return stationPos;
+    }
+
+    /** L'identita' del telaio su cui il menu si e' aperto. */
+    public UUID frameId() {
+        return frameId;
     }
 
     /** Le pressioni del pulsante di prova confermate dal server (sul client, quelle ricevute dal server). */
@@ -112,9 +150,17 @@ public final class StationMenu extends AbstractContainerMenu {
 
     /**
      * Vero finche' il menu puo' restare aperto. Il gioco lo chiama solo sul server, e nel menu del client (senza
-     * livello) e' sempre vero. Sul server: il giocatore e' nel livello della stazione (l'aiuto del gioco base non
-     * confronta le dimensioni), la stazione c'e' ancora ed e' alla distanza del gioco base, il giocatore e' vivo e non
-     * e' spettatore. Un'eccezione scrive una riga ERROR alla prima volta per menu e da' falso: la schermata si chiude.
+     * livello) e' sempre vero. Sul server, in quest'ordine:
+     * <ol>
+     * <li>il giocatore e' nel livello della stazione (l'aiuto del gioco base non confronta le dimensioni), la stazione
+     * c'e' ancora ed e' alla distanza del gioco base, il giocatore e' vivo e non e' spettatore; se no il menu non vale,
+     * senza messaggi (chi si allontana non ha bisogno di spiegazioni, come per un forziere);</li>
+     * <li>il record del telaio c'e' ancora (quindi e' piazzato e non indossato), e' a portata dell'impronta della
+     * stazione ({@link StationFinder#inReach}) e il giocatore lo puo' usare ({@link FramePermissions#canUse}, riletto
+     * a ogni chiamata). Se no, la prima volta il server lo dice sulla barra delle azioni ({@link #FRAME_GONE}), e da
+     * li' il menu non vale piu', anche se il telaio tornasse.</li>
+     * </ol>
+     * Un'eccezione scrive una riga ERROR alla prima volta per menu e da' falso: la schermata si chiude.
      */
     @Override
     public boolean stillValid(Player player) {
@@ -122,9 +168,19 @@ public final class StationMenu extends AbstractContainerMenu {
             return true;
         }
         try {
-            return player.level() == level
-                    && AbstractContainerMenu.stillValid(access, player, ModBlocks.STATION.get())
-                    && player.isAlive() && !player.isSpectator();
+            if (player.level() != level
+                    || !AbstractContainerMenu.stillValid(access, player, ModBlocks.STATION.get())
+                    || !player.isAlive() || player.isSpectator()) {
+                return false;
+            }
+            if (!frameGone && frameAvailableTo(player)) {
+                return true;
+            }
+            if (!frameGone) {
+                frameGone = true;
+                player.displayClientMessage(Component.translatable(FRAME_GONE), true);
+            }
+            return false;
         } catch (RuntimeException e) {
             if (!checkFailureLogged) {
                 checkFailureLogged = true;
@@ -133,5 +189,13 @@ public final class StationMenu extends AbstractContainerMenu {
             }
             return false;
         }
+    }
+
+    /** Vero se il telaio del menu e' ancora piazzato, a portata della stazione e usabile dal giocatore. */
+    private boolean frameAvailableTo(Player player) {
+        Optional<PlacedFrame> frame = Compat.frameState().placed(level.getServer(), frameId);
+        return frame.isPresent() && StationFinder.inReach(frame.get(), level.dimension(), footprint)
+                && player instanceof ServerPlayer serverPlayer
+                && FramePermissions.canUse(serverPlayer, frame.get().state());
     }
 }

@@ -62,6 +62,41 @@ class ExoframesConfigTest {
         assertTrue(cfg.world.armoredIllager);
         assertTrue(cfg.world.chestLoot);
         assertTrue(cfg.server.ownerOnlyFrames);
+        assertEquals(2.0, cfg.station.reachBlocks, 1e-9);
+    }
+
+    @Test
+    void stationReachBlocksStaysBetweenHalfAndEight() {
+        assertEquals(0.5, ConfigValidation.MIN_REACH_BLOCKS, 1e-12);
+        assertEquals(8.0, ConfigValidation.MAX_REACH_BLOCKS, 1e-12);
+
+        for (double kept : new double[] {0.5, 8.0}) {
+            ExoframesConfig cfg = ExoframesConfig.defaults();
+            cfg.station.reachBlocks = kept;
+            ConfigValidation.ValidationResult result = ConfigValidation.validate(cfg);
+            assertTrue(result.problems().isEmpty(), kept + " " + result.problems());
+            assertEquals(kept, result.normalized().station.reachBlocks, 1e-12);
+        }
+
+        for (double invalid : new double[] {0.49, 8.01, Double.NaN, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY}) {
+            ExoframesConfig cfg = ExoframesConfig.defaults();
+            cfg.station.reachBlocks = invalid;
+            ConfigValidation.ValidationResult result = ConfigValidation.validate(cfg);
+            assertEquals(2.0, result.normalized().station.reachBlocks, 1e-12, String.valueOf(invalid));
+            assertEquals(List.of("station.reachBlocks: " + invalid
+                    + " is invalid (must be between 0.5 and 8.0), using default 2.0"), result.problems());
+        }
+        ExoframesConfig small = ExoframesConfig.defaults();
+        small.station.reachBlocks = 0.49;
+        assertEquals(List.of("station.reachBlocks: 0.49 is invalid (must be between 0.5 and 8.0), using default 2.0"),
+                ConfigValidation.validate(small).problems());
+
+        ExoframesConfig missing = ExoframesConfig.defaults();
+        missing.station = null;
+        ConfigValidation.ValidationResult result = ConfigValidation.validate(missing);
+        assertEquals(2.0, result.normalized().station.reachBlocks, 1e-12);
+        assertEquals(List.of("station: section missing, using defaults"), result.problems());
     }
 
     @Test

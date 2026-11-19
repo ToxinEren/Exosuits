@@ -21,6 +21,7 @@ public final class ExoframesConfig {
     public Frame frame = new Frame();
     public World world = new World();
     public Server server = new Server();
+    public Station station = new Station();
 
     /** Configurazione con tutti i valori di specifica. */
     public static ExoframesConfig defaults() {
@@ -122,5 +123,13 @@ public final class ExoframesConfig {
     /** Regole lato server. */
     public static final class Server {
         public boolean ownerOnlyFrames = true;
+    }
+
+    /**
+     * Stazione di manutenzione (design M4 §5.15): la distanza in blocchi, dall'impronta della stazione, entro cui trova
+     * un telaio piazzato. La usa solo il server.
+     */
+    public static final class Station {
+        public double reachBlocks = 2.0;
     }
 }

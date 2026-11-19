@@ -1,10 +1,17 @@
 package com.toxineren.exoframes.content;
 
+import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.CompatBlock;
+import com.toxineren.exoframes.compat.PlacedFrame;
+import com.toxineren.exoframes.frame.FrameInteractions;
+import com.toxineren.exoframes.station.StationFinder;
 import com.toxineren.exoframes.station.StationMenu;
-import com.toxineren.exoframes.station.StationOpening;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -34,7 +41,7 @@ import net.minecraft.world.phys.shapes.CollisionContext;
  * blocco: la principale ({@link StationPart#MAIN}), dove il gioco posa il blocco, e la laterale
  * ({@link StationPart#SIDE}), alla destra di chi la posa ({@link #otherHalf}). Nessuna block entity: il blocco non
  * custodisce nulla, e il menu nasce dal clic sull'una o sull'altra meta' ({@link #onClick}), come quello del banco da
- * lavoro.
+ * lavoro, su un telaio piazzato a portata della stazione.
  * <p>
  * Le due meta' nascono e spariscono insieme, e una stazione lascia a terra al piu' un oggetto, quello della principale
  * (la tabella di bottino fa cadere l'oggetto solo da {@code part=main}):
@@ -56,6 +63,11 @@ public final class StationBlock extends CompatBlock {
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
     /** Quale meta' della stazione e' il blocco. */
     public static final EnumProperty<StationPart> PART = EnumProperty.create("part", StationPart.class);
+    /**
+     * Il messaggio sulla barra delle azioni quando nessun telaio e' a portata della stazione, con la distanza in
+     * blocchi della config del server.
+     */
+    public static final String NO_FRAME = "message." + RedstoneExoframes.MOD_ID + ".station.no_frame";
 
     /** Stato predefinito: il fronte a nord, la meta' principale. */
     public StationBlock(BlockBehaviour.Properties properties) {
@@ -205,9 +217,15 @@ public final class StationBlock extends CompatBlock {
 
     /**
      * Il clic destro, sull'una o sull'altra meta': passa con la mano secondaria, per uno spettatore e per un giocatore
-     * che non e' vivo. Altrimenti riesce senza usare l'oggetto in mano, qualunque sia: sul client cosi' e basta, sul
-     * server dopo aver aperto il menu della stazione ({@link StationMenu#open}) per la sua meta' principale
-     * ({@link #mainPos}).
+     * che non e' vivo. Altrimenti non usa l'oggetto in mano, qualunque sia; sul client riesce e basta. Sul server cerca
+     * il telaio per la meta' principale della stazione ({@link #mainPos}, con {@link StationFinder#find}):
+     * <ul>
+     * <li>nessun telaio a portata: il messaggio {@link #NO_FRAME} sulla barra delle azioni, con la distanza della
+     * config del server ({@link StationFinder#reachText}), e {@code CONSUME};</li>
+     * <li>telai a portata ma nessuno che il giocatore possa usare: il messaggio del telaio bloccato
+     * ({@link FrameInteractions#LOCKED}) e {@code CONSUME};</li>
+     * <li>il telaio trovato: il menu della stazione su quel telaio ({@link StationMenu#open}) e {@code SUCCESS}.</li>
+     * </ul>
      */
     @Override
     public InteractionResult onClick(BlockState state, Level level, BlockPos pos, Player player,
@@ -215,9 +233,29 @@ public final class StationBlock extends CompatBlock {
         if (hand != InteractionHand.MAIN_HAND || player.isSpectator() || !player.isAlive()) {
             return InteractionResult.PASS;
         }
-        if (!level.isClientSide && player instanceof ServerPlayer serverPlayer) {
-            StationMenu.open(serverPlayer, new StationOpening(mainPos(pos, state)));
+        if (level.isClientSide || !(player instanceof ServerPlayer serverPlayer)
+                || !(level instanceof ServerLevel serverLevel)) {
+            return InteractionResult.SUCCESS;
         }
-        return InteractionResult.SUCCESS;
+        BlockPos main = mainPos(pos, state);
+        // Lo stato della principale dallo stato cliccato: le due meta' hanno lo stesso FACING.
+        StationFinder.Result found = StationFinder.find(serverPlayer, serverLevel, main,
+                state.setValue(PART, StationPart.MAIN));
+        switch (found.outcome()) {
+            case NONE_IN_REACH -> serverPlayer.displayClientMessage(Component.translatable(NO_FRAME,
+                    StationFinder.reachText(RedstoneExoframes.config().station.reachBlocks)), true);
+            case ALL_LOCKED -> serverPlayer.displayClientMessage(Component.translatable(FrameInteractions.LOCKED),
+                    true);
+            case FOUND -> {
+                Optional<PlacedFrame> frame = found.frameId()
+                        .flatMap(frameId -> Compat.frameState().placed(serverLevel.getServer(), frameId));
+                // La ricerca ha appena letto il record, nello stesso tick: c'e' sempre.
+                if (frame.isPresent()) {
+                    StationMenu.open(serverPlayer, StationMenu.opening(serverPlayer, main, frame.get()));
+                    return InteractionResult.SUCCESS;
+                }
+            }
+        }
+        return InteractionResult.CONSUME;
     }
 }

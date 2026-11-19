@@ -1,24 +1,29 @@
 package com.toxineren.exoframes.station;
 
 import java.util.Objects;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 
 /**
  * Cio' che il server sa quando apre la stazione e manda al client nei dati extra dell'apertura (design §5.2 e §5.5):
- * la posizione della meta' principale della stazione. Si scrive e si rilegge con i soli metodi di
- * {@link FriendlyByteBuf} uguali sulle quattro varianti, nello stesso ordine; nessun NBT e nessun codec degli stack.
+ * la posizione della meta' principale della stazione e l'identita' del telaio su cui si apre, fissato all'apertura
+ * per tutta la vita del menu. Si scrive e si rilegge con i soli metodi di {@link FriendlyByteBuf} uguali sulle quattro
+ * varianti, nello stesso ordine; nessun NBT e nessun codec degli stack.
  *
  * @param main la posizione della meta' principale della stazione
+ * @param frameId l'identita' del telaio piazzato su cui il menu si apre
  */
-public record StationOpening(BlockPos main) {
+public record StationOpening(BlockPos main, UUID frameId) {
     public StationOpening {
         main = Objects.requireNonNull(main, "main must not be null").immutable();
+        Objects.requireNonNull(frameId, "frameId must not be null");
     }
 
     /** Scrive l'apertura nei dati extra: lo scrittore che {@link StationMenu#open} passa ad Architectury. */
     public void write(FriendlyByteBuf buf) {
         buf.writeBlockPos(main);
+        buf.writeUUID(frameId);
     }
 
     /**
@@ -26,6 +31,7 @@ public record StationOpening(BlockPos main) {
      * 1.21.1 il buffer dei dati extra si rilascia appena quel costruttore torna.
      */
     public static StationOpening read(FriendlyByteBuf buf) {
-        return new StationOpening(buf.readBlockPos());
+        BlockPos main = buf.readBlockPos();
+        return new StationOpening(main, buf.readUUID());
     }
 }

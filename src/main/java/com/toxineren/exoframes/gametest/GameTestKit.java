@@ -26,8 +26,8 @@ import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.Placeholders;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SuitSize;
+import com.toxineren.exoframes.station.StationFinder;
 import com.toxineren.exoframes.station.StationMenu;
-import com.toxineren.exoframes.station.StationOpening;
 import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -802,21 +802,40 @@ final class GameTestKit {
     }
 
     /**
-     * Apre la stazione per il giocatore come la apre il clic sul server, ma senza la rete: costruisce il menu del
-     * server con il costruttore che il clic vero usa attraverso {@code StationMenu.provider}, per la stazione con la
-     * meta' principale in {@code relativeMain} (relativa alla struttura), con l'id {@link #STATION_MENU_ID}, lo mette
-     * in {@code player.containerMenu} e lo restituisce. Il menu non si apre dalla rete del loader perche' i loader non
-     * lo permettono al giocatore finto: su Fabric aprire un tipo di menu "esteso" con {@code ServerPlayer.openMenu} del
+     * Apre la stazione per il giocatore come la apre il clic sul server, ma senza la rete: cerca il telaio con la
+     * ricerca del clic ({@link StationFinder#find}), che deve trovarlo ({@code FOUND}, altrimenti il test fallisce), e
+     * costruisce il menu del server con il costruttore che il clic vero usa attraverso {@code StationMenu.provider},
+     * con l'apertura del clic ({@link StationMenu#opening}), per la stazione con la meta' principale in
+     * {@code relativeMain} (relativa alla struttura), con l'id {@link #STATION_MENU_ID}; lo mette in
+     * {@code player.containerMenu} e lo restituisce. Il menu non si apre dalla rete del loader perche' i loader non lo
+     * permettono al giocatore finto: su Fabric aprire un tipo di menu "esteso" con {@code ServerPlayer.openMenu} del
      * gioco base lancia, e su NeoForge il pacchetto dell'apertura con i dati extra, che non e' del gioco base, si
      * rifiuta verso una connessione senza canali negoziati come quella del giocatore finto. Senza sincronizzatore il
      * menu lavora sul server come quello vero (pulsanti, {@code stillValid}, {@code broadcastChanges}, chiusura) e non
      * manda pacchetti; che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a1_shots.sh).
      */
     static StationMenu openStation(GameTestHelper helper, ServerPlayer player, BlockPos relativeMain) {
-        StationMenu menu = new StationMenu(STATION_MENU_ID, player.getInventory(), helper.getLevel(),
-                new StationOpening(helper.absolutePos(relativeMain)));
+        ServerLevel level = helper.getLevel();
+        BlockPos main = helper.absolutePos(relativeMain);
+        StationFinder.Result found = StationFinder.find(player, level, main, level.getBlockState(main));
+        helper.assertTrue(found.outcome() == StationFinder.Outcome.FOUND, "the station at " + relativeMain
+                + " found no frame for " + player.getGameProfile().getName() + ": " + found);
+        PlacedFrame frame = found.frameId().flatMap(id -> Compat.frameState().placed(level.getServer(), id))
+                .orElse(null);
+        helper.assertTrue(frame != null, "the frame found by the station is not placed: " + found);
+        StationMenu menu = new StationMenu(STATION_MENU_ID, player.getInventory(), level,
+                StationMenu.opening(player, main, frame));
         player.containerMenu = menu;
         return menu;
+    }
+
+    /**
+     * Un telaio con lo stato dato con i piedi sopra la meta' principale della stazione in {@code relativeMain}
+     * (relativa alla struttura), al centro del blocco, con yaw 0 ({@link #placeFrame}).
+     */
+    static ExoframeEntity frameOnStation(GameTestHelper helper, FrameState state, BlockPos relativeMain) {
+        return placeFrame(helper, state, new Vec3(relativeMain.getX() + 0.5, relativeMain.getY() + 1,
+                relativeMain.getZ() + 0.5), 0f);
     }
 
     /**

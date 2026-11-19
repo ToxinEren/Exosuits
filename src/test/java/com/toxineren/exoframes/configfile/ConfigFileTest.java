@@ -4,10 +4,13 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import java.io.IOException;
@@ -142,6 +145,32 @@ class ConfigFileTest {
         assertTrue(r.problems().get(0).startsWith("energy"), r.problems().toString());
         assertEquals(10_000, r.config().energy.cellCapacity);
         assertEquals(3, r.config().frame.exitHoldSeconds);
+    }
+
+    @Test
+    void fileWithoutTheStationSectionTakesItsDefaultsSilently() throws IOException {
+        // Il file scritto dalla parte 3c: i predefiniti di oggi senza la sezione station, indentati come li scrive
+        // ConfigFile.
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        JsonObject tree = gson.toJsonTree(ExoframesConfig.defaults()).getAsJsonObject();
+        assertNotNull(tree.remove("station"), "the defaults have no station section");
+        Files.writeString(file(), gson.toJson(tree), UTF_8);
+        byte[] before = Files.readAllBytes(file());
+
+        ConfigFile.Result r = ConfigFile.load(file());
+        assertTrue(r.problems().isEmpty(), r.problems().toString());
+        assertEquals(2.0, r.config().station.reachBlocks, 1e-12);
+        assertDefaults(r.config());
+        assertFalse(r.wroteDefaults());
+        assertArrayEquals(before, Files.readAllBytes(file()));
+    }
+
+    @Test
+    void nullStationSectionIsOneProblem() throws IOException {
+        ConfigFile.Result r = loadText("{\"station\": null}");
+        assertEquals(1, r.problems().size(), r.problems().toString());
+        assertTrue(r.problems().get(0).startsWith("station: section missing"), r.problems().toString());
+        assertEquals(2.0, r.config().station.reachBlocks, 1e-12);
     }
 
     @Test

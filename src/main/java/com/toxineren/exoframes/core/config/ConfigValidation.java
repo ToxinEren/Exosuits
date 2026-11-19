@@ -31,6 +31,8 @@ import java.util.Map;
  *       del caricatore &lt;= {@link #MAX_RE_PER_REDSTONE}; secondi di attesa del cambio cella e dell'uscita
  *       (energy.cellSwapSeconds, frame.exitHoldSeconds) &lt;= {@link #MAX_HOLD_SECONDS}; moltiplicatore di consumo
  *       con il torso rotto e moltiplicatori di protezione dei livelli &lt;= {@link #MAX_MULTIPLIER}.</li>
+ *   <li>distanza a cui la stazione trova un telaio (station.reachBlocks): fra {@link #MIN_REACH_BLOCKS} e
+ *       {@link #MAX_REACH_BLOCKS}, estremi compresi; fuori, NaN o infinito torna al default.</li>
  * </ul>
  *
  * <p>I limiti superiori tengono i conti della parte 3c lontani dal trabocco: con questi tetti i prodotti che il
@@ -54,6 +56,10 @@ public final class ConfigValidation {
     public static final int MAX_HOLD_SECONDS = 30;
     /** Moltiplicatore massimo (consumo con il torso rotto, protezione dei livelli). */
     public static final double MAX_MULTIPLIER = 10.0;
+    /** Distanza minima, in blocchi, a cui la stazione trova un telaio. */
+    public static final double MIN_REACH_BLOCKS = 0.5;
+    /** Distanza massima, in blocchi, a cui la stazione trova un telaio. */
+    public static final double MAX_REACH_BLOCKS = 8.0;
 
     /** Esito: elenco delle correzioni (vuoto se la config era valida) e la config normalizzata (nuova istanza). */
     public record ValidationResult(List<String> problems, ExoframesConfig normalized) {
@@ -171,6 +177,11 @@ public final class ConfigValidation {
 
         if (present(input.server, "server", c)) {
             out.server.ownerOnlyFrames = input.server.ownerOnlyFrames;
+        }
+
+        if (present(input.station, "station", c)) {
+            out.station.reachBlocks = c.between("station.reachBlocks", input.station.reachBlocks,
+                    defaults.station.reachBlocks, MIN_REACH_BLOCKS, MAX_REACH_BLOCKS);
         }
 
         return new ValidationResult(problems, out);
@@ -339,6 +350,16 @@ public final class ConfigValidation {
         double atLeastOne(String name, double v, double def, double max) {
             double value = atLeastOne(name, v, def);
             return atMost(name, value, def, max);
+        }
+
+        /** Valore in [{@code min}, {@code max}], estremi compresi: fuori, NaN o infinito torna al default. */
+        double between(String name, double v, double def, double min, double max) {
+            if (!Double.isFinite(v) || v < min || v > max) {
+                problems.add(name + ": " + v + " is invalid (must be between " + min + " and " + max
+                        + "), using default " + def);
+                return def;
+            }
+            return v;
         }
 
         /**
