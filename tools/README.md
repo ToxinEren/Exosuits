@@ -2,8 +2,8 @@
 
 Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio (`tools/art/build.py`) in
 `tools/art/README.md`; per il client senza schermo (`tools/client/client_shot.sh`, le sequenze `m3a_shots.sh`,
-`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`, `m3d_shots.sh` e lo strumento di misura degli
-scatti del braccio in prima persona, `arm_measure.sh`) in `tools/client/README.md`.
+`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`, `m3d_shots.sh`, `m4a1_shots.sh` e lo strumento
+di misura degli scatti, `arm_measure.sh`) in `tools/client/README.md`.
 
 | Strumento | Che cosa fa |
 |---|---|
@@ -38,7 +38,7 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
 byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva degli oggetti
-e dell'icona. Scrive diciotto file:
+e dell'icona. Scrive ventidue file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -48,9 +48,13 @@ e dell'icona. Scrive diciotto file:
   - `exoframe_helmet.png`, `exoframe_torso.png`, `exoframe_legs.png`, `exoframe_boots.png`: i segnaposto che
     stanno negli slot armatura di chi indossa il telaio (`exoframe_torso.png` è anche la texture dell'oggetto di
     prova `suit_model`);
-- `src/main/resources/assets/redstone_exoframes/textures/block/` (16x16, del tutto opache: il blocco è un cubo pieno):
+  - `station.png`: l'oggetto della stazione di manutenzione, un'icona piatta (un banco con sopra un telaio piccolo);
+- `src/main/resources/assets/redstone_exoframes/textures/block/` (16x16, del tutto opache: i blocchi sono cubi pieni):
   `charger_top.png`, `charger_side.png` e i tre fronti del caricatore, `charger_front.png` (alloggiamento vuoto),
-  `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese);
+  `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese); della
+  stazione di manutenzione, sulla stessa piastra, `station_top.png` (un piano di lavoro con due guide di rame),
+  `station_side.png` (una fascia di rame e tre feritoie) e `station_front_main.png` (un pannello con una spia di
+  redstone e un cassetto), segnaposto fino alla grafica della parte 4d;
 - `src/main/resources-mc1.20.1/assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png` e
   `_layer_2.png` (64x32), solo nei jar 1.20.1: completamente trasparenti, perché il layer armatura di vanilla non
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
@@ -61,7 +65,7 @@ qui ma da `tools/art/build.py`.
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciotto file con quelli committati, pixel per pixel.
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventidue file con quelli committati, pixel per pixel.
 
 ## Dati per versione: `gen_data.py`
 

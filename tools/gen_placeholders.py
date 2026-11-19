@@ -417,6 +417,73 @@ CHARGER_TEXTURES = (("charger_top", draw_charger_top), ("charger_side", draw_cha
                     ("charger_front_lit", lambda: charger_front(True, True)))
 
 
+# Stazione di manutenzione (parte 4a-1), segnaposto fino alla grafica della parte 4d: un cubo pieno, quindi tre texture
+# 16x16 del tutto opache, sulla piastra del caricatore. Sopra un piano di lavoro con due guide di rame, sui lati una
+# fascia di rame e tre feritoie, sul fronte un pannello scuro con una spia di redstone e un cassetto di rame.
+def draw_station_top():
+    """Sommita' della stazione: la piastra con un piano di lavoro scuro attraversato da due guide di rame."""
+    px = charger_plate()
+    rect(px, 2, 2, 13, 13, PLATE_EDGE)       # bordo del piano
+    rect(px, 3, 3, 12, 12, PLATE_DARK)       # piano di lavoro
+    for y in (5, 10):                        # guide di rame
+        rect(px, 3, y, 12, y, COPPER)
+        rect(px, 3, y + 1, 12, y + 1, COPPER_DARK)
+    return solid(px)
+
+
+def draw_station_side():
+    """Lato della stazione: la piastra con una fascia di rame in alto e tre feritoie sotto."""
+    px = charger_plate()
+    rect(px, 1, 3, 14, 3, COPPER_LIGHT)      # fascia di rame
+    rect(px, 1, 4, 14, 4, COPPER)
+    rect(px, 1, 5, 14, 5, COPPER_DARK)
+    for y in (8, 10, 12):                    # feritoie
+        rect(px, 4, y, 11, y, PLATE_EDGE)
+    return solid(px)
+
+
+def draw_station_front_main():
+    """Fronte della meta' principale: la piastra con un pannello scuro, una spia di redstone accesa, due tacche di
+    metallo e, sotto, un cassetto di rame."""
+    px = charger_plate()
+    rect(px, 3, 2, 12, 9, PLATE_EDGE)        # cornice del pannello
+    rect(px, 4, 3, 11, 8, HOUSING)           # pannello
+    rect(px, 4, 3, 11, 3, HOUSING_BACK)
+    rect(px, 5, 5, 6, 6, CHARGER_RED)        # spia
+    rect(px, 8, 5, 10, 5, METAL)             # tacche
+    rect(px, 8, 7, 10, 7, METAL_DARK)
+    rect(px, 3, 11, 12, 13, PLATE_EDGE)      # cassetto
+    rect(px, 4, 11, 11, 12, COPPER)
+    rect(px, 4, 11, 11, 11, COPPER_LIGHT)
+    rect(px, 7, 12, 8, 12, COPPER_DARK)      # maniglia
+    return solid(px)
+
+
+STATION_TEXTURES = (("station_top", draw_station_top), ("station_side", draw_station_side),
+                    ("station_front_main", draw_station_front_main))
+
+# L'oggetto della stazione: un'icona piatta (design par. 5.1), un banco largo e basso visto di fronte, con due sportelli
+# (la spia di redstone a sinistra) e sopra un telaio piccolo, lo scheletro d'acciaio con il nucleo di redstone.
+STATION = (
+    "................",
+    "......kssk......",
+    "......kSSk......",
+    "....sssSSsss....",
+    "....kS.RR.Sk....",
+    "....kS.SS.Sk....",
+    "......sSSs......",
+    ".....kS..Sk.....",
+    ".ssssssssssssss.",
+    ".sSSSSSSSSSSSSk.",
+    ".bBBBBBBBBBBBBd.",
+    ".bBkkkBBBBkkkBd.",
+    ".bBkRkBBBBkSkBd.",
+    ".bBkkkBBBBkkkBd.",
+    ".kk..........kk.",
+    "................",
+)
+
+
 def outputs():
     """I file che il generatore scrive: (percorso nei sorgenti, larghezza, altezza, funzione che disegna)."""
     files = [(CELL_PATH, 16, 16, draw_cell), (ICON_PATH, 64, 64, draw_icon)]
@@ -426,6 +493,9 @@ def outputs():
         files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, lambda rows=rows: draw_sprite(rows)))
     for name, draw in CHARGER_TEXTURES:
         files.append((os.path.join(BLOCK_DIR, name + ".png"), 16, 16, draw))
+    for name, draw in STATION_TEXTURES:
+        files.append((os.path.join(BLOCK_DIR, name + ".png"), 16, 16, draw))
+    files.append((os.path.join(ITEM_DIR, "station.png"), 16, 16, lambda: draw_sprite(STATION)))
     for path in ARMOR_LAYER_PATHS:
         files.append((path, 64, 32, lambda: canvas(64, 32)))
     return files

@@ -8,6 +8,7 @@ import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModCreativeTabs;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.ModMenus;
 import com.toxineren.exoframes.core.armor.DamageRouter;
 import com.toxineren.exoframes.core.config.ExoframesConfig;
 import com.toxineren.exoframes.core.frame.FrameRules;
@@ -30,6 +31,7 @@ import com.toxineren.exoframes.gametest.DataGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
 import com.toxineren.exoframes.gametest.MovementGameTests;
+import com.toxineren.exoframes.gametest.StationMenuGameTests;
 import com.toxineren.exoframes.gametest.SurvivalGameTests;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
@@ -64,9 +66,10 @@ public final class RedstoneExoframes {
         LOGGER.info("Redstone Exoframes init ({})", MOD_ID);
         Compat.armorMaterials().register(); // prima degli item: su 1.21.1 i pezzi usano il materiale registrato
         ModEntities.register(); // prima degli item: l'oggetto che piazza il telaio usa il tipo dell'entita'
-        ModBlocks.register(); // prima degli item: l'oggetto del caricatore usa il suo blocco
+        ModBlocks.register(); // prima degli item: gli oggetti del caricatore e della stazione usano il loro blocco
         ModItems.register();
         ModBlockEntities.register(); // dopo i blocchi: il tipo della block entity nasce con il blocco del caricatore
+        ModMenus.register(); // il menu della stazione, con i dati extra dell'apertura
         ModCreativeTabs.register();
         Compat.frameState().registerCommon();
         FrameEntry.registerNet(); // pacchetto C2S dell'uscita dal telaio, su entrambi i lati
@@ -99,6 +102,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(ChargerGameTests.class);
         Compat.gameTests().register(DataGameTests.class);
         Compat.gameTests().register(SurvivalGameTests.class);
+        Compat.gameTests().register(StationMenuGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

@@ -24,9 +24,24 @@
 #                                      ancora premuto (<dopo> minore di <secondi>)
 #   @scatto <nome>                     salva <nome>.png subito, con l'interfaccia com'e' in quel momento
 #   @attendi <secondi>                 aspetta
-# I secondi possono avere decimali (0.5). Un passo sconosciuto o con argomenti sbagliati ferma lo script prima di
-# avviare qualunque cosa (uscita 2); un passo che non si riesce a eseguire lo ferma con uscita 1. Dove guarda il
-# giocatore e cosa tiene in mano si decide con comandi del server (tp, item replace) fra un passo e l'altro.
+#   @punta <x> <y>                     porta il puntatore nel punto
+#   @clic <x> <y> [sinistro|destro] [maiuscole]
+#                                      porta il puntatore nel punto e clicca (di base con il tasto sinistro); con
+#                                      maiuscole tiene premuto Maiusc sinistro (Shift_L) durante il clic
+#   @trascina <x1> <y1> <x2> <y2>      porta il puntatore in (x1, y1), preme il tasto sinistro, si sposta fino a
+#                                      (x2, y2) in dieci passi uguali da 0,03 s e lascia il tasto
+# I secondi possono avere decimali (0.5). Le coordinate sono pixel della finestra (e degli scatti), interi da 0 a
+# EXO_SHOT_W - 1 e da 0 a EXO_SHOT_H - 1: senza gestore di finestre la finestra del gioco sta nell'angolo (0, 0) dello
+# schermo virtuale, che ha la sua misura. Un punto (x, y) dell'interfaccia con la scala 2 e' il punto (2x, 2y) della
+# finestra. I tre passi del puntatore servono con una schermata aperta: senza, il gioco tiene il mouse e muoverlo gira
+# la telecamera. Un passo sconosciuto o con argomenti sbagliati (anche un punto fuori dalla finestra) ferma lo script
+# prima di avviare qualunque cosa (uscita 2); un passo che non si riesce a eseguire lo ferma con uscita 1. Dove guarda
+# il giocatore e cosa tiene in mano si decide con comandi del server (tp, item replace) fra un passo e l'altro.
+#
+# Per provare i passi senza avviare nulla: EXO_SHOT_STEPS_ONLY=true controlla variante, cartella, passi e coordinate,
+# stampa "OK passi: <N>" (N passi) ed esce con 0, prima di guardare sistema, programmi ed EULA e senza creare la
+# cartella; bash tools/client/client_shot.sh --selftest lo fa su una lista di passi giusti e sbagliati e stampa
+# "OK passi" (uscita 0) o una riga "FAIL:" per caso (uscita 1).
 #
 # Lavora sul checkout in cui si trova, in cartelle di esecuzione proprie (versions/<variante>/run-shot-client e
 # run-shot-server, ignorate da git), senza toccare run/ e run-gametest/. Il mondo del server si ricrea ogni volta, e
@@ -45,6 +60,8 @@
 #   EXO_SHOT_PORT     porta del server, default 25601; RCON usa la porta + 10
 #   EXO_SHOT_W        larghezza della finestra, default 960
 #   EXO_SHOT_H        altezza della finestra, default 540
+#   EXO_SHOT_STEPS_ONLY
+#                     true per controllare solo variante, cartella e passi (sopra) e uscire
 #   EXO_SHOT_USER     nome del giocatore offline, default Exo
 #   EXO_SHOT_SETTLE   secondi di attesa dopo i comandi, prima degli scatti, default 8
 #   EXO_SHOT_SERVER_CONFIG
@@ -67,6 +84,50 @@ here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../.." && pwd)
 variants=(1.20.1-forge 1.20.1-fabric 1.21.1-fabric 1.21.1-neoforge)
 
+# --- prova dei passi (--selftest) -----------------------------------------------------------------------------------
+# Lo script richiama se stesso con EXO_SHOT_STEPS_ONLY=true, un caso alla volta, su passi giusti (uscita 0 e
+# "OK passi: 1") e sbagliati (uscita 2 e una riga ERRORE: che nomina il passo), con la finestra di 960x540 e senza
+# EXO_ACCEPT_EULA, quindi senza avviare nulla anche se il controllo dei soli passi mancasse. Stampa "OK passi" (uscita
+# 0) oppure una riga "FAIL:" per caso (uscita 1).
+if [ "${1:-}" = --selftest ]; then
+    if [ "$#" -ne 1 ]; then
+        echo "ERRORE: --selftest non vuole altri argomenti" >&2
+        exit 2
+    fi
+    tmp=$(mktemp -d) || { echo "ERRORE: cartella temporanea non creata" >&2; exit 2; }
+    trap 'rm -rf "$tmp"' EXIT
+    good=("@punta 0 0" "@punta 959 539" "@clic 10 20" "@clic 10 20 destro" "@clic 10 20 maiuscole"
+        "@clic 10 20 sinistro maiuscole" "@trascina 1 2 3 4" "@click destro" "@tieni v 1" "@scatto a" "@attendi 0.5")
+    bad=("@punta 960 0" "@punta 0 540" "@punta -1 0" "@punta 1" "@punta a b" "@clic 10" "@clic 10 20 medio"
+        "@clic 10 20 maiuscole destro" "@trascina 1 2 3" "@trascina 1 2 3 999" "@scatto a b")
+    failed=0
+    steps_only() { # passo: l'uscita in code, quello che stampa in got
+        got=$(env -u EXO_ACCEPT_EULA -u EXO_SHOT_W -u EXO_SHOT_H EXO_SHOT_STEPS_ONLY=true \
+            bash "$0" 1.21.1-neoforge "$tmp/scatti" "$1" 2>&1)
+        code=$?
+    }
+    for s in "${good[@]}"; do
+        steps_only "$s"
+        [ "$code" -eq 0 ] && [ "$got" = "OK passi: 1" ] && continue
+        echo "FAIL: \"$s\": atteso uscita 0 e \"OK passi: 1\", avuto uscita $code: $(head -n 1 <<<"$got")" >&2
+        failed=1
+    done
+    for s in "${bad[@]}"; do
+        steps_only "$s"
+        [ "$code" -eq 2 ] && grep -F "ERRORE:" <<<"$got" | grep -qF "$s" && continue
+        echo "FAIL: \"$s\": atteso uscita 2 e una riga ERRORE: con il passo, avuto uscita $code:" \
+            "$(head -n 1 <<<"$got")" >&2
+        failed=1
+    done
+    if [ -e "$tmp/scatti" ]; then
+        echo "FAIL: il controllo dei soli passi ha creato la cartella degli scatti" >&2
+        failed=1
+    fi
+    [ "$failed" -eq 0 ] || exit 1
+    echo "OK passi"
+    exit 0
+fi
+
 usage() {
     echo "Uso: EXO_ACCEPT_EULA=true bash tools/client/client_shot.sh <variante> <cartella> [\"comando\" | \"@passo\" ...]" >&2
     echo "Varianti: ${variants[*]}" >&2
@@ -88,13 +149,28 @@ if [ "$known" -eq 0 ]; then
     fatal "variante sconosciuta '$variant'"
 fi
 
+# --- finestra -------------------------------------------------------------------------------------------------------
+# Prima dei passi: le loro coordinate devono stare dentro la finestra.
+width=${EXO_SHOT_W:-960}
+height=${EXO_SHOT_H:-540}
+for n in "$width" "$height"; do
+    case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_W ed EXO_SHOT_H vogliono numeri interi" ;; esac
+done
+
 # --- passi del client ----------------------------------------------------------------------------------------------
 # Tutti controllati prima di avviare qualunque cosa: un passo sbagliato non costa un avvio di server e client.
 is_seconds() { [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && awk -v s="$1" 'BEGIN { exit !(s > 0) }'; }
 is_name() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9_-]*$ ]]; }
+# Un punto della finestra: x intero da 0 a width - 1, y da 0 a height - 1 (al piu' cinque cifre, in base 10).
+check_point() { # passo x y
+    [[ "$2" =~ ^[0-9]{1,5}$ && "$3" =~ ^[0-9]{1,5}$ ]] && [ $((10#$2)) -lt "$width" ] && [ $((10#$3)) -lt "$height" ] \
+        || fatal "passo \"$1\": punto ($2, $3) fuori dalla finestra (x intero da 0 a $((width - 1))," \
+            "y intero da 0 a $((height - 1)))"
+}
 reserved=(back front quarter)
 step_names=() # scatti dei passi, in ordine
 step_keys=()  # tasti dei passi @tieni, da provare quando c'e' lo schermo virtuale
+step_count=0  # quanti passi
 add_shot_name() { # nome passo
     local r
     is_name "$1" || fatal "passo \"$2\": nome di scatto non valido '$1' (lettere, cifre, _ e -)"
@@ -127,9 +203,30 @@ for c in "$@"; do
         @attendi)
             [ "${#w[@]}" -eq 2 ] && is_seconds "${w[1]}" \
                 || fatal "passo \"$c\": si scrive @attendi <secondi> (numero maggiore di 0)" ;;
-        *) fatal "passo sconosciuto \"$c\" (passi: @click, @tieni, @scatto, @attendi; vedi tools/client/README.md)" ;;
+        @punta)
+            [ "${#w[@]}" -eq 3 ] || fatal "passo \"$c\": si scrive @punta <x> <y>"
+            check_point "$c" "${w[1]}" "${w[2]}" ;;
+        @clic)
+            [ "${#w[@]}" -ge 3 ] && [ "${#w[@]}" -le 5 ] \
+                || fatal "passo \"$c\": si scrive @clic <x> <y> [sinistro|destro] [maiuscole]"
+            check_point "$c" "${w[1]}" "${w[2]}"
+            case "${w[*]:3}" in
+                '' | sinistro | destro | maiuscole | "sinistro maiuscole" | "destro maiuscole") ;;
+                *) fatal "passo \"$c\": dopo il punto vanno sinistro o destro e poi maiuscole, in quest'ordine" ;;
+            esac ;;
+        @trascina)
+            [ "${#w[@]}" -eq 5 ] || fatal "passo \"$c\": si scrive @trascina <x1> <y1> <x2> <y2>"
+            check_point "$c" "${w[1]}" "${w[2]}"
+            check_point "$c" "${w[3]}" "${w[4]}" ;;
+        *) fatal "passo sconosciuto \"$c\" (passi: @click, @tieni, @scatto, @attendi, @punta, @clic, @trascina; vedi" \
+                 "tools/client/README.md)" ;;
     esac
+    step_count=$((step_count + 1))
 done
+if [ "${EXO_SHOT_STEPS_ONLY:-}" = true ]; then
+    echo "OK passi: $step_count"
+    exit 0
+fi
 
 # --- ambiente -------------------------------------------------------------------------------------------------------
 [ "$(uname -s)" = Linux ] || fatal "lo strumento funziona solo su Linux (Xvfb); sul PC Windows segui la checklist"
@@ -152,11 +249,9 @@ fi
 
 user=${EXO_SHOT_USER:-Exo}
 port=${EXO_SHOT_PORT:-25601}
-width=${EXO_SHOT_W:-960}
-height=${EXO_SHOT_H:-540}
 settle=${EXO_SHOT_SETTLE:-8}
-for n in "$port" "$width" "$height" "$settle"; do
-    case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_PORT, EXO_SHOT_W, EXO_SHOT_H ed EXO_SHOT_SETTLE vogliono numeri interi" ;; esac
+for n in "$port" "$settle"; do
+    case "$n" in '' | *[!0-9]*) fatal "EXO_SHOT_PORT ed EXO_SHOT_SETTLE vogliono numeri interi" ;; esac
 done
 case "$user" in '' | *[!A-Za-z0-9_]*) fatal "EXO_SHOT_USER: solo lettere, cifre e _ (nome di giocatore valido)" ;; esac
 # Mano principale del giocatore: finisce in options.txt, e un valore che il gioco non conosce varrebbe "right" in
@@ -264,7 +359,8 @@ EOF
 
 # --- chiusura -------------------------------------------------------------------------------------------------------
 xpid=""
-held_key="" # il tasto che un passo @tieni tiene premuto in questo momento
+held_key=""    # il tasto che un passo @tieni o @clic tiene premuto in questo momento
+held_button="" # il pulsante del mouse che un passo @trascina tiene premuto in questo momento
 spid=""
 cpid=""
 # Chiusura, su ogni uscita: "stop" via RCON al server, TERM ai due processi Gradle dello script (il client di Gradle
@@ -276,8 +372,13 @@ cleanup() {
     local code=$?
     trap - EXIT
     trap '' INT TERM
-    # un tasto rimasto premuto da @tieni (scatto fallito o interruzione durante la pressione) si rilascia per primo,
-    # con lo schermo virtuale ancora vivo: il client non lo riceve per tutta la chiusura
+    # un pulsante del mouse o un tasto rimasti premuti da @trascina, @tieni o @clic (scatto fallito o interruzione
+    # durante la pressione) si rilasciano per primi, con lo schermo virtuale ancora vivo: il client non li riceve per
+    # tutta la chiusura
+    if [ -n "$held_button" ] && [ -n "$xpid" ] && kill -0 "$xpid" 2>/dev/null; then
+        xdotool mouseup "$held_button" 2>/dev/null && echo "pulsante $held_button del mouse rilasciato" >&2
+        held_button=""
+    fi
     if [ -n "$held_key" ] && [ -n "$xpid" ] && kill -0 "$xpid" 2>/dev/null; then
         xdotool keyup "$held_key" 2>/dev/null && echo "tasto $held_key rilasciato" >&2
         held_key=""
@@ -452,10 +553,41 @@ xdo() { # passo argomenti...
 now() { date +%s.%N; }
 # Un passo del client, gia' controllato all'inizio.
 run_step() {
-    local w t0s rest
+    local w t0s rest a button shifted x1 y1 x2 y2 i
     read -r -a w <<<"$1"
     alive "il passo \"$1\""
     case "${w[0]}" in
+        @punta) xdo "$1" mousemove "$((10#${w[1]}))" "$((10#${w[2]}))" ;;
+        @clic)
+            button=1
+            shifted=0
+            for a in "${w[@]:3}"; do
+                case "$a" in destro) button=3 ;; maiuscole) shifted=1 ;; esac
+            done
+            xdo "$1" mousemove "$((10#${w[1]}))" "$((10#${w[2]}))"
+            if [ "$shifted" -eq 1 ]; then
+                held_key=Shift_L
+                xdo "$1" keydown Shift_L
+            fi
+            xdo "$1" click "$button"
+            if [ "$shifted" -eq 1 ]; then
+                xdo "$1" keyup Shift_L
+                held_key=""
+            fi ;;
+        @trascina)
+            x1=$((10#${w[1]}))
+            y1=$((10#${w[2]}))
+            x2=$((10#${w[3]}))
+            y2=$((10#${w[4]}))
+            xdo "$1" mousemove "$x1" "$y1"
+            held_button=1
+            xdo "$1" mousedown 1
+            for i in $(seq 10); do
+                xdo "$1" mousemove $((x1 + (x2 - x1) * i / 10)) $((y1 + (y2 - y1) * i / 10))
+                sleep 0.03
+            done
+            xdo "$1" mouseup 1
+            held_button="" ;;
         @click) xdo "$1" click "$([ "${w[1]}" = destro ] && echo 3 || echo 1)" ;;
         @tieni)
             t0s=$(now)

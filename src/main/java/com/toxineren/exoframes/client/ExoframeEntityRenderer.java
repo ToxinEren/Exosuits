@@ -2,7 +2,6 @@ package com.toxineren.exoframes.client;
 
 import com.google.common.collect.MapMaker;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.math.Axis;
 import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.client.SuitView;
@@ -32,9 +31,6 @@ import net.minecraft.world.entity.LivingEntity;
  * ({@link ExoframeEntity#getBoundingBoxForCulling}), che {@code EntityRenderer.shouldRender} legge sulle due versioni.
  */
 public final class ExoframeEntityRenderer extends EntityRenderer<ExoframeEntity> {
-    /** La scala del modello del giocatore in {@code PlayerRenderer.scale}: la tuta indossata la riceve con il giocatore. */
-    private static final float PLAYER_MODEL_SCALE = 0.9375f;
-
     /**
      * Il raggio dell'ombra: quello del giocatore vanilla ({@code PlayerRenderer}), che la tuta indossata non cambia.
      * Un'ombra piu' grande per entrambi e' una scelta di grafica successiva.
@@ -70,10 +66,7 @@ public final class ExoframeEntityRenderer extends EntityRenderer<ExoframeEntity>
             pose.pushPose();
             // Come LivingEntityRenderer per il corpo e PlayerRenderer.scale per la scala: lo spazio del modello del
             // giocatore, con i piedi a y = FEET_Y (y verso il basso).
-            pose.mulPose(Axis.YP.rotationDegrees(180f - entityYaw));
-            pose.scale(-1f, -1f, 1f);
-            pose.scale(PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE, PLAYER_MODEL_SCALE);
-            pose.translate(0f, -SuitDraw.FEET_Y, 0f);
+            SuitPreview.frameSpace(pose, entityYaw);
             SuitDraw.draw(entity, restPose, pose, buffers, packedLight, partialTick, view, 0f);
             pose.popPose();
         }

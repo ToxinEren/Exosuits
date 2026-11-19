@@ -60,6 +60,10 @@ public final class ModItems {
     public static final RegistrySupplier<ChargerItem> CHARGER = ITEMS.register("charger",
             () -> new ChargerItem(ModBlocks.CHARGER.get(), new Item.Properties()));
 
+    /** L'oggetto che posa la stazione di manutenzione (design §5.1); il suo nome e' quello del blocco. */
+    public static final RegistrySupplier<StationItem> STATION = ITEMS.register("station",
+            () -> new StationItem(ModBlocks.STATION.get(), new Item.Properties()));
+
     private ModItems() {
     }
 

@@ -23,6 +23,8 @@ import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.Placeholders;
 import com.toxineren.exoframes.frame.SafeSpots;
 import com.toxineren.exoframes.frame.SuitSize;
+import com.toxineren.exoframes.station.StationMenu;
+import com.toxineren.exoframes.station.StationOpening;
 import dev.architectury.event.events.common.TickEvent;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -46,6 +48,7 @@ import net.minecraft.gametest.framework.TestFunction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
+import net.minecraft.network.protocol.game.ServerboundContainerButtonClickPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -76,9 +79,9 @@ import net.minecraft.world.phys.Vec3;
  * <p>Per aggiungere un test. I test stanno in una classe per area, in {@code gametest/}: {@code ExoframeGameTests} i
  * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
  * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests},
- * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2. Ogni classe ha un costruttore pubblico senza
- * argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
- * {@code Compat.gameTests().register(Classe.class)} in
+ * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2, {@code StationMenuGameTests} il menu della stazione
+ * (parte 4a-1). Ogni classe ha un costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator},
+ * {@code import static GameTestKit.*} e una riga {@code Compat.gameTests().register(Classe.class)} in
  * {@code RedstoneExoframes.init()}. Un test e' un metodo {@code private static void temaCaso(GameTestHelper helper)}
  * che chiude con {@code helper.succeed()}, piu' una riga {@code add(tests, "temaCaso", Classe::temaCaso);} nel
  * generatore della sua classe ({@link #add}); i nomi sono unici fra tutte le classi. tools/run_gametests.sh conta
@@ -127,6 +130,8 @@ final class GameTestKit {
             List.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET);
     /** Lato della griglia del banco da lavoro, in caselle. */
     static final int CRAFTING_GRID_SIDE = 3;
+    /** L'id del menu della stazione aperto da {@link #openStation}. */
+    static final int STATION_MENU_ID = 100;
 
     /** Solo aiuti statici: nessuna istanza. */
     private GameTestKit() {
@@ -790,6 +795,33 @@ final class GameTestKit {
         BlockPos abs = helper.absolutePos(relative);
         return player.gameMode.useItemOn(player, helper.getLevel(), player.getItemInHand(hand), hand,
                 new BlockHitResult(Vec3.atCenterOf(abs), Direction.UP, abs, false));
+    }
+
+    /**
+     * Apre la stazione per il giocatore come la apre il clic sul server, ma senza la rete: costruisce il menu del
+     * server con il costruttore che il clic vero usa attraverso {@code StationMenu.provider}, per la stazione con la
+     * meta' principale in {@code relativeMain} (relativa alla struttura), con l'id {@link #STATION_MENU_ID}, lo mette
+     * in {@code player.containerMenu} e lo restituisce. Il menu non si apre dalla rete del loader perche' i loader non
+     * lo permettono al giocatore finto: su Fabric aprire un tipo di menu "esteso" con {@code ServerPlayer.openMenu} del
+     * gioco base lancia, e su NeoForge il pacchetto dell'apertura con i dati extra, che non e' del gioco base, si
+     * rifiuta verso una connessione senza canali negoziati come quella del giocatore finto. Senza sincronizzatore il
+     * menu lavora sul server come quello vero (pulsanti, {@code stillValid}, {@code broadcastChanges}, chiusura) e non
+     * manda pacchetti; che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a1_shots.sh).
+     */
+    static StationMenu openStation(GameTestHelper helper, ServerPlayer player, BlockPos relativeMain) {
+        StationMenu menu = new StationMenu(STATION_MENU_ID, player.getInventory(), helper.getLevel(),
+                new StationOpening(helper.absolutePos(relativeMain)));
+        player.containerMenu = menu;
+        return menu;
+    }
+
+    /**
+     * Il pulsante {@code buttonId} del menu {@code containerId} premuto dal giocatore come lo preme il client: il
+     * pacchetto del gioco base passa dal suo gestore sul server, con i suoi controlli (l'id del menu aperto, lo
+     * spettatore, {@code stillValid}) e il {@code broadcastChanges} finale.
+     */
+    static void pressButton(ServerPlayer player, int containerId, int buttonId) {
+        player.connection.handleContainerButtonClick(new ServerboundContainerButtonClickPacket(containerId, buttonId));
     }
 
     /** Gli oggetti a terra dentro il riquadro della struttura del test ({@link #structureBox}). */

@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
+import net.minecraft.world.level.material.PushReaction;
 
 /** Blocchi della mod. */
 public final class ModBlocks {
@@ -22,6 +23,14 @@ public final class ModBlocks {
             () -> new ChargerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.5F)
                     .requiresCorrectToolForDrops().sound(SoundType.METAL)
                     .lightLevel(state -> state.getValue(ChargerBlock.LIT) ? 7 : 0)));
+
+    /**
+     * La stazione di manutenzione (design §5.1): metallo, dura come il caricatore (3,5), cade solo con l'attrezzo
+     * giusto, nessuna luce; i pistoni non la spostano.
+     */
+    public static final RegistrySupplier<StationBlock> STATION = BLOCKS.register("station",
+            () -> new StationBlock(BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.5F)
+                    .requiresCorrectToolForDrops().sound(SoundType.METAL).pushReaction(PushReaction.BLOCK)));
 
     private ModBlocks() {
     }
