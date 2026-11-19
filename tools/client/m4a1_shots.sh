@@ -133,43 +133,8 @@ fi
 missing=()
 for s in "${shots[@]}"; do [ -f "$out/$s.png" ] || missing+=("$s"); done
 
-failed=() # i controlli falliti, per nome
-# Una misura di arm_measure.sh: la sua riga, oppure una parola che fa fallire il controllo che la usa.
-take_measure() { bash "$measure" "$@" 2>/dev/null || echo "misura-non-riuscita"; }
-# val <riga> <nome>: il valore dopo "<nome>=" nella riga di una misura; -1 se non c'e'.
-val() {
-    local w
-    for w in $1; do
-        case "$w" in "$2="*) echo "${w#*=}"; return 0 ;; esac
-    done
-    echo -1
-}
-# box <riga>: larghezza, altezza, X e Y del riquadro della misura in BL, BA, BX, BY.
-box() {
-    local r
-    r=$(val "$1" riquadro)
-    IFS='x+' read -r BL BA BX BY <<<"$r"
-    [[ "$BL" =~ ^[0-9]+$ && "$BA" =~ ^[0-9]+$ && "$BX" =~ ^[0-9]+$ && "$BY" =~ ^[0-9]+$ ]] && return 0
-    BL=0 BA=0 BX=0 BY=0
-}
-# inside <LxA+X+Y>: il riquadro dell'ultima box non e' vuoto e sta dentro il rettangolo dato.
-inside() {
-    local rl ra rx ry
-    IFS='x+' read -r rl ra rx ry <<<"$1"
-    [ "$BL" -gt 0 ] && [ "$BX" -ge "$rx" ] && [ "$BY" -ge "$ry" ] && [ $((BX + BL)) -le $((rx + rl)) ] \
-        && [ $((BY + BA)) -le $((ry + ra)) ]
-}
-# verdict <nome> <0 se vale> <misure> <atteso>: la riga del controllo; una misura non riuscita lo fa fallire comunque.
-verdict() {
-    local good=$2
-    case "$3" in *misura-non-riuscita*) good=1 ;; esac
-    if [ "$good" -eq 0 ]; then
-        echo "ok $1: $3"
-    else
-        echo "KO $1: $3 (atteso $4)"
-        failed+=("$1")
-    fi
-}
+# Gli aiuti delle misure (take_measure, val, box, inside, verdict) e l'elenco failed: tools/client/measure_lib.sh.
+source "$here/measure_lib.sh" || exit 2
 
 checks() {
     local m1 m2 good
