@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
-    "redstone_exoframes:charger"
+    "redstone_exoframes:charger",
+    "redstone_exoframes:station"
   ]
 }

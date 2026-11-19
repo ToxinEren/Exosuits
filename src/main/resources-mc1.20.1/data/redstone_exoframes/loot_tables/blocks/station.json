@@ -1,0 +1,28 @@
+{
+  "pools": [
+    {
+      "conditions": [
+        {
+          "condition": "minecraft:survives_explosion"
+        }
+      ],
+      "entries": [
+        {
+          "conditions": [
+            {
+              "block": "redstone_exoframes:station",
+              "condition": "minecraft:block_state_property",
+              "properties": {
+                "part": "main"
+              }
+            }
+          ],
+          "name": "redstone_exoframes:station",
+          "type": "minecraft:item"
+        }
+      ],
+      "rolls": 1
+    }
+  ],
+  "type": "minecraft:block"
+}

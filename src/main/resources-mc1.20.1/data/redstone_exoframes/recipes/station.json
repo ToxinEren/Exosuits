@@ -1,0 +1,27 @@
+{
+  "category": "misc",
+  "key": {
+    "C": {
+      "item": "minecraft:copper_ingot"
+    },
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "T": {
+      "item": "minecraft:crafting_table"
+    },
+    "r": {
+      "item": "minecraft:redstone"
+    }
+  },
+  "pattern": [
+    "CCC",
+    "ITI",
+    "IrI"
+  ],
+  "result": {
+    "count": 1,
+    "item": "redstone_exoframes:station"
+  },
+  "type": "minecraft:crafting_shaped"
+}

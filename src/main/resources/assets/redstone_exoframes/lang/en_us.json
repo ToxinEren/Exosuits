@@ -80,6 +80,8 @@
   "tooltip.redstone_exoframes.charger.dust": "Right-click with redstone dust to fuel it",
   "tooltip.redstone_exoframes.charger.status": "Sneak and right-click with empty hands to read its state",
   "tooltip.redstone_exoframes.charger.hoppers": "Hoppers: cells in from above, dust from the sides, full cells out below",
+  "tooltip.redstone_exoframes.station.where": "The exoframe goes on the station or within 2 blocks",
+  "tooltip.redstone_exoframes.station.open": "Right-click to open",
   "commands.redstone_exoframes.debug.energy.show": "Cell: %s / %s RE (%s)",
   "commands.redstone_exoframes.debug.energy.set": "Cell charge set to %s RE",
   "commands.redstone_exoframes.debug.energy.no_cell": "The exoframe you are wearing has no cell",

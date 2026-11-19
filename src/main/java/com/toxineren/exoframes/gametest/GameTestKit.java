@@ -9,8 +9,11 @@ import com.toxineren.exoframes.compat.NbtKeys;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
 import com.toxineren.exoframes.content.CellItem;
+import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.StationBlock;
+import com.toxineren.exoframes.content.StationPart;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
@@ -80,13 +83,14 @@ import net.minecraft.world.phys.Vec3;
  * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
  * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests},
  * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2, {@code StationMenuGameTests} il menu della stazione
- * (parte 4a-1). Ogni classe ha un costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator},
- * {@code import static GameTestKit.*} e una riga {@code Compat.gameTests().register(Classe.class)} in
- * {@code RedstoneExoframes.init()}. Un test e' un metodo {@code private static void temaCaso(GameTestHelper helper)}
- * che chiude con {@code helper.succeed()}, piu' una riga {@code add(tests, "temaCaso", Classe::temaCaso);} nel
- * generatore della sua classe ({@link #add}); i nomi sono unici fra tutte le classi. tools/run_gametests.sh conta
- * quelle righe in tutti i file di {@code gametest/} per sapere quanti test aspettarsi; la lista e' la stessa sulle
- * quattro varianti (il corpo di un test puo' dipendere dalla versione, la lista no).
+ * e {@code StationBlockGameTests} il suo blocco di due meta' (parte 4a-1). Ogni classe ha un costruttore pubblico senza
+ * argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
+ * {@code Compat.gameTests().register(Classe.class)} in {@code RedstoneExoframes.init()}. Un test e' un metodo
+ * {@code private static void temaCaso(GameTestHelper helper)} che chiude con {@code helper.succeed()}, piu' una riga
+ * {@code add(tests, "temaCaso", Classe::temaCaso);} nel generatore della sua classe ({@link #add}); i nomi sono unici
+ * fra tutte le classi. tools/run_gametests.sh conta quelle righe in tutti i file di {@code gametest/} per sapere
+ * quanti test aspettarsi; la lista e' la stessa sulle quattro varianti (il corpo di un test puo' dipendere dalla
+ * versione, la lista no).
  *
  * <p>Tutti i test girano sullo stesso server, con lo stesso dato salvato e lo stesso livello, e cominciano insieme,
  * ciascuno appena i chunk della sua struttura hanno le entita' caricate (di solito nello stesso tick; vedi
@@ -824,6 +828,32 @@ final class GameTestKit {
         player.connection.handleContainerButtonClick(new ServerboundContainerButtonClickPacket(containerId, buttonId));
     }
 
+    /**
+     * Posa con {@code helper.setBlock} una stazione con il fronte verso {@code facing}: la meta' principale in
+     * {@code relativeMain} (relativa alla struttura), poi la laterale accanto, verso
+     * {@code facing.getCounterClockWise()} (alla destra di chi guarda il fronte, come la posa l'oggetto). Restituisce
+     * la posizione relativa della laterale. Per toglierla, prima la principale: la laterale rimasta sola diventa aria
+     * senza bottino, mentre una principale rimasta sola diventerebbe aria lasciando a terra una stazione.
+     */
+    static BlockPos placeStation(GameTestHelper helper, BlockPos relativeMain, Direction facing) {
+        BlockState main = ModBlocks.STATION.get().defaultBlockState().setValue(StationBlock.FACING, facing);
+        BlockPos relativeSide = relativeMain.relative(facing.getCounterClockWise());
+        helper.setBlock(relativeMain, main);
+        helper.setBlock(relativeSide, main.setValue(StationBlock.PART, StationPart.SIDE));
+        return relativeSide;
+    }
+
+    /** Quante stazioni ci sono a terra nel riquadro della struttura: la somma dei conti degli oggetti stazione. */
+    static int stationsOnTheGround(GameTestHelper helper) {
+        int count = 0;
+        for (ItemEntity drop : itemsIn(helper)) {
+            if (drop.getItem().is(ModItems.STATION.get())) {
+                count += drop.getItem().getCount();
+            }
+        }
+        return count;
+    }
+
     /** Gli oggetti a terra dentro il riquadro della struttura del test ({@link #structureBox}). */
     static List<ItemEntity> itemsIn(GameTestHelper helper) {
         return helper.getLevel().getEntitiesOfClass(ItemEntity.class, structureBox(helper));
@@ -841,8 +871,9 @@ final class GameTestKit {
      * Nove stack per una griglia 3x3 del banco da lavoro, per righe, in una lista nuova che chi chiama puo' cambiare:
      * al piu' tre righe, ciascuna da uno a tre caratteri, riempite a destra e in basso con il vuoto. {@code I} lingotto
      * di ferro, {@code C} lingotto di rame, {@code R} blocco di redstone, {@code r} polvere di redstone, {@code Q}
-     * quarzo, {@code _} vuoto: le lettere delle forme di design §12.12. {@link IllegalArgumentException} per un altro
-     * carattere, per una riga vuota o troppo lunga e per piu' di tre righe.
+     * quarzo, {@code T} banco da lavoro, {@code _} vuoto: le lettere delle forme di design §12.12 e, per la stazione,
+     * di design M4 §5.1. {@link IllegalArgumentException} per un altro carattere, per una riga vuota o troppo lunga e
+     * per piu' di tre righe.
      */
     static List<ItemStack> craftingGrid(String... rows) {
         if (rows.length > CRAFTING_GRID_SIDE) {
@@ -862,6 +893,7 @@ final class GameTestKit {
                     case 'R' -> new ItemStack(Items.REDSTONE_BLOCK);
                     case 'r' -> new ItemStack(Items.REDSTONE);
                     case 'Q' -> new ItemStack(Items.QUARTZ);
+                    case 'T' -> new ItemStack(Items.CRAFTING_TABLE);
                     case '_' -> ItemStack.EMPTY;
                     default -> throw new IllegalArgumentException("unknown crafting letter '" + letter + "' in '"
                             + cells + "'");

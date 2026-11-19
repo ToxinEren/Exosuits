@@ -7,25 +7,36 @@
 # Il giocatore resta in creativa in 0,5 -60 0,5 rivolto a sud; finestra 960x540 e scala dell'interfaccia 2, quindi
 # interfaccia 480x270 e schermata della stazione (316x232) con l'angolo nel punto 82,19 dell'interfaccia, cioe' il
 # riquadro 632x464+164+38 negli scatti. Un punto (x, y) della schermata e' il punto (2 (82 + x), 2 (19 + y)) degli
-# scatti. La stazione sta in 0 -60 1, con il fronte a nord, verso il giocatore.
+# scatti. La stazione sta in 0 -60 1 (la meta' principale) e -1 -60 1 (la laterale, alla destra di chi la posa
+# guardando a sud), con il fronte a nord, verso il giocatore.
 #
 #   1. attesa       "@attendi 12": la riga in chat del "gamemode creative" di client_shot.sh e l'avviso "Chat
 #                   messages can't be verified" (460x110+500+0, sopra il ritaglio dell'anteprima) spariscono prima
 #                   del primo scatto misurato (vedi tools/client/README.md, regole degli scatti misurati)
-#   2. posa         setblock della stazione in 0 -60 1 (un blocco solo, il segnaposto della parte 4a-1)
-#   3. apertura     con l'inclinazione 60 il mirino sta sul fianco nord della stazione: un clic destro la apre, con i
+#   2. ricetta      un lingotto di rame nell'inventario sblocca la ricetta della stazione, come le altre della mod:
+#                   "recipe take" riesce solo se il giocatore la conosce; poi "@attendi 12", perche' l'avviso delle
+#                   ricette sbloccate sparisca prima del primo scatto misurato
+#   3. posa         con la stazione in mano e il mirino sul pavimento davanti (inclinazione 55) un clic destro la posa
+#                   con l'oggetto: "execute if block" vuole la principale in 0 -60 1 e la laterale in -1 -60 1, con
+#                   il fronte a nord; la mano torna vuota; scatto stazione-posata, da guardare: due blocchi affiancati
+#                   con le texture segnaposto, il fronte verso il giocatore, nessun blocco viola e nero (un modello o
+#                   una texture mancante)
+#   4. apertura     con l'inclinazione 60 il mirino sta sul fianco nord della principale: un clic destro la apre, con i
 #                   dati extra; la schermata si apre solo se il tipo del menu porta i dati e la schermata e' registrata
 #                   (su NeoForge un errore della registrazione sarebbe silenzioso); il puntatore nel punto neutro
 #                   10,10, fuori dalla schermata; scatto stazione-aperta, da guardare: la schermata scura al centro e,
 #                   nel riquadro di destra, la tuta fissa di fronte, in piedi, con il braccio destro magenta sul lato
 #                   sinistro dello schermo, tagliata dal ritaglio se ne esce
-#   4. pulsante     clic sinistro al centro del pulsante di prova (punto 748,426: il pulsante e' 283..301 x 186..202
+#   5. pulsante     clic sinistro al centro del pulsante di prova (punto 748,426: il pulsante e' 283..301 x 186..202
 #                   nella schermata, 36x32+730+410 negli scatti): il numero 102 va al server con il pacchetto dei
 #                   pulsanti del gioco base, il server conta la pressione e il gioco base rimanda il contatore; il
 #                   puntatore di nuovo nel punto neutro; scatto premuto, da guardare: il pulsante in basso a destra
 #                   verde con 1
-#   5. chiusura     Escape chiude la schermata
-#   6. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
+#   6. chiusura     Escape chiude la schermata
+#   7. rottura      con il mirino sul fianco nord della laterale (rotazione 63,4, inclinazione 45) un clic sinistro,
+#                   in creativa, rompe la laterale: la principale sparisce con lei, senza bottino ("execute if block"
+#                   vuole l'aria nelle due meta', "execute unless entity" nessun oggetto a terra)
+#   8. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
 #
 # Controlli sugli scatti (arm_measure.sh), solo dentro il riquadro della schermata o di una sua parte: attorno si vede
 # il mondo. "Dentro R" vuol dire un riquadro con X >= Rx, Y >= Ry, X + L <= Rx + RL e Y + A <= Ry + RA.
@@ -41,22 +52,25 @@
 # prima di uno scatto misurato (la sequenza non ne da'); il puntatore nel punto neutro in tutti e due gli scatti della
 # coppia del pulsante (sopra il pulsante lo schiarisce e ne mostra il suggerimento).
 #
-# Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la stazione di due blocchi, la ricerca del
-# telaio, la vista del telaio, l'anteprima girevole e il pannello del telaio, che arrivano con i task dopo; la
+# Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la rottura in sopravvivenza, con e senza
+# piccone, i pistoni e i comandi che tolgono una meta' (li provano i test in mondo di StationBlockGameTests); la ricerca
+# del telaio, la vista del telaio, l'anteprima girevole e il pannello del telaio, che arrivano con i task dopo; la
 # schermata con altre scale dell'interfaccia e altre misure della finestra; una ricarica delle risorse (F3+T) con la
-# schermata aperta. Sono nella checklist per il PC della parte.
+# schermata aperta; un'esplosione vera. Sono nella checklist per il PC della parte.
 #
-# Dura circa un minuto e tre quarti a cache calde (misurati 88-107 s sulle quattro varianti, di cui 83-102 s
-# l'esecuzione di client_shot.sh). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie,
-# piu' sotto), e cosi' il ritaglio dell'anteprima: la scala della tuta nell'interfaccia passa da GuiEntityScale, che
-# la applica come il gioco base di ogni versione (senza, su 1.20.1 la tuta usciva piu' scura, magenta 999).
+# Dura circa due minuti a cache calde: misurati 123 s su 1.21.1-neoforge, di cui 118 s l'esecuzione di client_shot.sh
+# (senza la ricetta, la posa con l'oggetto e la rottura la sequenza misurava 88-107 s sulle quattro varianti, di cui
+# 83-102 s client_shot.sh). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu'
+# sotto; le stesse nell'esecuzione con le fasi nuove su 1.21.1-neoforge), e cosi' il ritaglio dell'anteprima: la scala
+# della tuta nell'interfaccia passa da GuiEntityScale, che la applica come il gioco base di ogni versione (senza, su
+# 1.20.1 la tuta usciva piu' scura, magenta 999).
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se client_shot.sh e' uscito con 0 e
-# ogni controllo e' ok, altrimenti "FAIL <variante>: ..." su stderr (uscita 1). I controlli girano solo se ci sono i due
-# scatti. Con M4A1_SOLO_CONTROLLI=1 lo script salta l'esecuzione e rifa' i controlli sugli scatti che la cartella ha
-# gia' (per fissare le soglie senza riavviare il client). Uscita 2: uso sbagliato. Le variabili d'ambiente sono quelle
-# di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
+# ogni controllo e' ok, altrimenti "FAIL <variante>: ..." su stderr (uscita 1). I controlli girano solo se ci sono
+# tutti gli scatti. Con M4A1_SOLO_CONTROLLI=1 lo script salta l'esecuzione e rifa' i controlli sugli scatti che la
+# cartella ha gia' (per fissare le soglie senza riavviare il client). Uscita 2: uso sbagliato. Le variabili d'ambiente
+# sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
@@ -96,19 +110,29 @@ NEUTRAL="@punta 10 10" # il puntatore fuori dalla schermata
 steps=(
     # 1. attesa
     "@attendi $FIRST_WAIT"
-    # 2. posa
-    "setblock 0 -60 1 redstone_exoframes:station"
-    # 3. apertura: il mirino sul fianco nord della stazione
+    # 2. ricetta: il lingotto di rame sblocca la ricetta della stazione, e solo allora "recipe take" riesce
+    "give $u minecraft:copper_ingot" "@attendi 2" "recipe take $u redstone_exoframes:station" "@attendi 12"
+    # 3. posa con l'oggetto: il mirino sul pavimento davanti; la principale li', la laterale a destra, fronte a nord
+    "item replace entity $u weapon.mainhand with redstone_exoframes:station" "tp $u 0.5 -60 0.5 0 55" "@attendi 1"
+    "@click destro" "@attendi 1"
+    "execute if block 0 -60 1 redstone_exoframes:station[facing=north,part=main]"
+    "execute if block -1 -60 1 redstone_exoframes:station[facing=north,part=side]"
+    "item replace entity $u weapon.mainhand with minecraft:air" "@scatto stazione-posata"
+    # 4. apertura: il mirino sul fianco nord della principale
     "tp $u 0.5 -60 0.5 0 60" "@attendi 1" "@click destro" "@attendi 2" "$NEUTRAL" "@attendi 1"
     "@scatto stazione-aperta"
-    # 4. pulsante di prova, al suo centro
+    # 5. pulsante di prova, al suo centro
     "@clic 748 426" "@attendi 1" "$NEUTRAL" "@attendi 1" "@scatto premuto"
-    # 5. chiusura
+    # 6. chiusura
     "@tieni Escape 0.2" "@attendi 1"
-    # 6. fine, all'aperto per i tre scatti di client_shot.sh
+    # 7. rottura: il mirino sul fianco nord della laterale; in creativa le due meta' spariscono senza bottino
+    "tp $u 0.5 -60 0.5 63.4 45" "@attendi 1" "@click sinistro" "@attendi 1"
+    "execute if block 0 -60 1 minecraft:air" "execute if block -1 -60 1 minecraft:air"
+    "execute unless entity @e[type=minecraft:item]"
+    # 8. fine, all'aperto per i tre scatti di client_shot.sh
     "tp $u 0.5 -60 -5.5 0 15"
 )
-shots=(stazione-aperta premuto)
+shots=(stazione-posata stazione-aperta premuto)
 
 # --- l'esecuzione ---------------------------------------------------------------------------------------------------
 problems=() # le ragioni di un FAIL, nell'ordine in cui si incontrano

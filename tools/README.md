@@ -38,7 +38,7 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
 byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva degli oggetti
-e dell'icona. Scrive ventidue file:
+e dell'icona. Scrive ventitré file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -53,8 +53,9 @@ e dell'icona. Scrive ventidue file:
   `charger_top.png`, `charger_side.png` e i tre fronti del caricatore, `charger_front.png` (alloggiamento vuoto),
   `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese); della
   stazione di manutenzione, sulla stessa piastra, `station_top.png` (un piano di lavoro con due guide di rame),
-  `station_side.png` (una fascia di rame e tre feritoie) e `station_front_main.png` (un pannello con una spia di
-  redstone e un cassetto), segnaposto fino alla grafica della parte 4d;
+  `station_side.png` (una fascia di rame e tre feritoie) e i fronti delle due metà, `station_front_main.png` (un
+  pannello con una spia di redstone e un cassetto) e `station_front_side.png` (un pannello con una griglia di metallo
+  e un cassetto), segnaposto fino alla grafica della parte 4d;
 - `src/main/resources-mc1.20.1/assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png` e
   `_layer_2.png` (64x32), solo nei jar 1.20.1: completamente trasparenti, perché il layer armatura di vanilla non
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
@@ -65,33 +66,39 @@ qui ma da `tools/art/build.py`.
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventidue file con quelli committati, pixel per pixel.
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventitré file con quelli committati, pixel per pixel.
 
 ## Dati per versione: `gen_data.py`
 
-Ricette, avanzamenti di sblocco, tabella di bottino e tag non si scrivono a mano: li scrive `tools/gen_data.py` (solo
+Ricette, avanzamenti di sblocco, tabelle di bottino e tag non si scrivono a mano: li scrive `tools/gen_data.py` (solo
 libreria standard di Python 3; due esecuzioni danno file identici byte per byte) in due alberi, uno per versione di
 Minecraft, perché le cartelle dei dati hanno nomi diversi (al plurale su 1.20.1, al singolare su 1.21.1) e una
 cartella con il nome dell'altra versione il gioco la ignora in silenzio:
 
 | | `src/main/resources-mc1.20.1/data/` | `src/main/resources-mc1.21.1/data/` |
 |---|---|---|
-| 7 ricette | `redstone_exoframes/recipes/<oggetto>.json` | `redstone_exoframes/recipe/<oggetto>.json` |
-| 7 sblocchi | `redstone_exoframes/advancements/recipes/<categoria>/<oggetto>.json` | `redstone_exoframes/advancement/recipes/<categoria>/<oggetto>.json` |
-| bottino del caricatore | `redstone_exoframes/loot_tables/blocks/charger.json` | `redstone_exoframes/loot_table/blocks/charger.json` |
+| 8 ricette | `redstone_exoframes/recipes/<oggetto>.json` | `redstone_exoframes/recipe/<oggetto>.json` |
+| 8 sblocchi | `redstone_exoframes/advancements/recipes/<categoria>/<oggetto>.json` | `redstone_exoframes/advancement/recipes/<categoria>/<oggetto>.json` |
+| bottino del caricatore e della stazione | `redstone_exoframes/loot_tables/blocks/<blocco>.json` | `redstone_exoframes/loot_table/blocks/<blocco>.json` |
 | tag `minecraft:mineable/pickaxe` | `minecraft/tags/blocks/mineable/pickaxe.json` | `minecraft/tags/block/mineable/pickaxe.json` |
 
-Sono 32 file, sedici per albero, con gli stessi id sulle due versioni. La sola differenza di contenuto è il risultato
-di una ricetta: `{"count": 1, "item": "<id>"}` su 1.20.1, `{"count": 1, "id": "<id>"}` su 1.21.1. La build non ha
-nulla di apposta: ogni variante aggiunge già alle risorse la cartella `resources-mc<versione>` della sua versione.
+Sono 38 file, diciannove per albero, con gli stessi id sulle due versioni. La sola differenza di contenuto è il
+risultato di una ricetta: `{"count": 1, "item": "<id>"}` su 1.20.1, `{"count": 1, "id": "<id>"}` su 1.21.1. La build
+non ha nulla di apposta: ogni variante aggiunge già alle risorse la cartella `resources-mc<versione>` della sua
+versione.
 
 Le ricette stanno nella tabella `RECIPES` del generatore (oggetto, categoria, righe della forma, con `_` per il
-vuoto) e gli ingredienti in `INGREDIENTS` (simbolo → id dell'oggetto). Per cambiarne o aggiungerne una si tocca la
-tabella e si rigenera; una ricetta nuova va aggiunta anche all'elenco del controllo (f3) di `check_jars.sh`.
+vuoto) e gli ingredienti in `INGREDIENTS` (simbolo → id dell'oggetto; `T` è il banco da lavoro, nella ricetta della
+stazione). Per cambiarne o aggiungerne una si tocca la tabella e si rigenera; una ricetta nuova va aggiunta anche
+all'elenco del controllo (f3) di `check_jars.sh`. I blocchi stanno in `BLOCKS` (nome, proprietà dello stato da cui
+cade l'oggetto): ciascuno ha la sua tabella di bottino, che fa cadere l'oggetto del blocco se sopravvive
+all'esplosione, e sta nel tag `minecraft:mineable/pickaxe`. La stazione fa cadere l'oggetto solo dalla metà
+principale, come il letto dalla testa: la voce della sua tabella ha la condizione `minecraft:block_state_property` con
+`part: main`.
 
     python3 -I tools/gen_data.py               riscrive i file nei sorgenti
     python3 -I tools/gen_data.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
-    python3 -I tools/gen_data.py --selftest    prove negative di validate(): OK selftest (7 difetti segnalati)
+    python3 -I tools/gen_data.py --selftest    prove negative di validate(): OK selftest (9 difetti segnalati)
 
 Prima di scrivere, `validate()` controlla i file delle due versioni insieme, e se ne rifiuta uno non si scrive
 nulla. Impone:
@@ -102,16 +109,20 @@ nulla. Impone:
   chiave non usata;
 - ogni id nella forma `spazio:percorso`;
 - per ogni ricetta il suo sblocco (`recipes/<categoria>/<oggetto>`), con lo stesso id nei premi;
+- in ogni condizione `minecraft:block_state_property` di una voce di una tabella di bottino, `block` uguale al blocco
+  della tabella (`redstone_exoframes:<nome>` per `redstone_exoframes:blocks/<nome>`) e `properties` un oggetto non
+  vuoto di stringhe;
 - gli stessi id di ricette, sblocchi, bottini e tag sulle due versioni;
 - nessun percorso di una versione nelle cartelle dell'altra;
 - nei file dei tag nessuna chiave `remove`, e `replace` falso (il tag è del gioco: il file aggiunge un valore).
 
 `--selftest` inietta in memoria un difetto alla volta (`count` 2, la categoria `tools`, un simbolo senza chiave, una
-chiave non usata, `remove` in un tag, una ricetta tolta da una sola versione, un file di 1.20.1 sotto `recipe/`) e
-pretende che `validate()` lo rifiuti nominando quel file.
+chiave non usata, `remove` in un tag, una ricetta tolta da una sola versione, un file di 1.20.1 sotto `recipe/`, la
+condizione della metà della stazione che nomina il caricatore, la stessa condizione con `properties` vuote) e pretende
+che `validate()` lo rifiuti nominando quel file.
 
-`tools/check_data.sh` (anche nella CI) esegue `--selftest`, rigenera con `--out` e confronta i 32 file con quelli
+`tools/check_data.sh` (anche nella CI) esegue `--selftest`, rigenera con `--out` e confronta i 38 file con quelli
 committati, byte per byte; fallisce anche per un file in più nei due alberi (`non viene dal generatore`) e per
 qualunque file sotto `src/main/resources/data` che non sia una delle due strutture vuote dei test: i dati per
 versione non stanno nelle risorse comuni. Sui jar, il controllo (f3) di `check_jars.sh` ripete la regola delle
-cartelle e pretende in ogni jar i sedici file della sua versione.
+cartelle e pretende in ogni jar i diciannove file della sua versione.

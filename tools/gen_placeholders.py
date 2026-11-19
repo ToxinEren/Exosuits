@@ -417,9 +417,10 @@ CHARGER_TEXTURES = (("charger_top", draw_charger_top), ("charger_side", draw_cha
                     ("charger_front_lit", lambda: charger_front(True, True)))
 
 
-# Stazione di manutenzione (parte 4a-1), segnaposto fino alla grafica della parte 4d: un cubo pieno, quindi tre texture
-# 16x16 del tutto opache, sulla piastra del caricatore. Sopra un piano di lavoro con due guide di rame, sui lati una
-# fascia di rame e tre feritoie, sul fronte un pannello scuro con una spia di redstone e un cassetto di rame.
+# Stazione di manutenzione (parte 4a-1), segnaposto fino alla grafica della parte 4d: due cubi pieni affiancati, quindi
+# quattro texture 16x16 del tutto opache, sulla piastra del caricatore. Sopra un piano di lavoro con due guide di rame,
+# sui lati una fascia di rame e tre feritoie; sui fronti delle due meta' un pannello scuro e un cassetto di rame, con
+# una spia di redstone sulla principale e una griglia di metallo sulla laterale.
 def draw_station_top():
     """Sommita' della stazione: la piastra con un piano di lavoro scuro attraversato da due guide di rame."""
     px = charger_plate()
@@ -442,25 +443,40 @@ def draw_station_side():
     return solid(px)
 
 
-def draw_station_front_main():
-    """Fronte della meta' principale: la piastra con un pannello scuro, una spia di redstone accesa, due tacche di
-    metallo e, sotto, un cassetto di rame."""
+def station_front():
+    """Il fronte comune alle due meta': la piastra con un pannello scuro, vuoto (x 4-11, y 4-8 per chi lo riempie), e
+    sotto un cassetto di rame con la maniglia."""
     px = charger_plate()
     rect(px, 3, 2, 12, 9, PLATE_EDGE)        # cornice del pannello
     rect(px, 4, 3, 11, 8, HOUSING)           # pannello
     rect(px, 4, 3, 11, 3, HOUSING_BACK)
-    rect(px, 5, 5, 6, 6, CHARGER_RED)        # spia
-    rect(px, 8, 5, 10, 5, METAL)             # tacche
-    rect(px, 8, 7, 10, 7, METAL_DARK)
     rect(px, 3, 11, 12, 13, PLATE_EDGE)      # cassetto
     rect(px, 4, 11, 11, 12, COPPER)
     rect(px, 4, 11, 11, 11, COPPER_LIGHT)
     rect(px, 7, 12, 8, 12, COPPER_DARK)      # maniglia
+    return px
+
+
+def draw_station_front_main():
+    """Fronte della meta' principale: sul pannello una spia di redstone accesa e due tacche di metallo."""
+    px = station_front()
+    rect(px, 5, 5, 6, 6, CHARGER_RED)        # spia
+    rect(px, 8, 5, 10, 5, METAL)             # tacche
+    rect(px, 8, 7, 10, 7, METAL_DARK)
+    return solid(px)
+
+
+def draw_station_front_side():
+    """Fronte della meta' laterale: sul pannello una griglia di metallo, tre sbarre orizzontali."""
+    px = station_front()
+    for y, color in ((4, METAL), (6, METAL), (8, METAL_DARK)):
+        rect(px, 5, y, 10, y, color)
     return solid(px)
 
 
 STATION_TEXTURES = (("station_top", draw_station_top), ("station_side", draw_station_side),
-                    ("station_front_main", draw_station_front_main))
+                    ("station_front_main", draw_station_front_main),
+                    ("station_front_side", draw_station_front_side))
 
 # L'oggetto della stazione: un'icona piatta (design par. 5.1), un banco largo e basso visto di fronte, con due sportelli
 # (la spia di redstone a sinistra) e sopra un telaio piccolo, lo scheletro d'acciaio con il nucleo di redstone.

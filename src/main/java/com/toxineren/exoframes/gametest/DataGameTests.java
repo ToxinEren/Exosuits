@@ -33,18 +33,22 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Test in gioco dei dati per versione (design §12.12): le sette ricette, i loro avanzamenti di sblocco, la tabella di
+ * Test in gioco dei dati per versione (design §12.12): le otto ricette, i loro avanzamenti di sblocco, la tabella di
  * bottino e il tag del caricatore, che {@code tools/gen_data.py} scrive in due alberi (uno per versione del gioco) e
- * che il gioco ignora in silenzio se stanno nella cartella con il nome dell'altra versione. Qui si chiede al server
- * che cosa ha caricato davvero, sulle quattro varianti: le ricette e gli avanzamenti passano dagli aiuti
- * {@code recipeResult}, {@code craft} e {@code hasAdvancement} di {@link Compat#gameTests()} (il gestore delle ricette,
- * il contenitore del banco da lavoro e il gestore degli avanzamenti hanno tipi diversi sulle due versioni); lo sblocco
- * e la rottura sono quelli veri del gioco (il criterio {@code inventory_changed} e
- * {@code ServerPlayerGameMode.destroyBlock}). La tabella {@link #RECIPES} ripete a mano le forme di design §12.12: non
- * le legge dai file, cosi' un file sbagliato non si conferma da solo. Gli aiuti comuni stanno in {@link GameTestKit}.
+ * che il gioco ignora in silenzio se stanno nella cartella con il nome dell'altra versione; il bottino e il tag della
+ * stazione li provano i test del suo blocco ({@code StationBlockGameTests}). Qui si chiede al server che cosa ha
+ * caricato davvero, sulle quattro varianti: le ricette e gli avanzamenti passano dagli aiuti {@code recipeResult},
+ * {@code craft} e {@code hasAdvancement} di {@link Compat#gameTests()} (il gestore delle ricette, il contenitore del
+ * banco da lavoro e il gestore degli avanzamenti hanno tipi diversi sulle due versioni); lo sblocco e la rottura sono
+ * quelli veri del gioco (il criterio {@code inventory_changed} e {@code ServerPlayerGameMode.destroyBlock}). La tabella
+ * {@link #RECIPES} ripete a mano le forme di design §12.12 e quella della stazione (design M4 §5.1): non le legge dai
+ * file, cosi' un file sbagliato non si conferma da solo. Gli aiuti comuni stanno in {@link GameTestKit}.
  */
 public final class DataGameTests {
-    /** Le sette ricette della mod: oggetto, categoria e forma (design §12.12), tutte con un risultato da uno. */
+    /**
+     * Le otto ricette della mod: oggetto, categoria e forma (design §12.12 e, per la stazione, design M4 §5.1), tutte
+     * con un risultato da uno.
+     */
     private static final List<RecipeCase> RECIPES = List.of(
             new RecipeCase("exoframe", "equipment", ModItems.EXOFRAME, "ICI", "IRI", "I_I"),
             new RecipeCase("scrap_helmet", "equipment", ModItems.SCRAP_HELMET, "ICI", "I_I"),
@@ -52,7 +56,8 @@ public final class DataGameTests {
             new RecipeCase("scrap_arm", "equipment", ModItems.SCRAP_ARM, "CI", "_I", "_I"),
             new RecipeCase("scrap_leg", "equipment", ModItems.SCRAP_LEG, "I_", "I_", "IC"),
             new RecipeCase("redstone_cell", "redstone", ModItems.REDSTONE_CELL, "_C_", "rQr", "_C_"),
-            new RecipeCase("charger", "redstone", ModItems.CHARGER, "ICI", "CRC", "III"));
+            new RecipeCase("charger", "redstone", ModItems.CHARGER, "ICI", "CRC", "III"),
+            new RecipeCase("station", "misc", ModItems.STATION, "CCC", "ITI", "IrI"));
 
     /** Dove stanno i piedi del giocatore che rompe i caricatori, relativo alla struttura. */
     private static final Vec3 STAND = new Vec3(3.5, 2.0, 5.5);
@@ -85,13 +90,13 @@ public final class DataGameTests {
         add(tests, "everyRecipeIsFoundByKey", DataGameTests::everyRecipeIsFoundByKey);
         add(tests, "everyRecipeCraftsFromItsShape", DataGameTests::everyRecipeCraftsFromItsShape);
         add(tests, "everyRecipeHasItsUnlockAdvancement", DataGameTests::everyRecipeHasItsUnlockAdvancement);
-        add(tests, "aCopperIngotUnlocksTheSevenRecipes", DataGameTests::aCopperIngotUnlocksTheSevenRecipes);
+        add(tests, "aCopperIngotUnlocksEveryRecipe", DataGameTests::aCopperIngotUnlocksEveryRecipe);
         add(tests, "chargerNeedsAPickaxeToDropItself", DataGameTests::chargerNeedsAPickaxeToDropItself);
         return tests;
     }
 
     /**
-     * Il gestore delle ricette del server ha le sette ricette sotto la loro chiave, ciascuna con un risultato da uno
+     * Il gestore delle ricette del server ha le otto ricette sotto la loro chiave, ciascuna con un risultato da uno
      * dell'oggetto giusto; la cella esce vuota e senza dati. Una chiave che non c'e' da' vuoto (controllo).
      */
     private static void everyRecipeIsFoundByKey(GameTestHelper helper) {
@@ -113,7 +118,7 @@ public final class DataGameTests {
     }
 
     /**
-     * Il banco da lavoro da' ciascuno dei sette oggetti, uno, dalla sua forma. Controlli: la forma del telaio con un
+     * Il banco da lavoro da' ciascuno degli otto oggetti, uno, dalla sua forma. Controlli: la forma del telaio con un
      * lingotto d'oro al posto del rame e la griglia vuota non danno nulla.
      */
     private static void everyRecipeCraftsFromItsShape(GameTestHelper helper) {
@@ -137,7 +142,7 @@ public final class DataGameTests {
     }
 
     /**
-     * Il server ha i sette avanzamenti di sblocco, ciascuno nella cartella della categoria della sua ricetta.
+     * Il server ha gli otto avanzamenti di sblocco, ciascuno nella cartella della categoria della sua ricetta.
      * Controllo: il telaio non ne ha uno nella categoria {@code misc}.
      */
     private static void everyRecipeHasItsUnlockAdvancement(GameTestHelper helper) {
@@ -152,10 +157,10 @@ public final class DataGameTests {
     }
 
     /**
-     * Un giocatore in sopravvivenza che non conosce le ricette le ha tutte e sette nel libro appena il gioco vede un
-     * lingotto di rame nel suo inventario (il criterio {@code inventory_changed} dei sette avanzamenti).
+     * Un giocatore in sopravvivenza che non conosce le ricette le ha tutte e otto nel libro appena il gioco vede un
+     * lingotto di rame nel suo inventario (il criterio {@code inventory_changed} degli otto avanzamenti).
      */
-    private static void aCopperIngotUnlocksTheSevenRecipes(GameTestHelper helper) {
+    private static void aCopperIngotUnlocksEveryRecipe(GameTestHelper helper) {
         ServerPlayer p = Compat.gameTests().survivalPlayer(helper);
         for (RecipeCase recipe : RECIPES) {
             helper.assertTrue(!p.getRecipeBook().contains(recipe.recipeId()),

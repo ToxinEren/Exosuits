@@ -80,6 +80,8 @@
   "tooltip.redstone_exoframes.charger.dust": "Clic destro con polvere di redstone per alimentarlo",
   "tooltip.redstone_exoframes.charger.status": "Accovacciato, clic destro a mani vuote per leggerne lo stato",
   "tooltip.redstone_exoframes.charger.hoppers": "Tramogge: celle dall'alto, polvere dai lati, celle piene da sotto",
+  "tooltip.redstone_exoframes.station.where": "Il telaio va sopra la stazione o entro 2 blocchi",
+  "tooltip.redstone_exoframes.station.open": "Clic destro per aprirla",
   "commands.redstone_exoframes.debug.energy.show": "Cella: %s / %s RE (%s)",
   "commands.redstone_exoframes.debug.energy.set": "Carica della cella portata a %s RE",
   "commands.redstone_exoframes.debug.energy.no_cell": "Il telaio che indossi non ha una cella",

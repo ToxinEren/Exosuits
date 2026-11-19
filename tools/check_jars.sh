@@ -267,10 +267,10 @@ sys.exit(0 if any(m.get("config") == sys.argv[1] for m in tomllib.load(sys.stdin
     #      ignora in silenzio: la ricetta o il bottino che contiene non esiste, senza una riga nel log. Quindi nessun
     #      percorso nelle cartelle dell'altra versione, sui cinque tipi (ricette, avanzamenti, tabelle di bottino, tag
     #      dei blocchi, tag degli oggetti: questi ultimi oggi non li scrive nessuno), in qualunque spazio dei nomi; e
-    #      presenti, nelle cartelle della versione del jar, le sette ricette, i loro sette sblocchi, la tabella di
-    #      bottino del caricatore e il tag minecraft:mineable/pickaxe che scrive tools/gen_data.py. Le due strutture
-    #      vuote dei test (data/redstone_exoframes/structure/empty.nbt e structures/empty.nbt) non sono fra i cinque
-    #      tipi e restano ammesse in tutti i jar.
+    #      presenti, nelle cartelle della versione del jar, le otto ricette, i loro otto sblocchi, le tabelle di
+    #      bottino del caricatore e della stazione e il tag minecraft:mineable/pickaxe che scrive tools/gen_data.py.
+    #      Le due strutture vuote dei test (data/redstone_exoframes/structure/empty.nbt e structures/empty.nbt) non
+    #      sono fra i cinque tipi e restano ammesse in tutti i jar.
     case "$mc" in
         1.20.1) other_dirs='recipe|advancement|loot_table|tags/block|tags/item'
                 recipes=recipes; advancements=advancements; loot_tables=loot_tables; block_tags=tags/blocks ;;
@@ -283,14 +283,15 @@ sys.exit(0 if any(m.get("config") == sys.argv[1] for m in tomllib.load(sys.stdin
     done <<< "$wrong"
     data=data/redstone_exoframes
     for entry in exoframe:equipment scrap_helmet:equipment scrap_torso:equipment scrap_arm:equipment \
-            scrap_leg:equipment redstone_cell:redstone charger:redstone; do
+            scrap_leg:equipment redstone_cell:redstone charger:redstone station:misc; do
         object=${entry%%:*}
         category=${entry##*:}
         for f in "$data/$recipes/$object.json" "$data/$advancements/recipes/$category/$object.json"; do
             echo "$listing" | grep -qxF "$f" || err "$name" "manca $f"
         done
     done
-    for f in "$data/$loot_tables/blocks/charger.json" "data/minecraft/$block_tags/mineable/pickaxe.json"; do
+    for f in "$data/$loot_tables/blocks/charger.json" "$data/$loot_tables/blocks/station.json" \
+            "data/minecraft/$block_tags/mineable/pickaxe.json"; do
         echo "$listing" | grep -qxF "$f" || err "$name" "manca $f"
     done
 done
