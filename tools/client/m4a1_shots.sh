@@ -44,14 +44,12 @@
 # Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la stazione di due blocchi, la ricerca del
 # telaio, la vista del telaio, l'anteprima girevole e il pannello del telaio, che arrivano con i task dopo; la
 # schermata con altre scale dell'interfaccia e altre misure della finestra; una ricarica delle risorse (F3+T) con la
-# schermata aperta; la luce della tuta nell'anteprima, che su 1.20.1 e' piu' scura che su 1.21.1 (vedi
-# docs/compat.md, "Limiti noti e rinvii"): si guarda negli scatti. Sono nella checklist per il PC della parte.
+# schermata aperta. Sono nella checklist per il PC della parte.
 #
-# Dura circa un minuto e tre quarti a cache calde (misurati 95-104 s sulle quattro varianti, di cui 90-99 s
+# Dura circa un minuto e tre quarti a cache calde (misurati 88-107 s sulle quattro varianti, di cui 83-102 s
 # l'esecuzione di client_shot.sh). Le misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie,
-# piu' sotto), salvo il magenta dell'anteprima, uguale fra le due varianti della stessa versione: 1193 su 1.21.1 e 999
-# su 1.20.1, dove la tuta e' disegnata piu' scura e meno pixel del braccio passano per magenta (lo stesso riquadro,
-# 41x85+604+152).
+# piu' sotto), e cosi' il ritaglio dell'anteprima: la scala della tuta nell'interfaccia passa da GuiEntityScale, che
+# la applica come il gioco base di ogni versione (senza, su 1.20.1 la tuta usciva piu' scura, magenta 999).
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se client_shot.sh e' uscito con 0 e
@@ -75,11 +73,11 @@ out=$2
 u=${EXO_SHOT_USER:-Exo}
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
-# Ciascuna con la ragione e, fra parentesi, il valore misurato su 1.21.1-neoforge, la prima variante.
+# Ciascuna con la ragione e, fra parentesi, il valore misurato (uguale sulle quattro varianti).
 
 # Il magenta della tuta fissa nel ritaglio dell'anteprima: la meta', arrotondata per difetto alla decina, del magenta
-# di stazione-aperta (misurato 1193, nel riquadro 41x85+604+152: il braccio destro, nella meta' sinistra del ritaglio;
-# 999 sulle due varianti 1.20.1, piu' scure).
+# di stazione-aperta (misurato 1193 sulle quattro varianti, nel riquadro 41x85+604+152: il braccio destro, nella
+# meta' sinistra del ritaglio).
 MAGENTA_MIN=590
 # I pixel del pulsante di prova che cambiano fra prima e dopo la pressione: la meta', arrotondata per difetto alla
 # decina, della sagoma fra premuto e stazione-aperta (misurati 1112, nel riquadro 36x32+730+410, il pulsante intero).
