@@ -1,0 +1,35 @@
+Controllo della disposizione (pixel dello schermo, finestra 960x540, scala dell'interfaccia 2)
+  mano destra, FULL: HUD 176x70+4+466 -> mirino libero, barra e stato libero, chat (10 righe) libero, braccio destro libero, seconda mano libero; di passaggio: nessuno
+    nota: sta nel riquadro dell'altro braccio, che con questa mano non si disegna (salvo la mappa a due mani)
+  mano destra, BAR_ONLY: HUD 134x70+46+466 -> mirino libero, barra e stato libero, chat (10 righe) libero, braccio destro libero, seconda mano libero; di passaggio: nessuno
+    nota: sta nel riquadro dell'altro braccio, che con questa mano non si disegna (salvo la mappa a due mani)
+  mano sinistra, FULL: HUD 176x70+780+466 -> mirino libero, barra e stato libero, chat (10 righe) libero, braccio sinistro libero, seconda mano libero; di passaggio: salvataggio 1.21.1, salvataggio 1.20.1, sottotitoli (riga piu' bassa)
+    nota: sta nel riquadro dell'altro braccio, che con questa mano non si disegna (salvo la mappa a due mani)
+  mano sinistra, BAR_ONLY: HUD 134x70+780+466 -> mirino libero, barra e stato libero, chat (10 righe) libero, braccio sinistro libero, seconda mano libero; di passaggio: salvataggio 1.21.1, salvataggio 1.20.1, sottotitoli (riga piu' bassa)
+    nota: sta nel riquadro dell'altro braccio, che con questa mano non si disegna (salvo la mappa a due mani)
+  vignetta.alto_sx 144x80+0+0: nessun elemento fisso; di passaggio: nessuno
+  vignetta.alto_dx 144x80+816+0: nessun elemento fisso; di passaggio: effetti (due file, in alto a destra), avvisi (toast) in alto a destra
+  vignetta.basso_sx 144x80+0+460: nessun elemento fisso; di passaggio: nessuno
+  vignetta.basso_dx 144x80+816+460: nessun elemento fisso; di passaggio: salvataggio 1.21.1, salvataggio 1.20.1, sottotitoli (riga piu' bassa)
+Altre grandezze dell'interfaccia (pixel dell'interfaccia; braccio scalato con l'altezza):
+  427x240 mano destra: in basso a sinistra, libero
+  427x240 mano sinistra: in basso a destra, libero
+  480x270 mano destra: in basso a sinistra, libero
+  480x270 mano sinistra: in basso a destra, libero
+  640x360 mano destra: in basso a sinistra, libero
+  640x360 mano sinistra: in basso a destra, libero
+  683x384 mano destra: in basso a sinistra, libero
+  683x384 mano sinistra: in basso a destra, libero
+  640x270 mano destra: in basso a sinistra, libero
+  640x270 mano sinistra: in basso a destra, libero
+  341x256 mano destra: in alto a sinistra (stretta), libero (tocca le barre dei boss, di passaggio)
+  341x256 mano sinistra: in alto a sinistra (stretta), libero (tocca le barre dei boss, di passaggio)
+  320x240 mano destra: in alto a sinistra (stretta), libero (tocca le barre dei boss, di passaggio)
+  320x240 mano sinistra: in alto a sinistra (stretta), libero (tocca le barre dei boss, di passaggio)
+GUI della stazione 316x232 (pixel dell'interfaccia):
+  in 320x240: ci sta (margini 2 e 4)
+  in 427x240: ci sta (margini 55 e 4)
+  in 480x270: ci sta (margini 82 e 19)
+  widget sovrapposti: nessuno (56 widget)
+  fuori dalla schermata: nessuno
+ESITO: tutto libero
