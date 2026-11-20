@@ -46,6 +46,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
@@ -56,8 +59,9 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Test in gioco del menu della stazione di manutenzione (design §5.2, §5.5, §5.6, §5.13 e i casi di §5.18): la
- * ricerca del telaio, il clic che non apre nulla, il menu che resta legato al suo telaio e la vista del telaio, nei
- * dati extra dell'apertura e rimandata quando cambia. Il menu non si apre dalla rete del loader:
+ * ricerca del telaio, il clic che non apre nulla, il menu che resta legato al suo telaio, la vista del telaio, nei
+ * dati extra dell'apertura e rimandata quando cambia, e lo spostamento rapido fra inventario e barra degli slot del
+ * giocatore. Il menu non si apre dalla rete del loader:
  * {@code openStation} cerca il telaio come il clic vero ({@link StationFinder#find}, che deve trovarlo), costruisce il
  * menu del server con lo stesso costruttore del clic e lo mette in {@code player.containerMenu} (perche', lo dice il
  * suo Javadoc); che il clic apra davvero la schermata lo prova il client vero, con tools/client/m4a1_shots.sh. Il clic
@@ -123,6 +127,7 @@ public final class StationMenuGameTests {
         add(tests, "viewIsSentAtMostOncePerTick", StationMenuGameTests::viewIsSentAtMostOncePerTick);
         add(tests, "viewCarriesThePlayersRights", StationMenuGameTests::viewCarriesThePlayersRights);
         add(tests, "viewForAnotherMenuIsIgnored", StationMenuGameTests::viewForAnotherMenuIsIgnored);
+        add(tests, "quickMoveSwapsInventoryAndHotbar", StationMenuGameTests::quickMoveSwapsInventoryAndHotbar);
         return tests;
     }
 
@@ -877,6 +882,58 @@ public final class StationMenuGameTests {
     }
 
     /**
+     * Lo spostamento rapido (il clic con le maiuscole) nel menu della stazione, che ha gli slot dell'inventario del
+     * giocatore (design §5.3): dalle tre file dell'inventario (slot 0-26 del menu) alla barra (27-35) e dalla barra
+     * all'inventario, nel primo posto libero; con la barra piena non sposta nulla, non perde nulla e non lascia nulla a
+     * terra ne' sul cursore. Nulla esce dal menu (design §5.13: nessuno spostamento rapido monta pezzi). Sopra la
+     * stazione un telaio del giocatore: senza telaio il menu non resterebbe valido. Alla fine l'inventario si svuota.
+     */
+    private static void quickMoveSwapsInventoryAndHotbar(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        ExoframeEntity frame = frameOnStation(helper, ownedBy(a), MAIN);
+        Inventory inventory = a.getInventory();
+        try {
+            StationMenu menu = openStation(helper, a, MAIN);
+            inventory.setItem(9, new ItemStack(Items.IRON_INGOT, 3));
+
+            menu.clicked(0, 0, ClickType.QUICK_MOVE, a);
+            helper.assertTrue(inventory.getItem(9).isEmpty() && holds(inventory.getItem(0), Items.IRON_INGOT, 3),
+                    "after the quick move from the inventory: slot 9 holds " + inventory.getItem(9)
+                            + ", hotbar slot 0 holds " + inventory.getItem(0));
+            menu.clicked(27, 0, ClickType.QUICK_MOVE, a);
+            helper.assertTrue(inventory.getItem(0).isEmpty() && holds(inventory.getItem(9), Items.IRON_INGOT, 3),
+                    "after the quick move from the hotbar: hotbar slot 0 holds " + inventory.getItem(0)
+                            + ", slot 9 holds " + inventory.getItem(9));
+
+            for (int i = 0; i < Inventory.getSelectionSize(); i++) {
+                inventory.setItem(i, new ItemStack(Items.DIRT, 64));
+            }
+            // prima direttamente: il gioco base ripete la chiamata finche' riceve uno stack non vuoto, e uno stack non
+            // vuoto senza spostamento lo farebbe girare per sempre
+            ItemStack moved = menu.quickMoveStack(a, 0);
+            helper.assertTrue(moved.isEmpty(), "a quick move with a full hotbar returned " + moved);
+            menu.clicked(0, 0, ClickType.QUICK_MOVE, a);
+            helper.assertTrue(holds(inventory.getItem(9), Items.IRON_INGOT, 3),
+                    "with a full hotbar slot 9 holds " + inventory.getItem(9));
+            for (int i = 0; i < Inventory.getSelectionSize(); i++) {
+                helper.assertTrue(holds(inventory.getItem(i), Items.DIRT, 64),
+                        "with a full hotbar, hotbar slot " + i + " holds " + inventory.getItem(i));
+            }
+            helper.assertTrue(countInMainInventory(a, Items.IRON_INGOT) == 3 && menu.getCarried().isEmpty()
+                    && itemsIn(helper).isEmpty(), countInMainInventory(a, Items.IRON_INGOT)
+                    + " iron ingots in the inventory, " + menu.getCarried() + " on the cursor, "
+                    + itemsIn(helper).size() + " items on the ground: expected the 3 ingots in the inventory only");
+        } finally {
+            cleanUp(helper, side, frame, a);
+            inventory.clearContent();
+        }
+        helper.succeed();
+    }
+
+    /**
      * Piazza un telaio nudo del giocatore con i piedi in {@code feet} (relativo alla struttura), cerca alla stazione
      * dei test e toglie il telaio: la ricerca deve trovare proprio quel telaio se {@code inReach}, nessun telaio a
      * portata altrimenti.
@@ -999,6 +1056,11 @@ public final class StationMenuGameTests {
         PlacedFrame record = Compat.frameState().placed(helper.getLevel().getServer(), frame.frameId()).orElse(null);
         helper.assertTrue(record != null, "frame " + frame.frameId() + " is not placed");
         return record;
+    }
+
+    /** Vero se lo stack e' dell'oggetto dato, con quel conto. */
+    private static boolean holds(ItemStack stack, Item item, int count) {
+        return stack.is(item) && stack.getCount() == count;
     }
 
     /** La durata del pezzo dello slot nella vista; -1 se lo slot e' vuoto. */

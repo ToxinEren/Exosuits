@@ -26,14 +26,16 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
 import net.minecraft.world.inventory.DataSlot;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
  * Il menu della stazione di manutenzione (design §5.2, §5.5, §5.6 e §5.13), del tipo {@link ModMenus#STATION}. Nasce
  * dal clic sulla stazione ({@link #open}) con i dati extra di Architectury ({@link StationOpening}), uguali sulle due
  * versioni, e ha sempre un telaio: quello che la ricerca ({@link StationFinder#find}) ha scelto all'apertura, fissato
- * per tutta la vita del menu ({@link #frameId}). Nel menu non vive nessun oggetto: non ha slot e non ridefinisce
- * {@code removed}.
+ * per tutta la vita del menu ({@link #frameId}). Nel menu non vive nessun oggetto: ha solo gli slot dell'inventario
+ * del giocatore, le tre file e la barra, perche' la schermata li mostri e il cursore li usi come nel gioco base, e non
+ * ridefinisce {@code removed}.
  * <p>
  * Ha due costruttori: quello del server, con il livello della stazione, che calcola una volta l'impronta della
  * stazione; e quello del client, la fabbrica del tipo, che legge subito i dati extra e non tiene il buffer. Il gioco
@@ -61,8 +63,27 @@ public final class StationMenu extends AbstractContainerMenu {
     /** Il messaggio sulla barra delle azioni quando il menu si chiude perche' il suo telaio non e' piu' disponibile. */
     public static final String FRAME_GONE = "message." + RedstoneExoframes.MOD_ID + ".station.frame_gone";
 
+    /**
+     * L'ascissa dell'oggetto del primo slot di ogni fila dell'inventario e della barra, relativa all'angolo della
+     * schermata (design §5.3: le file stanno in 7..169, cornici comprese).
+     */
+    public static final int INVENTORY_X = 8;
+    /** L'ordinata dell'oggetto della prima fila dell'inventario principale (le tre file stanno in 149..203). */
+    public static final int INVENTORY_Y = 150;
+    /** L'ordinata dell'oggetto della barra degli oggetti (la barra sta in 207..225). */
+    public static final int HOTBAR_Y = 208;
+
     /** Il tick dell'ultimo invio della vista prima del primo: nessuno, quindi il primo puo' partire subito. */
     private static final int NEVER = Integer.MIN_VALUE;
+
+    /** Il passo degli slot nella schermata, in pixel dell'interfaccia: uno slot del gioco base con la sua cornice. */
+    private static final int SLOT_PITCH = 18;
+    /** Gli slot di una fila dell'inventario e della barra. */
+    private static final int ROW_SLOTS = 9;
+    /** Le file dell'inventario principale, sopra la barra. */
+    private static final int MAIN_ROWS = 3;
+    /** Gli slot dell'inventario principale nel menu, i primi (0-26); dopo vengono i nove della barra (27-35). */
+    private static final int MAIN_SLOTS = MAIN_ROWS * ROW_SLOTS;
 
     /** Chi ha aperto il menu: il giocatore per cui si fa la vista. */
     private final Player viewer;
@@ -124,6 +145,24 @@ public final class StationMenu extends AbstractContainerMenu {
         this.view = opening.view();
         this.lastSentView = opening.view();
         addDataSlot(testPresses);
+        addPlayerSlots(inventory);
+    }
+
+    /**
+     * Gli slot dell'inventario del giocatore, uguali nel menu del server e in quello del client: prima le tre file
+     * dell'inventario principale (indici 9-35 dell'inventario, slot 0-26 del menu), poi la barra (indici 0-8, slot
+     * 27-35), con gli angoli {@link #INVENTORY_X}, {@link #INVENTORY_Y} e {@link #HOTBAR_Y}.
+     */
+    private void addPlayerSlots(Inventory inventory) {
+        for (int row = 0; row < MAIN_ROWS; row++) {
+            for (int column = 0; column < ROW_SLOTS; column++) {
+                addSlot(new Slot(inventory, ROW_SLOTS + row * ROW_SLOTS + column, INVENTORY_X + SLOT_PITCH * column,
+                        INVENTORY_Y + SLOT_PITCH * row));
+            }
+        }
+        for (int column = 0; column < ROW_SLOTS; column++) {
+            addSlot(new Slot(inventory, column, INVENTORY_X + SLOT_PITCH * column, HOTBAR_Y));
+        }
     }
 
     /** Chi apre la stazione: il titolo della schermata e il menu del server per l'apertura data. */
@@ -176,7 +215,8 @@ public final class StationMenu extends AbstractContainerMenu {
 
     /**
      * Mette la vista arrivata dal server con il pacchetto {@code station_view} ({@link StationNet#apply}); la schermata
-     * la legge a ogni fotogramma.
+     * la legge a ogni fotogramma. E' per il menu del client: sul server {@link #broadcastChanges} rifa' la vista dal
+     * record e la sovrascrive al prossimo invio.
      */
     public void setView(StationView view) {
         this.view = Objects.requireNonNull(view, "view must not be null");
@@ -220,10 +260,37 @@ public final class StationMenu extends AbstractContainerMenu {
         return true;
     }
 
-    /** Nessuno slot: niente da spostare. */
+    /**
+     * Lo spostamento rapido (il clic con le maiuscole) dello slot {@code index}: da uno slot dell'inventario
+     * principale (0-26) alla barra (27-35), dalla barra all'inventario principale, nel primo posto che lo accoglie.
+     * Restituisce la copia dello stack di prima se qualcosa si e' spostato, altrimenti {@link ItemStack#EMPTY}: il
+     * gioco base ripete la chiamata finche' riceve uno stack non vuoto e lo slot tiene ancora lo stesso oggetto, quindi
+     * uno stack non vuoto senza spostamento non finirebbe mai. Nulla esce dal menu: nessuno spostamento rapido monta
+     * pezzi (design §5.13).
+     */
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
-        return ItemStack.EMPTY;
+        if (index < 0 || index >= slots.size()) {
+            return ItemStack.EMPTY;
+        }
+        Slot slot = slots.get(index);
+        if (!slot.hasItem()) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack stack = slot.getItem();
+        ItemStack before = stack.copy();
+        boolean moved = index < MAIN_SLOTS
+                ? moveItemStackTo(stack, MAIN_SLOTS, slots.size(), false)
+                : moveItemStackTo(stack, 0, MAIN_SLOTS, false);
+        if (!moved) {
+            return ItemStack.EMPTY;
+        }
+        if (stack.isEmpty()) {
+            slot.setByPlayer(ItemStack.EMPTY);
+        } else {
+            slot.setChanged();
+        }
+        return before;
     }
 
     /**
