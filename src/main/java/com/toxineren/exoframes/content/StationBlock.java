@@ -165,7 +165,7 @@ public final class StationBlock extends CompatBlock {
      * (Togliere per prima la laterale quando si rompe la principale farebbe invece diventare aria la principale per
      * {@link #updateShape}, con il bottino.)
      * <p>
-     * Due limiti accettati (decisione P13), perche' e' la stessa regola delle porte del gioco base 1.21.1
+     * Due limiti accettati, perche' e' la stessa regola delle porte del gioco base 1.21.1
      * ({@code DoorBlock.playerWillDestroy}: creativa, o {@code hasCorrectToolForDrops} a un argomento falso) e
      * correggerli vorrebbe una cucitura diversa per loader:
      * <ul>

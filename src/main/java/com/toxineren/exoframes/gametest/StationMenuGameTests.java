@@ -178,6 +178,7 @@ public final class StationMenuGameTests {
     private static void placeholderButtonIgnoresSpectatorsAndTheDead(GameTestHelper helper) {
         BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
         ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
+        p.setGameMode(GameType.SURVIVAL);
         standFacingNorth(helper, p, STAND);
         ExoframeEntity frame = frameOnStation(helper, ownedBy(p), MAIN);
         try {
