@@ -89,9 +89,10 @@
 #                   altro (il verso dell'angolo 0 l'ha provato il Task 1 con la tuta fissa, e la trasformazione non e'
 #                   cambiata)
 # Le regole degli scatti misurati: il primo almeno 12 s dopo il primo passo; nessun oggetto che sblocca ricette nei 12 s
-# prima di uno scatto misurato (il lingotto di rame della fase 2 arriva ben prima del primo, i lingotti di ferro della
-# fase 10 dopo l'ultimo); il puntatore nel punto neutro in tutti e due gli scatti di una coppia (sopra il pulsante lo
-# schiarisce e ne mostra il suggerimento, sopra l'anteprima e il pannello del telaio mostra il loro).
+# prima di uno scatto misurato (la sequenza ne da' due: il lingotto di rame della fase 2, seguito da "@attendi 12" dopo
+# "recipe take" e lontano dal primo scatto misurato, stazione-aperta, che viene dopo la posa e il telaio; i lingotti di
+# ferro della fase 10, dopo l'ultimo); il puntatore nel punto neutro in tutti e due gli scatti di una coppia (sopra il
+# pulsante lo schiarisce e ne mostra il suggerimento, sopra l'anteprima e il pannello del telaio mostra il loro).
 #
 # Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la rottura in sopravvivenza, con e senza
 # piccone, i pistoni e i comandi che tolgono una meta' (li provano i test in mondo di StationBlockGameTests); la scelta
@@ -102,18 +103,20 @@
 # telaio e dei suggerimenti, che si guardano negli scatti e non si misurano; pezzi danneggiati, critici, rotti o
 # mancanti (il comando di debug monta sei pezzi intatti); lo spostamento rapido nell'altro verso e con la barra piena
 # (li prova il test in mondo quickMoveSwapsInventoryAndHotbar); la schermata con altre scale dell'interfaccia e altre
-# misure della finestra; una ricarica delle risorse (F3+T) con la schermata aperta; un'esplosione vera. Sono nella
-# checklist per il PC della parte.
+# misure della finestra; una ricarica delle risorse (F3+T) con la schermata aperta; un'esplosione vera; i suoni (il
+# client non ha audio); un secondo giocatore; la morte e l'uscita dal server con la schermata aperta e una pila sul
+# cursore. Sono nella checklist per il PC della parte, docs/test-in-gioco/m4a1-banco.md.
 #
-# Dura due minuti e mezzo a cache calde: misurati 146 s su 1.21.1-neoforge e 156 s su 1.20.1-forge, di cui 139 s e
-# 148 s l'esecuzione di client_shot.sh (prima delle fasi della rotazione, del suggerimento e dell'inventario 135 s su
-# 1.21.1-neoforge e 134 s su 1.20.1-forge, di cui 130 s client_shot.sh; prima delle fasi del telaio 126 s; senza la
-# ricetta, la posa con l'oggetto e la rottura la sequenza misurava 88-107 s sulle quattro varianti). Dentro la
-# schermata gli scatti di 1.21.1-neoforge e di 1.20.1-forge sono uguali al pixel, anteprima di fronte compresa: la
-# scala della tuta nell'interfaccia passa da GuiEntityScale, che la applica come il gioco base di ogni versione (senza,
-# su 1.20.1 la tuta usciva piu' scura). Di fianco la luce della tuta differisce fra le versioni di 1/255 al piu', e la
-# sagoma della rotazione, che conta i pixel vicini alla soglia del 4 %, cambia di poco (i valori accanto alle soglie,
-# piu' sotto).
+# Dura poco piu' di due minuti a cache calde: misurati 152 s su 1.20.1-forge, 132 s su 1.20.1-fabric, 135 s su
+# 1.21.1-fabric e 137 s su 1.21.1-neoforge, di cui 144, 125, 128 e 130 s l'esecuzione di client_shot.sh. Dentro la
+# schermata gli scatti delle quattro varianti sono uguali al pixel, anteprima di fronte compresa: la scala della tuta
+# nell'interfaccia passa da GuiEntityScale, che la applica come il gioco base di ogni versione (senza, su 1.20.1 la
+# tuta usciva piu' scura). Di fianco, in girata e suggerimento-torso, le due varianti di una versione restano uguali
+# al pixel, mentre fra le due versioni la luce della tuta differisce di 1/255 al piu' (in 11906 pixel), e la sagoma
+# della rotazione, che conta i pixel vicini alla soglia del 4 %, cambia di poco (i valori accanto alle soglie, piu'
+# sotto). Il kill degli oggetti a terra della fase 12 deve arrivare prima che finiscano i 2 s del ritardo di raccolta
+# (poi il giocatore, a un blocco, li raccoglierebbe e kill fallirebbe senza bersagli): sulle quattro varianti arriva
+# nel secondo dopo "/exoframe remove" (orari del log di client_shot.sh) e toglie i sette oggetti.
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se client_shot.sh e' uscito con 0 e
@@ -137,8 +140,8 @@ out=$2
 u=${EXO_SHOT_USER:-Exo}
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
-# Ciascuna con la ragione e, fra parentesi, il valore misurato, su 1.21.1-neoforge e uguale su 1.20.1-forge dove non
-# e' detto altro.
+# Ciascuna con la ragione e, fra parentesi, il valore misurato: lo stesso sulle quattro varianti dove non e' detto
+# altro. La soglia e' la meta' del valore della prima variante misurata, 1.21.1-neoforge.
 
 # Il magenta della tuta del telaio nel ritaglio dell'anteprima: la meta', arrotondata per difetto alla decina, del
 # magenta di stazione-aperta (misurato 18582, nel riquadro 167x198+604+96: i sei pezzi dipinti, di fronte).
@@ -147,8 +150,8 @@ MAGENTA_MIN=9290
 # decina, della sagoma fra premuto e stazione-aperta (misurati 1112, nel riquadro 36x32+730+410, il pulsante intero).
 BUTTON_MIN=550
 # I pixel dell'anteprima che cambiano girando la tuta di 90 gradi: la meta', arrotondata per difetto alla decina, della
-# sagoma fra girata e premuto (misurati 24332, 24587 su 1.20.1-forge, nel riquadro 167x198+604+96; di fianco il
-# magenta scende a 9225, nel riquadro 111x198+629+96).
+# sagoma fra girata e premuto (misurati 24332 sulle due varianti 1.21.1 e 24587 sulle due 1.20.1, nel riquadro
+# 167x198+604+96; di fianco il magenta scende a 9225, nel riquadro 111x198+629+96).
 ROT_MIN=12160
 # Riquadri negli scatti: la schermata, il ritaglio dell'anteprima, il pulsante di prova.
 SCREEN_RECT=632x464+164+38
