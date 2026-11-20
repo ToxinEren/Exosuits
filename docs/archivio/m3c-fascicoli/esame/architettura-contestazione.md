@@ -53,7 +53,7 @@ Re-derived from the code (`J/` = `src/main/java/com/toxineren/exoframes/`), the 
 - Holds: design §5.7 "se il danno aggira l'armatura si salta"; `fall`/`stalagmite` are in `bypasses_armor`
   (danno.md §4, confirmed by danno-verifica C10). 2.2 wears legs on them without declaring the override, and §12 lists
   both "bypassing damage does not wear" and "fall with leg wear". The game document does say "caduta → gambe"
-  (claude-doc…:39), and `DamageRouter` already routes `FALL` to the legs (DamageRouter.java:220): a legitimate
+  (<documento iniziale>…:39), and `DamageRouter` already routes `FALL` to the legs (DamageRouter.java:220): a legitimate
   override, it only needs to be declared.
 - Mostly refuted: the over-count that rejected LIVING_HURT is per-tick sources (lava, fire, cactus: danno.md §1); a fall
   is one hit per landing. Creative never reaches it for falls (`Player.causeFallDamage` returns false when `mayfly`,

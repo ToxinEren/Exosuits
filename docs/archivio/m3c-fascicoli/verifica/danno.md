@@ -4,7 +4,7 @@ Read-only investigation, 15 Nov. No Gradle, no game run: nothing here was observ
 
 **Tags.** [code] file:line in `/home/user/exosuits` (branch `m3c-giocarci` is now `d88e1e0` = `2e35aa6` + two files under `docs/superpowers/specs/ricognizioni/`; `src/` and `tools/` are identical to `2e35aa6`). [javap] `javap -c -p` on one class, with bytecode offsets `@n`. [arch] Architectury sources jar, file:line. [data] file inside a jar. [emul] my IEEE-double emulation of the router. [not checked].
 **Jars.** V20 = `minecraft-merged` 1.20.1 (what Fabric 1.20.1 runs); Fo20 = `forge-1.20.1-47.4.29-minecraft-merged`; V21 = `minecraft-merged` 1.21.1 (Fabric 1.21.1); Neo21 = `neoforge-21.1.266-minecraft-merged`. `DS` = `net.minecraft.world.damagesource.DamageSource`, so `(LDS;F)V` stands for `(Lnet/minecraft/world/damagesource/DamageSource;F)V`.
-Working files (javap dumps, scripts): `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m3c/verifica/tmp-danno/`.
+Working files (javap dumps, scripts): `<scratchpad>/m3c/verifica/tmp-danno/`.
 
 ## 1. Where Architectury fires `EntityEvent.LIVING_HURT` for a server player
 

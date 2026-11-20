@@ -87,7 +87,7 @@ Read-only. Paths relative to `src/main/java/com/toxineren/exoframes/` unless abs
   base would spam chat).
 
 ## P9 — PARTLY (minor)
-- The behaviour is not "missing": design line 357 lists it under the heading at line 349 "Decisioni di Luigi … ciò che fa la mod oggi"
+- The behaviour is not "missing": design line 357 lists it under the heading at line 349 "Decisioni di the owner … ciò che fa la mod oggi"
   (q.10, already in the 3b checklist): it is an open owner question with today's behaviour as the default.
 - "Cannot be recovered" is too strong: placed frames are indestructible (design line 354; lava/fire immunity of the entity not checked here) and lava is left vanilla for
   the suit (`ricognizione:71`, measured: the suit rises in lava with Space), so a player with Fire Resistance can dive,

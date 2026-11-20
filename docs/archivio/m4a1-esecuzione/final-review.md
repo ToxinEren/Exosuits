@@ -145,9 +145,9 @@ StationScreen.java:205-212.
     - the earlier PC checklists: docs/test-in-gioco/m1-setup.md:3,83, m2b-compat.md:3, m3a-vedere-il-telaio.md (5),
       m3b-entrare-e-uscire.md (4) and m3c-giocarci.md (5).
   - Historical docs/superpowers/** files hold about 70 more lines. That includes the owner's full name next to an
-    AI vendor name at docs/superpowers/specs/claude-doc-2026-11-04-redstone-exoframes.md:3.
+    AI vendor name at docs/superpowers/specs/<documento iniziale>:3.
   - Related vendor-name mentions in current docs: README.md:11 (that file's name) and
-    docs/audit/mjolnir-armor-audit.md:646 ("il Claude Doc").
+    docs/audit/mjolnir-armor-audit.md:646 ("il documento iniziale").
 - **This part's own diff is clean:** it removed the one occurrence in README.md and added none.
 - **Why it matters:** the fix wave would leave the standing "no personal data in docs" rule half applied, while the
   ruling reads as if it were done.

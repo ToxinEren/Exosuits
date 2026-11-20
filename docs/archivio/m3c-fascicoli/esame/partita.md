@@ -101,7 +101,7 @@ relative to `src/main/java/com/toxineren/exoframes/`), dossiers `verifica/{danno
   chat line with `Component.keybind` for both keys: "Hold [V] to leave, hold [R] to swap the cell". `no_cell` text:
   "…needs a charged cell (charge cells in a Charger)".
 
-### P9 — major — missing (3b rest-spot rule, design §11 Luigi q.10): a pilot who dies in lava loses the frame at the bottom of the lava
+### P9 — major — missing (3b rest-spot rule, design §11 the owner q.10): a pilot who dies in lava loses the frame at the bottom of the lava
 - Evidence: design §11 "Acqua e lava": fluids are not ground, the frame settles on the bottom; P3 sends every
   player to the Nether, where lava seas are ~30 deep. Entering or unmounting needs the player inside the lava next
   to the frame. Lava wear is irrelevant (table C: the pilot dies in ~5 s), the loss is the frame.

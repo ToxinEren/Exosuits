@@ -178,7 +178,7 @@ None.
 - **Risk:** `@throws` in a record-level Javadoc (`StationView.java:36-37`) breaks house style.
   - **Checked:** the same pattern exists in `station/StationFinder.java:43` and `core/station/StationReach.java:45`.
   - **Result:** not a finding.
-- **Evidence read:** Step 5, Step 7, and all five mutation files (J, A, B, C, D), in `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t4/`. The game-test WARN/ERROR lines that name the mod are the allowlisted ones earlier data tests provoke on purpose; none is about the view.
+- **Evidence read:** Step 5, Step 7, and all five mutation files (J, A, B, C, D), in `<scratchpad>/m4a1/t4/`. The game-test WARN/ERROR lines that name the mod are the allowlisted ones earlier data tests provoke on purpose; none is about the view.
 
 ### Structure
 

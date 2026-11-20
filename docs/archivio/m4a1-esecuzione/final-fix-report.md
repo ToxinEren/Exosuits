@@ -59,13 +59,13 @@ Line numbers are at the fixed tree (after all edits).
 ### B. Rulings P24 + P27: the owner's name (commit 2)
 
 Done by a script of exact substrings, each with its expected count (no blind sed):
-`/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/fix/owner_replace.py`. "di/da/a/per
+`<scratchpad>/m4a1/fix/owner_replace.py`. "di/da/a/per
 il proprietario" became "del/dal/al/per il proprietario"; sentence starts got "Il proprietario". Lines changed (fixed tree):
 
 - `docs/arte/README.md`: :3, :7 (2 occurrences), :11 (4), :25, :36 (2), :49, :53, :65, :85. That is 14 occurrences
   on 9 lines.
 - `docs/audit/mjolnir-armor-audit.md`: :3, :16, :595, :601, :604, :637 (heading "## 10. Domande aperte per il
-  proprietario"), and :646 "come dice il Claude Doc?" → "come dice il documento iniziale del proprietario?".
+  proprietario"), and :646 "come dice il documento iniziale?" → "come dice il documento iniziale del proprietario?".
 - `src/main/java/com/toxineren/exoframes/client/SuitScale.java:13-16`: the Javadoc paragraph, reflowed to stay within
   120 characters.
 - `src/test/java/com/toxineren/exoframes/client/SuitScaleTest.java:63` ("Richiesta del proprietario:").
@@ -93,9 +93,9 @@ il proprietario" became "del/dal/al/per il proprietario"; sentence starts got "I
 - Left untouched, as the brief says: README.md:11 (a link to a file by its name) and everything under
   docs/superpowers/**.
 - Observations, not changed because they are outside the brief:
-  - "Jarvis", the name of the assistant on the PC, in m1-setup.md:3, m2b-compat.md:3, m3a-vedere-il-telaio.md:3,
+  - "the PC assistant", the name of the assistant on the PC, in m1-setup.md:3, m2b-compat.md:3, m3a-vedere-il-telaio.md:3,
     m3b-entrare-e-uscire.md:3 and m3c-giocarci.md:3. The newer checklists say "l'assistente".
-  - The vendor-named file name `claude-doc-2026-11-04-redstone-exoframes.md` at docs/audit/mjolnir-armor-audit.md:3,
+  - The vendor-named file name `<documento iniziale>` at docs/audit/mjolnir-armor-audit.md:3,
     a reference to the file by its name, like README.md:11.
   - `mod_authors=ToxinEren` (a handle) at mjolnir-armor-audit.md:595. It is also the package name.
 
@@ -156,7 +156,7 @@ il proprietario" became "del/dal/al/per il proprietario"; sentence starts got "I
 ## Cloud check of P22
 
 Two runs of `tools/client/client_shot.sh` on **1.21.1-neoforge**, with the same 41 steps (script
-`/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/fix/p22_check.sh`, validated first with
+`<scratchpad>/m4a1/fix/p22_check.sh`, validated first with
 `EXO_SHOT_STEPS_ONLY=true` → `OK passi: 41`). The first run is a negative control on the unmodified tree (a9cb5cb),
 the second runs on the fixed StationScreen. Folders (not committed): `.../scratchpad/m4a1/fix/p22-neg/` and
 `.../scratchpad/m4a1/fix/p22-fix/` (shots, `rcon.log`, `run.txt`, client and server logs).
@@ -232,7 +232,7 @@ turn into +x on the screen.
 ## Verification
 
 Run once, after all edits, one Gradle or client run at a time. Outputs are in
-`/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/fix/`.
+`<scratchpad>/m4a1/fix/`.
 
 - `./gradlew --console=plain :1.20.1-forge:build :1.20.1-fabric:build :1.21.1-fabric:build :1.21.1-neoforge:build
   :1.20.1-forge:collectJar :1.20.1-fabric:collectJar :1.21.1-fabric:collectJar :1.21.1-neoforge:collectJar`
@@ -314,6 +314,6 @@ this git-ignored report.
 - The negative control stops at the first failing check, by design. So the release-over-slot case has no unfixed-run
   evidence; that case rests on the bytecode reading in final-review I-1.
 - Left untouched, outside the brief, to mention to the owner with ruling P27:
-  - "Jarvis" (the PC assistant's name) on line 3 of five older checklists;
+  - "the PC assistant" (the PC assistant's name) on line 3 of five older checklists;
   - the vendor-named file name at docs/audit/mjolnir-armor-audit.md:3;
   - the handle `ToxinEren` at audit:595, which is also the Java package name.

@@ -2,7 +2,7 @@
 
 **Status:** DONE_WITH_CONCERNS. Concern 0 needs a ruling: edits outside the file list. The others are observations, and no defect is open.
 **Commit:** `1dd63b6` station: la vista del telaio nei dati extra e nel pacchetto station_view, mandata quando cambia (SSH-signed, `gpgsig` present; the two trailer lines; branch `m4-stazione`; not pushed; tree clean; 15 files)
-**Evidence folder:** `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t4/` (below: `t4/`).
+**Evidence folder:** `<scratchpad>/m4a1/t4/` (below: `t4/`).
 
 ## What I implemented
 

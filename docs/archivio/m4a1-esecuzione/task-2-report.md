@@ -3,7 +3,7 @@
 **Status:** DONE_WITH_CONCERNS (all work done and verified; the concerns are below)
 **Commit:** `dc503e4` content: la stazione 2x1 (posa, rottura dalla metà laterale, bottino dalla principale, pistoni) con ricetta e segnaposto; compat: CompatBlock.onPlayerWillDestroy (SSH-signed like the previous commits, with the two trailer lines).
 
-Evidence folder (outside the repository): `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/`
+Evidence folder (outside the repository): `<scratchpad>/m4a1/t2/`
 
 ## What I implemented
 
@@ -173,13 +173,13 @@ The Step 5 run before the docs edits had identical results.
 
 ### Step 6: the real client, 1.21.1-neoforge only
 
-`EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/shots-neoforge`, run after `./gradlew --stop` (output in `client-neoforge.txt`):
+`EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge <scratchpad>/m4a1/t2/shots-neoforge`, run after `./gradlew --stop` (output in `client-neoforge.txt`):
 
 ```
 ok anteprima: ritaglio magenta=1193 riquadro=41x85+604+152; schermata magenta=1193 riquadro=41x85+604+152
 ok orientamento: meta' destra del ritaglio magenta=0 riquadro=0x0+0+0
 ok pulsante: pixel=1112 copertura=0.21 mirino=0 barra=0 energia=0 riquadro=36x32+730+410
-OK 1.21.1-neoforge: scatti in /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/shots-neoforge
+OK 1.21.1-neoforge: scatti in <scratchpad>/m4a1/t2/shots-neoforge
 ```
 
 - The run took 123 s, of which 118 s was `client_shot.sh`.
@@ -270,14 +270,14 @@ Coordinator's rulings: concern 1 is accepted as documented (P13), with nothing t
 
 ### Commands and outputs
 
-The evidence is in `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/`: `client-neoforge-p14.txt` and the folder `shots-neoforge-p14/`.
+The evidence is in `<scratchpad>/m4a1/t2/`: `client-neoforge-p14.txt` and the folder `shots-neoforge-p14/`.
 
-- **The rerun.** `./gradlew --stop`, then `EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/shots-neoforge-p14`. Exit 0, in 126 s.
+- **The rerun.** `./gradlew --stop`, then `EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge <scratchpad>/m4a1/t2/shots-neoforge-p14`. Exit 0, in 126 s.
   ```
   ok anteprima: ritaglio magenta=1193 riquadro=41x85+604+152; schermata magenta=1193 riquadro=41x85+604+152
   ok orientamento: meta' destra del ritaglio magenta=0 riquadro=0x0+0+0
   ok pulsante: pixel=1112 copertura=0.21 mirino=0 barra=0 energia=0 riquadro=36x32+730+410
-  OK 1.21.1-neoforge: scatti in /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/shots-neoforge-p14
+  OK 1.21.1-neoforge: scatti in <scratchpad>/m4a1/t2/shots-neoforge-p14
   ```
   - `log-check.txt` is 0 bytes.
   - The step log shows `[85s] comando eseguito: item replace entity Exo weapon.mainhand with minecraft:air`, then `[86s] passo eseguito: @attendi 1`, then `[86s] salvato stazione-posata.png`.
@@ -333,7 +333,7 @@ The review found one Important finding: the two platform gaps accepted under rul
 
 ### Covering checks
 
-All output is in `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t2/fix1-checks.txt`.
+All output is in `<scratchpad>/m4a1/t2/fix1-checks.txt`.
 
 ```
 $ bash tools/check_sources.sh

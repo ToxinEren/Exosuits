@@ -3,7 +3,7 @@
 **Status:** DONE_WITH_CONCERNS (all work done and verified; the concerns are doc drift outside the file list and two small notes, below)
 **Commit:** `6ffb904` station: portata e ricerca del telaio, stillValid legato al telaio; config: sezione station con reachBlocks (SSH-signed by the environment, `gpgsig` present, with the two trailer lines; not pushed; tree clean).
 
-Evidence folder (outside the repository): `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t3/`
+Evidence folder (outside the repository): `<scratchpad>/m4a1/t3/`
 
 ## What I implemented
 
@@ -111,13 +111,13 @@ Each run was `bash tools/run_gametests.sh 1.21.1-neoforge` with temporary edits.
 
 ### Step 7: the real client, 1.21.1-neoforge only
 
-I ran `./gradlew --stop`, then `EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t3/shots-neoforge`. It exited 0 after 133 s, of which 128 s was `client_shot.sh` (`client-neoforge.txt`):
+I ran `./gradlew --stop`, then `EXO_ACCEPT_EULA=true bash tools/client/m4a1_shots.sh 1.21.1-neoforge <scratchpad>/m4a1/t3/shots-neoforge`. It exited 0 after 133 s, of which 128 s was `client_shot.sh` (`client-neoforge.txt`):
 
 ```
 ok anteprima: ritaglio magenta=1193 riquadro=41x85+604+152; schermata magenta=1193 riquadro=41x85+604+152
 ok orientamento: meta' destra del ritaglio magenta=0 riquadro=0x0+0+0
 ok pulsante: pixel=1112 copertura=0.21 mirino=0 barra=0 energia=0 riquadro=36x32+730+410
-OK 1.21.1-neoforge: scatti in /tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t3/shots-neoforge
+OK 1.21.1-neoforge: scatti in <scratchpad>/m4a1/t3/shots-neoforge
 ```
 
 - **Measurements:** the same values as Tasks 1 and 2 (1193 / 0 / 1112). The painted frame behind the opaque screen does not leak into the measured rectangles.
@@ -270,7 +270,7 @@ Concerns 2-4 need no action now, per the ruling; concern 4 (the pickup race) goe
 
 ### Commands and outputs
 
-The evidence is in `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t3/`.
+The evidence is in `<scratchpad>/m4a1/t3/`.
 
 - **RED**, with the new check against the old `onClick`: `bash tools/run_gametests.sh 1.21.1-neoforge` (`fix1-red-gametests.txt`) → `FAIL 1.21.1-neoforge: Gradle e' uscito con 1`, one test failed:
   ```

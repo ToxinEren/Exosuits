@@ -6,7 +6,7 @@
 
 Commit: `45722f9 client: prova delle cuciture della stazione (schermata registrata, anteprima, pulsante 102 al server e ritorno); tools: passi @punta @clic @trascina, m4a1_shots.sh` on `m4-stazione`, SSH-signed by the environment (not pushed).
 
-All evidence files are under `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t1/` (called `$S` below): `$S/evidence/*.txt` holds the command outputs, and `$S/<variante>/` and `$S/m3d-<variante>/` hold the run folders.
+All evidence files are under `<scratchpad>/m4a1/t1/` (called `$S` below): `$S/evidence/*.txt` holds the command outputs, and `$S/<variante>/` and `$S/m3d-<variante>/` hold the run folders.
 
 ## What was implemented
 
@@ -180,7 +180,7 @@ Final thresholds: `MAGENTA_MIN=590` (half of 1193, measured on 1.21.1-neoforge, 
 
 Commit: `99e4605 compat: cucitura GuiEntityScale, la scala (s, s, -s) dell'anteprima come il gioco base su ogni versione (luce giusta su 1.20.1); docs: compat.md`. It sits on top of `45722f9`, is SSH-signed by the environment, and is not pushed. The tree is clean.
 
-Evidence for this section is in `$S/p11/`, where `$S` = `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t1`.
+Evidence for this section is in `$S/p11/`, where `$S` = `<scratchpad>/m4a1/t1`.
 
 ### What changed
 
@@ -243,7 +243,7 @@ Nothing beyond the original finding. The fix behaved exactly as predicted: 1.20.
 
 Commit: `a722480 tools: measure_lib.sh, gli aiuti delle misure comuni a m3d_shots.sh e m4a1_shots.sh`. It sits on top of `99e4605`, is SSH-signed by the environment, and is not pushed. The tree is clean.
 
-Evidence is in `$S/p12/`, where `$S` = `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t1`.
+Evidence is in `$S/p12/`, where `$S` = `<scratchpad>/m4a1/t1`.
 
 ### What changed
 

@@ -131,7 +131,7 @@ None.
 - **Risk: verbatim duplication of the measuring helpers.**
   - I compared `m3d_shots.sh:204-233` with the same block of `m4a1_shots.sh`, using one read-only `git show 99e4605:tools/client/m4a1_shots.sh` and `grep` on the checkout. Nothing was modified.
   - Result: Important 1.
-- **Evidence I opened** (under `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t1/`):
+- **Evidence I opened** (under `<scratchpad>/m4a1/t1/`):
   - `p11/final-checks.txt`: all six checks `OK`.
   - `p11/final-junit.txt`: 331 ×4.
   - `p11/final-checks-m4a1.txt`: three `ok` ×4.

@@ -12,7 +12,7 @@ Every item below is decided. Full reasoning and file:line evidence are in final-
 ## B. Rulings P24 + P27 (final review I-2): the owner's name in current files
 - Replace the owner's first name "il proprietario" with "il proprietario" (or a neutral rephrase that reads well) in every current file OUTSIDE docs/superpowers/**, prose and comments only:
   docs/arte/README.md (9 lines); docs/audit/mjolnir-armor-audit.md (:3, :16, :595, :601, :604, :637); src/main/java/com/toxineren/exoframes/client/SuitScale.java:13 (comment); src/test/java/com/toxineren/exoframes/client/SuitScaleTest.java:63 (comment); tools/art/README.md:174; tools/art/designs/frame.py (5 lines), scrap.py (4), _legs.py:1; docs/test-in-gioco/m1-setup.md (:3, :83), m2b-compat.md:3, m3a-vedere-il-telaio.md (5), m3b-entrare-e-uscire.md (4), m3c-giocarci.md (5).
-- Also rephrase docs/audit/mjolnir-armor-audit.md:646 ("il Claude Doc") without the vendor name, e.g. "il documento iniziale del proprietario".
+- Also rephrase docs/audit/mjolnir-armor-audit.md:646 ("il documento iniziale") without the vendor name, e.g. "il documento iniziale del proprietario".
 - Leave untouched: README.md:11 (a link to a file by its name) and everything under docs/superpowers/**.
 - If an occurrence is not prose or a comment (a string that reaches generated art, a test name, an identifier), leave it and list it in the report.
 - Check: `git grep -n -w il proprietario -- . ':!docs/superpowers/**'` prints nothing; the art generators' output is unchanged (check_art OK, and if tools/art/README.md says how to regenerate, regenerate and show `git status` clean for the generated files).
@@ -37,6 +37,6 @@ Every item below is decided. Full reasoning and file:line evidence are in final-
 
 ## Commits
 At most three, signed by the environment, Italian messages, each ending with the two trailer lines:
-Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
-Claude-Session: https://claude.ai/code/session_018Fcbc2CFSwuiCoDaNxQwgt
+(riga di attribuzione dei commit)
+(riga della sessione)
 Suggested: (1) `client: il rilascio che chiude una rotazione non arriva al gioco base (la pila sul cursore resta); checklist`; (2) `docs: il proprietario al posto del nome nei documenti e nei commenti`; (3) `docs, test: le correzioni minori della revisione finale della 4a-1`. Do not push.

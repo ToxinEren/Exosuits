@@ -5,7 +5,7 @@ Status: DONE_WITH_CONCERNS. Two commits on `m4-stazione`, both signed (`gpgsig` 
 - `cee81a0`: the task.
 - `51e6a69`: a checklist-only follow-up from the final check. Step 7 now places the piston before the station. Step 18 no longer switches the difficulty. See "Self-review findings".
 
-Logs and shots are under `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t6/` (written `t6/` below).
+Logs and shots are under `<scratchpad>/m4a1/t6/` (written `t6/` below).
 
 ## What I implemented
 

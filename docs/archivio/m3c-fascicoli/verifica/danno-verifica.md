@@ -1,7 +1,7 @@
 # Verification of dossier "danno" (damage path, wear hook, fall damage)
 
 Read-only. No Gradle, no game run. All evidence re-derived independently; working dumps in
-`/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m3c/verifica/tmp-danno-v/`.
+`<scratchpad>/m3c/verifica/tmp-danno-v/`.
 
 Jars: V20 = vanilla merged 1.20.1; FO = forge-1.20.1-47.4.29-minecraft-merged (Mojang names); FOS = its SRG copy;
 V21 = vanilla merged 1.21.1; NEO = neoforge-21.1.266-minecraft-merged; I20/I21 = minecraft-merged-intermediary.

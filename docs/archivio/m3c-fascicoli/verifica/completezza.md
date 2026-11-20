@@ -49,10 +49,10 @@ Tags: [design §x], [EXP §x], [danno §x], [test §x], [blocco §x], [dati §x]
 - A wearer switched to spectator (`/gamemode spectator`) keeps the record and the placeholders; the exit key does nothing for spectators [design §5.5]; `doTick` still runs; the size mixin, `noPhysics`, the water mixin, `SlotGuard`, drain and attributes in spectator were not examined [not checked].
 - How: decide the rule (e.g. no drain and no wear in creative/spectator; spectator forces nothing / is refused); then one GameTest per mode. Not blocking.
 
-### G7. Riding a vehicle in the suit: still Luigi's open question, and its consequences were not checked
+### G7. Riding a vehicle in the suit: still the owner's open question, and its consequences were not checked
 - Design §8 2(c) is unanswered (forbid, or accept the edge cases). `FrameEntry.enter` calls `stopRiding()`, but nothing stops mounting afterwards.
 - Not checked: suffocation (`in_wall`) of a seated pilot whose eyes stand ~2.67 above the seat under a 2-high minecart tunnel or a bridge [not checked]; how drain behaves (test §3 treats a passenger as not moving → IDLE); jump stat not counted as passenger; fall damage via the vehicle (test-v C7); the suit's box vs boats.
-- How: get Luigi's answer or record the builder's default; if "forbid", `InteractionEvent.INTERACT_ENTITY` can refuse mounting (attributi §5) [that every mount path goes through it: not checked]. Needs one client run either way.
+- How: get the owner's answer or record the builder's default; if "forbid", `InteractionEvent.INTERACT_ENTITY` can refuse mounting (attributi §5) [that every mount path goes through it: not checked]. Needs one client run either way.
 
 ### G8. The new mixins: up to four, two never compiled
 - Proved by EXP: `PlayerMovementMixin` (common) and `LocalPlayerSprintMixin` (client). Proposed, never compiled: `hurtArmor` (G1) and `calculateFallDamage` (G5).
@@ -99,7 +99,7 @@ Tags: [design §x], [EXP §x], [danno §x], [test §x], [blocco §x], [dati §x]
 - Step in a task (first test task).
 
 ### G17. Damage classification with the 3-block suit
-- Melee never classifies as HEAD (source position = attacker's feet; HEAD needs y ≥ wearer's feet + 2.42) [danno §5]; anvils/falling blocks are GENERIC unless "`DAMAGES_HELMET` → HEAD" is added [danno §8.4]. So the helmet wears almost only from high projectiles: a balance consequence no one put to Luigi.
+- Melee never classifies as HEAD (source position = attacker's feet; HEAD needs y ≥ wearer's feet + 2.42) [danno §5]; anvils/falling blocks are GENERIC unless "`DAMAGES_HELMET` → HEAD" is added [danno §8.4]. So the helmet wears almost only from high projectiles: a balance consequence no one put to the owner.
 - Vanilla version difference visible in play: on 1.21.1 every pilot takes 75 % from anvils/falling blocks/stalactites (helmet placeholder always present), 100 % on 1.20.1 [danno §7].
 - Small decisions: unit of `unabsorbed` in the milli overload; whether an exception in the wear handler may propagate into `hurt`.
 - Not blocking; decisions inside the damage task.

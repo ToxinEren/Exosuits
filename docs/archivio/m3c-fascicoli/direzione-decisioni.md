@@ -7,14 +7,14 @@ the owner, with the default that applies meanwhile). Facts are in the dossiers, 
 Sources (read them, do not trust this file for facts):
 - Binding design (Italian): `/home/user/exosuits/docs/superpowers/specs/2026-11-13-m3-telaio-design.md`
   — part 3c: §4.6 row 3c, §5.3 last bullet, §5.6, §5.7, §5.8, §5.9, §6, §7 (points 21-26), §8, §9, §11.
-- Game document (Italian): `/home/user/exosuits/docs/superpowers/specs/claude-doc-2026-11-04-redstone-exoframes.md`
+- Game document (Italian): `/home/user/exosuits/docs/superpowers/specs/<documento iniziale>`
   and the first design `…/specs/2026-11-12-redstone-exoframes-design.md`.
 - Code map: `<scratchpad>/m3c/stato-del-codice.md`. Real-client experiments (water, step, sprint, data per
   version): `<scratchpad>/m3c/ricognizione-movimento-e-dati.md` (+ `.patch`), also committed in the repo under
   `docs/superpowers/specs/ricognizioni/`.
 - Six fact dossiers and their independent verifications: `<scratchpad>/m3c/verifica/{danno,test,blocco,dati,attributi,repo}.md`,
   `…-verifica.md`, and `completezza.md` (some verifications may not exist yet).
-- `<scratchpad>` = `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad`
+- `<scratchpad>` = la cartella di lavoro temporanea della sessione
 
 "Done when" of part 3c **[D]**: a complete game: build (recipes), charge (charger), enter, consume energy,
 take damage (pieces wear, break), swap the cell, recharge. Four variants, one source tree. Nothing is ever

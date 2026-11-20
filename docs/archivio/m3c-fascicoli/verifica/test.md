@@ -4,7 +4,7 @@ Read-only investigation, 15 Nov. No Gradle and no game run by me. The only runti
 
 **Tags.** [code] file:line under `/home/user/exosuits` (HEAD is now `d88e1e0` = `2e35aa6` + two files in `docs/superpowers/specs/ricognizioni/`; `src/` and `tools/` unchanged). [javap] `javap -c -p` of one class, bytecode offsets `@n`. [arch] Architectury sources jar, file:line: AF9 / AF13 = architectury-fabric 9.2.14 / 13.0.11, AFo9 = architectury-forge 9.2.14, ANeo13 = architectury-neoforge 13.0.11. [data] file inside a jar. [log] the logs above. [not checked].
 **Jars.** V20 = `minecraft-merged` 1.20.1 (what Fabric 1.20.1 runs), Fo20 = `forge-1.20.1-47.4.29-minecraft-merged`, V21 = `minecraft-merged` 1.21.1 (Fabric 1.21.1), Neo21 = `neoforge-21.1.266-minecraft-merged`. "The four" = read on all four. Fabric's differences are mixins, quoted from sources.
-Working files (javap dumps, scripts `m.py`, `mapnames.py`): `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m3c/verifica/tmp-test/`.
+Working files (javap dumps, scripts `m.py`, `mapnames.py`): `<scratchpad>/m3c/verifica/tmp-test/`.
 
 ## 0. Verdict on `stato-del-codice.md` and on the neighbouring dossiers, where they overlap
 

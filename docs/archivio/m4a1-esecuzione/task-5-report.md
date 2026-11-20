@@ -2,7 +2,7 @@
 
 Status: DONE_WITH_CONCERNS. Commit `14df684` on `m4-stazione` (signed: `gpgsig` present; both trailers). Tree clean after the commit. Not pushed.
 
-Logs and shots are under `/tmp/claude-0/-home-user/3f7b8ad1-7942-5139-8688-e3b7d5b2e5fc/scratchpad/m4a1/t5/` (written `t5/` below).
+Logs and shots are under `<scratchpad>/m4a1/t5/` (written `t5/` below).
 
 ## What I implemented
 
