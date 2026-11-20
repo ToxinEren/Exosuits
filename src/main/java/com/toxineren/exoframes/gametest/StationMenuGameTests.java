@@ -5,7 +5,9 @@ import static com.toxineren.exoframes.gametest.GameTestKit.*;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.PlacedFrame;
+import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.StationBlock;
+import com.toxineren.exoframes.content.StationPart;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.station.StationReach;
 import com.toxineren.exoframes.entity.ExoframeEntity;
@@ -40,6 +42,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -65,6 +68,12 @@ public final class StationMenuGameTests {
 
     /** Dove stanno i piedi del secondo giocatore, relativo alla struttura: accanto al primo, a ovest. */
     private static final Vec3 OTHER_STAND = new Vec3(2.5, 1.0, 5.5);
+
+    /**
+     * Dove sta la meta' laterale rimasta sola di {@code clickWithNoFrameInReachSaysSo}, relativa alla struttura,
+     * lontana dalla stazione dei test: con il fronte a nord la sua principale starebbe a est, in (6, 1, 1).
+     */
+    private static final BlockPos LONE_SIDE = new BlockPos(5, 1, 1);
 
     /** Numeri di pulsante che non sono quello di prova: nessuno cambia il contatore. */
     private static final int[] OTHER_BUTTONS = {0, 101, 103, 127, -1};
@@ -246,7 +255,8 @@ public final class StationMenuGameTests {
      * Con un telaio di A a 3 blocchi dall'impronta, il clic vero di A sulla principale e poi sulla laterale (che porta
      * alla principale) non apre nulla e dice due volte, sulla barra delle azioni, che non c'e' un telaio vicino, con la
      * distanza della config scritta senza decimali ("2"); il server risponde {@code CONSUME}. La distanza si scrive
-     * con un decimale se non e' intera.
+     * con un decimale se non e' intera. Una meta' laterale rimasta sola non apre nulla e non dice nulla, anche con un
+     * telaio a portata ({@link #assertLoneSideHalfOpensNothing}).
      */
     private static void clickWithNoFrameInReachSaysSo(GameTestHelper helper) {
         BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
@@ -271,6 +281,7 @@ public final class StationMenuGameTests {
                     && StationFinder.reachText(2.5).equals("2.5") && StationFinder.reachText(0.5).equals("0.5"),
                     "reachText: " + StationFinder.reachText(2.0) + ", " + StationFinder.reachText(8.0) + ", "
                             + StationFinder.reachText(2.5) + ", " + StationFinder.reachText(0.5));
+            assertLoneSideHalfOpensNothing(helper, a);
         } finally {
             removeFrame(helper.getLevel().getServer(), far);
             closeStation(helper, side, a);
@@ -584,6 +595,42 @@ public final class StationMenuGameTests {
             assertFind(helper, player, inReach ? found(frame) : NONE_IN_REACH, "a frame at " + feet);
         } finally {
             removeFrame(helper.getLevel().getServer(), frame);
+        }
+    }
+
+    /**
+     * Una meta' laterale rimasta sola in {@link #LONE_SIDE}, rivolta a nord, posata come la posa {@code /setblock}
+     * (nessuno ne aggiorna la forma, quindi resta), con un telaio del giocatore sopra: il telaio sarebbe a portata
+     * dell'impronta della stazione con la principale accanto, in (6, 1, 1), che pero' e' aria. Il clic vero del
+     * giocatore sulla laterale non lancia, non apre nulla e non dice nulla; il server risponde {@code CONSUME}. Poi
+     * toglie telaio e laterale.
+     */
+    private static void assertLoneSideHalfOpensNothing(GameTestHelper helper, ServerPlayer player) {
+        BlockState lone = ModBlocks.STATION.get().defaultBlockState().setValue(StationBlock.FACING, Direction.NORTH)
+                .setValue(StationBlock.PART, StationPart.SIDE);
+        helper.setBlock(LONE_SIDE, lone);
+        ExoframeEntity frame = placeFrame(helper, ownedBy(player), new Vec3(5.5, 2.0, 1.5), 0f);
+        try {
+            helper.assertTrue(helper.getBlockState(LONE_SIDE).equals(lone)
+                    && helper.getBlockState(LONE_SIDE.east()).isAir(), "premise: the side half is not alone");
+            int before = modMessages(player).size();
+            InteractionResult result = null;
+            RuntimeException thrown = null;
+            try {
+                result = clickBlock(helper, player, LONE_SIDE, InteractionHand.MAIN_HAND);
+            } catch (RuntimeException e) {
+                thrown = e;
+            }
+            helper.assertTrue(thrown == null, "the click on a lone side half threw " + thrown);
+            helper.assertTrue(player.containerMenu == player.inventoryMenu,
+                    "the click on a lone side half opened a menu");
+            helper.assertTrue(modMessages(player).size() == before,
+                    "the click on a lone side half said something: " + modMessages(player));
+            helper.assertTrue(result == InteractionResult.CONSUME,
+                    "the server answered " + result + " on a lone side half");
+        } finally {
+            removeFrame(helper.getLevel().getServer(), frame);
+            helper.setBlock(LONE_SIDE, Blocks.AIR);
         }
     }
 

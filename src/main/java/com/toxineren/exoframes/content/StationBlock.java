@@ -217,8 +217,11 @@ public final class StationBlock extends CompatBlock {
 
     /**
      * Il clic destro, sull'una o sull'altra meta': passa con la mano secondaria, per uno spettatore e per un giocatore
-     * che non e' vivo. Altrimenti non usa l'oggetto in mano, qualunque sia; sul client riesce e basta. Sul server cerca
-     * il telaio per la meta' principale della stazione ({@link #mainPos}, con {@link StationFinder#find}):
+     * che non e' vivo. Altrimenti non usa l'oggetto in mano, qualunque sia; sul client riesce e basta. Sul server legge
+     * prima il blocco vero nel posto della meta' principale ({@link #mainPos}): se non e' la principale di questa
+     * stazione (lo stesso blocco, {@link #PART} principale, lo stesso {@link #FACING} della meta' cliccata), come per
+     * una meta' laterale rimasta sola posata con un comando, non apre nulla e non dice nulla ({@code CONSUME}).
+     * Altrimenti cerca il telaio per la principale, con il suo stato vero ({@link StationFinder#find}):
      * <ul>
      * <li>nessun telaio a portata: il messaggio {@link #NO_FRAME} sulla barra delle azioni, con la distanza della
      * config del server ({@link StationFinder#reachText}), e {@code CONSUME};</li>
@@ -238,9 +241,13 @@ public final class StationBlock extends CompatBlock {
             return InteractionResult.SUCCESS;
         }
         BlockPos main = mainPos(pos, state);
-        // Lo stato della principale dallo stato cliccato: le due meta' hanno lo stesso FACING.
-        StationFinder.Result found = StationFinder.find(serverPlayer, serverLevel, main,
-                state.setValue(PART, StationPart.MAIN));
+        // La principale vera: una laterale rimasta sola non ha una stazione intorno, e il menu non si costruirebbe.
+        BlockState mainState = level.getBlockState(main);
+        if (!mainState.is(this) || mainState.getValue(PART) != StationPart.MAIN
+                || mainState.getValue(FACING) != state.getValue(FACING)) {
+            return InteractionResult.CONSUME;
+        }
+        StationFinder.Result found = StationFinder.find(serverPlayer, serverLevel, main, mainState);
         switch (found.outcome()) {
             case NONE_IN_REACH -> serverPlayer.displayClientMessage(Component.translatable(NO_FRAME,
                     StationFinder.reachText(RedstoneExoframes.config().station.reachBlocks)), true);
