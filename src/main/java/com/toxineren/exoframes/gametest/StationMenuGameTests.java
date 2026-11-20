@@ -8,20 +8,29 @@ import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.StationBlock;
 import com.toxineren.exoframes.content.StationPart;
+import com.toxineren.exoframes.core.armor.Appearance;
+import com.toxineren.exoframes.core.armor.Piece;
+import com.toxineren.exoframes.core.armor.PieceSlot;
+import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.station.StationReach;
+import com.toxineren.exoframes.core.station.StationView;
 import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.FrameEntry;
 import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.FramePermissions;
 import com.toxineren.exoframes.station.StationFinder;
 import com.toxineren.exoframes.station.StationMenu;
+import com.toxineren.exoframes.station.StationNet;
 import com.toxineren.exoframes.station.StationOpening;
+import com.toxineren.exoframes.station.StationViewPacket;
 import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
@@ -46,8 +55,9 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Test in gioco del menu della stazione di manutenzione (design §5.2, §5.6 e i casi di §5.18): la ricerca del telaio,
- * il clic che non apre nulla e il menu che resta legato al suo telaio. Il menu non si apre dalla rete del loader:
+ * Test in gioco del menu della stazione di manutenzione (design §5.2, §5.5, §5.6, §5.13 e i casi di §5.18): la
+ * ricerca del telaio, il clic che non apre nulla, il menu che resta legato al suo telaio e la vista del telaio, nei
+ * dati extra dell'apertura e rimandata quando cambia. Il menu non si apre dalla rete del loader:
  * {@code openStation} cerca il telaio come il clic vero ({@link StationFinder#find}, che deve trovarlo), costruisce il
  * menu del server con lo stesso costruttore del clic e lo mette in {@code player.containerMenu} (perche', lo dice il
  * suo Javadoc); che il clic apra davvero la schermata lo prova il client vero, con tools/client/m4a1_shots.sh. Il clic
@@ -108,6 +118,11 @@ public final class StationMenuGameTests {
                 StationMenuGameTests::menuClosesForOthersWhenTheOwnerLocks);
         add(tests, "menuClosesWithoutAMessageForOtherReasons",
                 StationMenuGameTests::menuClosesWithoutAMessageForOtherReasons);
+        add(tests, "openingCarriesTheFrameView", StationMenuGameTests::openingCarriesTheFrameView);
+        add(tests, "viewFollowsTheRecordWithinATick", StationMenuGameTests::viewFollowsTheRecordWithinATick);
+        add(tests, "viewIsSentAtMostOncePerTick", StationMenuGameTests::viewIsSentAtMostOncePerTick);
+        add(tests, "viewCarriesThePlayersRights", StationMenuGameTests::viewCarriesThePlayersRights);
+        add(tests, "viewForAnotherMenuIsIgnored", StationMenuGameTests::viewForAnotherMenuIsIgnored);
         return tests;
     }
 
@@ -584,6 +599,284 @@ public final class StationMenuGameTests {
     }
 
     /**
+     * L'apertura porta la vista del telaio (design §5.5). Sopra la principale un telaio di A, bloccato, con l'elmo
+     * consumato (60 su 180) e dipinto, il torso nuovo e una cella da 3 000 RE: la vista dell'apertura e' quella del
+     * record con i diritti di A, il proprietario, che ne puo' cambiare il blocco, la regola {@code ownerOnlyFrames}
+     * accesa (la config predefinita), la scelta 0 (l'elmo, il primo pezzo montato), nessuna armatura custodita e
+     * {@code free} uguale alla capacita' {@code instabuild} di A. Scritta in un buffer, la legge il menu del client,
+     * come la fabbrica del tipo; il buffer si rilascia subito dopo il costruttore, e solo dopo si confrontano
+     * posizione, {@code frameId} e vista: nulla si legge tardi dal buffer, che su Fabric 1.21.1 si rilascia appena il
+     * costruttore torna. Il menu di {@code openStation} ha la stessa vista. Con un telaio con il solo torso la scelta
+     * dell'apertura e' 1, con un telaio nudo 0.
+     */
+    private static void openingCarriesTheFrameView(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        MinecraftServer server = helper.getLevel().getServer();
+        int capacity = RedstoneExoframes.config().energy.cellCapacity;
+        FrameState state = ownedBy(a);
+        state.mount(new Piece(PieceSlot.HELMET, Tier.SCRAP, 180, 60));
+        state.setAppearance(PieceSlot.HELMET, new Appearance(0x3A6EA5, Appearance.UNPAINTED, List.of()));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        state.insertCell(new EnergyCell(capacity, 3_000));
+        ExoframeEntity frame = frameOnStation(helper, state, MAIN);
+        ExoframeEntity other = null;
+        try {
+            BlockPos main = helper.absolutePos(MAIN);
+            PlacedFrame record = placedRecord(helper, frame);
+            StationView expected = StationView.of(record.state(), true, true, 0, false, a.getAbilities().instabuild);
+            helper.assertTrue(expected.pieces().get(PieceSlot.HELMET).equals(new StationView.PieceInfo(Tier.SCRAP, 60,
+                    180, 0x3A6EA5, Appearance.UNPAINTED)) && durability(expected, PieceSlot.TORSO) == 180
+                    && expected.cell().equals(Optional.of(new StationView.CellInfo(3_000, capacity)))
+                    && !expected.unlocked(), "premise: the record does not hold the test's frame: " + expected);
+            StationOpening opening = StationMenu.opening(a, main, record);
+            helper.assertTrue(opening.view().equals(expected),
+                    "the opening carries " + opening.view() + ", expected " + expected);
+
+            FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
+            StationMenu client;
+            try {
+                opening.write(buf);
+                client = new StationMenu(1, a.getInventory(), buf);
+            } finally {
+                buf.release();
+            }
+            helper.assertTrue(buf.refCnt() == 0, "premise: the extra data buffer was not released");
+            helper.assertTrue(client.stationPos().equals(main) && client.frameId().equals(frame.frameId())
+                    && client.view().equals(expected), "the client menu read " + client.stationPos() + ", "
+                    + client.frameId() + " and " + client.view());
+
+            StationMenu menu = openStation(helper, a, MAIN);
+            helper.assertTrue(menu.view().equals(expected), "the opened menu has the view " + menu.view());
+            a.closeContainer();
+
+            removeFrame(server, frame);
+            FrameState torsoOnly = ownedBy(a);
+            torsoOnly.mount(scrapPiece(PieceSlot.TORSO));
+            other = frameOnStation(helper, torsoOnly, MAIN);
+            int selection = StationMenu.opening(a, main, placedRecord(helper, other)).view().selection();
+            helper.assertTrue(selection == 1, "the opening on a frame with only the torso selects " + selection);
+            removeFrame(server, other);
+            other = frameOnStation(helper, ownedBy(a), MAIN);
+            selection = StationMenu.opening(a, main, placedRecord(helper, other)).view().selection();
+            helper.assertTrue(selection == 0, "the opening on a bare frame selects " + selection);
+        } finally {
+            if (other != null) {
+                removeFrame(server, other);
+            }
+            cleanUp(helper, side, frame, a);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * La vista segue il record entro un tick (design §5.5): sul telaio di A con il torso nuovo, aperto, il torso perde
+     * 50 punti nel registro, come per un danno, un comando o un'altra stazione, senza che nessuno lo annunci. Due tick
+     * dopo il menu, ancora aperto, ha mandato una vista, con il torso a 130; altri due tick dopo, senza cambi, nessuna
+     * altra. Il menu dei test non ha sincronizzatore: {@code viewsSent} conta le decisioni di invio del menu, anche
+     * dove {@code Net} salta il giocatore finto (NeoForge 1.21.1, senza canali negoziati).
+     */
+    private static void viewFollowsTheRecordWithinATick(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameState state = ownedBy(a);
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        ExoframeEntity frame = frameOnStation(helper, state, MAIN);
+        boolean delayed = false;
+        try {
+            StationMenu menu = openStation(helper, a, MAIN);
+            helper.assertTrue(menu.viewsSent() == 0 && menu.lastSentView().equals(menu.view()),
+                    "after opening: " + menu.viewsSent() + " views sent, last " + menu.lastSentView());
+            helper.assertTrue(Compat.frameState().updatePlaced(server, frame.frameId(),
+                    s -> s.pieces().get(PieceSlot.TORSO).damage(50)), "damaging the torso in the registry failed");
+            helper.runAfterDelay(2, () -> runInSequence(helper, h -> {
+                boolean passed = false;
+                try {
+                    h.assertTrue(a.containerMenu == menu, "the station menu closed");
+                    h.assertTrue(menu.viewsSent() == 1 && durability(menu.lastSentView(), PieceSlot.TORSO) == 130,
+                            "two ticks after the change: " + menu.viewsSent() + " views sent, torso at "
+                                    + durability(menu.lastSentView(), PieceSlot.TORSO) + "; expected 1 and 130");
+                    passed = true;
+                } finally {
+                    if (!passed) {
+                        cleanUp(h, side, frame, a);
+                    }
+                }
+            }));
+            helper.runAfterDelay(4, () -> runInSequence(helper, h -> {
+                try {
+                    h.assertTrue(a.containerMenu == menu, "the station menu closed");
+                    h.assertTrue(menu.viewsSent() == 1 && durability(menu.lastSentView(), PieceSlot.TORSO) == 130,
+                            "two more ticks without changes: " + menu.viewsSent() + " views sent, torso at "
+                                    + durability(menu.lastSentView(), PieceSlot.TORSO) + "; expected 1 and 130");
+                } finally {
+                    cleanUp(h, side, frame, a);
+                }
+                h.succeed();
+            }));
+            delayed = true;
+        } finally {
+            if (!delayed) {
+                cleanUp(helper, side, frame, a);
+            }
+        }
+    }
+
+    /**
+     * Al piu' una vista per tick per menu (design §5.13): sul telaio di A con l'elmo nuovo, aperto, nello stesso tick
+     * l'elmo perde 10 punti e {@code broadcastChanges} manda la vista (una, con l'elmo a 170); l'elmo ne perde altri 10
+     * e un secondo {@code broadcastChanges}, nello stesso tick, non manda nulla (ancora una, a 170). Il cambio parte al
+     * tick dopo: due tick dopo le viste mandate sono due, con l'elmo a 160.
+     */
+    private static void viewIsSentAtMostOncePerTick(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameState state = ownedBy(a);
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        ExoframeEntity frame = frameOnStation(helper, state, MAIN);
+        boolean delayed = false;
+        try {
+            StationMenu menu = openStation(helper, a, MAIN);
+            helper.assertTrue(Compat.frameState().updatePlaced(server, frame.frameId(),
+                    s -> s.pieces().get(PieceSlot.HELMET).damage(10)), "damaging the helmet in the registry failed");
+            menu.broadcastChanges();
+            helper.assertTrue(menu.viewsSent() == 1 && durability(menu.lastSentView(), PieceSlot.HELMET) == 170,
+                    "after the first change: " + menu.viewsSent() + " views sent, helmet at "
+                            + durability(menu.lastSentView(), PieceSlot.HELMET) + "; expected 1 and 170");
+            helper.assertTrue(Compat.frameState().updatePlaced(server, frame.frameId(),
+                    s -> s.pieces().get(PieceSlot.HELMET).damage(10)), "damaging the helmet again failed");
+            menu.broadcastChanges();
+            helper.assertTrue(menu.viewsSent() == 1 && durability(menu.lastSentView(), PieceSlot.HELMET) == 170,
+                    "after a second change in the same tick: " + menu.viewsSent() + " views sent, helmet at "
+                            + durability(menu.lastSentView(), PieceSlot.HELMET) + "; expected 1 and 170");
+            helper.runAfterDelay(2, () -> runInSequence(helper, h -> {
+                try {
+                    h.assertTrue(a.containerMenu == menu, "the station menu closed");
+                    h.assertTrue(menu.viewsSent() == 2 && durability(menu.lastSentView(), PieceSlot.HELMET) == 160,
+                            "two ticks later: " + menu.viewsSent() + " views sent, helmet at "
+                                    + durability(menu.lastSentView(), PieceSlot.HELMET) + "; expected 2 and 160");
+                } finally {
+                    cleanUp(h, side, frame, a);
+                }
+                h.succeed();
+            }));
+            delayed = true;
+        } finally {
+            if (!delayed) {
+                cleanUp(helper, side, frame, a);
+            }
+        }
+    }
+
+    /**
+     * La vista porta i diritti di chi guarda (design §5.5). Sul telaio di A, sbloccato: la vista di A dice che ne puo'
+     * cambiare il blocco (il proprietario), che la regola {@code ownerOnlyFrames} e' accesa (la config predefinita) e
+     * che A, in sopravvivenza, paga; B, che apre il suo menu sullo stesso telaio, non ne puo' cambiare il blocco. A
+     * passa in creativa: due tick dopo la sua vista mandata dice che non paga, e B non ha avuto viste nuove. Su un
+     * telaio di A con un paio di stivali stivati, sopra la principale, la vista dice che il telaio custodisce
+     * un'armatura. Il caso dell'operatore non c'e': farlo operatore scriverebbe {@code ops.json} del server dei test;
+     * la regola e' quella del comando.
+     */
+    private static void viewCarriesThePlayersRights(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        ServerPlayer b = Compat.gameTests().mockServerPlayer(helper);
+        b.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, b, OTHER_STAND);
+        MinecraftServer server = helper.getLevel().getServer();
+        FrameState state = ownedBy(a);
+        state.setUnlocked(true);
+        ExoframeEntity frame = frameOnStation(helper, state, MAIN);
+        boolean delayed = false;
+        try {
+            helper.assertTrue(RedstoneExoframes.config().server.ownerOnlyFrames,
+                    "premise: ownerOnlyFrames is not the default");
+            StationMenu menuOfA = openStation(helper, a, MAIN);
+            StationView ofA = menuOfA.view();
+            helper.assertTrue(ofA.canToggleLock() && ofA.ownerOnly() && !ofA.free(), "A's view: " + ofA);
+            StationMenu menuOfB = openStation(helper, b, MAIN);
+            StationView ofB = menuOfB.view();
+            helper.assertTrue(!ofB.canToggleLock() && ofB.ownerOnly() && !ofB.free(), "B's view: " + ofB);
+            a.setGameMode(GameType.CREATIVE);
+            helper.runAfterDelay(2, () -> runInSequence(helper, h -> {
+                ExoframeEntity stowing = null;
+                try {
+                    h.assertTrue(a.containerMenu == menuOfA && menuOfA.lastSentView().free(),
+                            "A's last sent view in creative: " + menuOfA.lastSentView());
+                    h.assertTrue(b.containerMenu == menuOfB && menuOfB.viewsSent() == 0,
+                            "B got " + menuOfB.viewsSent() + " views after A changed game mode");
+                    a.closeContainer();
+                    b.closeContainer();
+                    removeFrame(server, frame);
+                    stowing = frameWithStowedBoots(h, a, ownedBy(a), new Vec3(3.5, 2.0, 3.5));
+                    StationMenu menu = openStation(h, a, MAIN);
+                    h.assertTrue(menu.view().hasStowed(), "the view of a frame with stowed boots: " + menu.view());
+                } finally {
+                    if (stowing != null) {
+                        Compat.frameState().takeStowedOfPlaced(server, stowing.frameId());
+                        removeFrame(server, stowing);
+                    }
+                    cleanUp(h, side, frame, a, b);
+                }
+                h.succeed();
+            }));
+            delayed = true;
+        } finally {
+            if (!delayed) {
+                cleanUp(helper, side, frame, a, b);
+            }
+        }
+    }
+
+    /**
+     * Il gestore del pacchetto {@code station_view} ({@link StationNet#apply}, codice comune) mette la vista solo nel
+     * menu della stazione aperto con quel numero (design §5.5): sul menu di A, aperto, un pacchetto con un altro numero
+     * non cambia la vista, uno con il numero giusto la cambia; chiuso il menu, un pacchetto con il numero vecchio, come
+     * uno arrivato dopo la chiusura, non lancia e non cambia nulla; senza giocatore (sul client prima che ci sia) non
+     * lancia.
+     */
+    private static void viewForAnotherMenuIsIgnored(GameTestHelper helper) {
+        BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
+        ServerPlayer a = Compat.gameTests().mockServerPlayer(helper);
+        a.setGameMode(GameType.SURVIVAL);
+        standFacingNorth(helper, a, STAND);
+        ExoframeEntity frame = frameOnStation(helper, ownedBy(a), MAIN);
+        try {
+            StationMenu menu = openStation(helper, a, MAIN);
+            StationView opened = menu.view();
+            StationView another = new StationView(Map.of(), Optional.empty(), true, true, false, false,
+                    StationView.SELECT_ALL, true, true);
+            helper.assertTrue(!another.equals(opened), "premise: the other view is the opened one: " + opened);
+            StationNet.apply(a, new StationViewPacket(menu.containerId + 1, another));
+            helper.assertTrue(menu.view().equals(opened),
+                    "a view for another menu id changed the view to " + menu.view());
+            StationNet.apply(a, new StationViewPacket(menu.containerId, another));
+            helper.assertTrue(menu.view().equals(another), "the view for the open menu was not set: " + menu.view());
+
+            a.closeContainer();
+            helper.assertTrue(a.containerMenu == a.inventoryMenu, "the station menu is still open");
+            // un'eccezione qui fa fallire il test: il gestore non deve lanciare
+            StationNet.apply(a, new StationViewPacket(menu.containerId, opened));
+            helper.assertTrue(menu.view().equals(another),
+                    "a view after closing changed the closed menu to " + menu.view());
+            StationNet.apply(null, new StationViewPacket(menu.containerId, opened));
+        } finally {
+            cleanUp(helper, side, frame, a);
+        }
+        helper.succeed();
+    }
+
+    /**
      * Piazza un telaio nudo del giocatore con i piedi in {@code feet} (relativo alla struttura), cerca alla stazione
      * dei test e toglie il telaio: la ricerca deve trovare proprio quel telaio se {@code inReach}, nessun telaio a
      * portata altrimenti.
@@ -669,7 +962,7 @@ public final class StationMenuGameTests {
         BlockPos main = helper.absolutePos(MAIN);
         FriendlyByteBuf buf = new FriendlyByteBuf(Unpooled.buffer());
         try {
-            new StationOpening(main, frame.frameId()).write(buf);
+            StationMenu.opening(player, main, placedRecord(helper, frame)).write(buf);
             StationMenu client = new StationMenu(STATION_MENU_ID + 1, player.getInventory(), buf);
             helper.assertTrue(client.stationPos().equals(main) && client.frameId().equals(frame.frameId()),
                     "the client menu read " + client.stationPos() + " and " + client.frameId());
@@ -699,6 +992,19 @@ public final class StationMenuGameTests {
     /** La ricerca che trova il telaio. */
     private static StationFinder.Result found(ExoframeEntity frame) {
         return new StationFinder.Result(StationFinder.Outcome.FOUND, Optional.of(frame.frameId()));
+    }
+
+    /** Il record piazzato del telaio, che deve esserci. */
+    private static PlacedFrame placedRecord(GameTestHelper helper, ExoframeEntity frame) {
+        PlacedFrame record = Compat.frameState().placed(helper.getLevel().getServer(), frame.frameId()).orElse(null);
+        helper.assertTrue(record != null, "frame " + frame.frameId() + " is not placed");
+        return record;
+    }
+
+    /** La durata del pezzo dello slot nella vista; -1 se lo slot e' vuoto. */
+    private static int durability(StationView view, PieceSlot slot) {
+        StationView.PieceInfo piece = view.pieces().get(slot);
+        return piece == null ? -1 : piece.durability();
     }
 
     /**

@@ -34,6 +34,7 @@ import com.toxineren.exoframes.gametest.MovementGameTests;
 import com.toxineren.exoframes.gametest.StationBlockGameTests;
 import com.toxineren.exoframes.gametest.StationMenuGameTests;
 import com.toxineren.exoframes.gametest.SurvivalGameTests;
+import com.toxineren.exoframes.station.StationNet;
 import dev.architectury.event.EventResult;
 import dev.architectury.event.events.common.EntityEvent;
 import dev.architectury.event.events.common.TickEvent;
@@ -75,6 +76,7 @@ public final class RedstoneExoframes {
         Compat.frameState().registerCommon();
         FrameEntry.registerNet(); // pacchetto C2S dell'uscita dal telaio, su entrambi i lati
         ClientRules.register(); // pacchetto S2C con i valori del server che il client conta, mandato a chi entra
+        StationNet.register(); // pacchetto S2C della vista del telaio alla stazione, mandato dal menu quando cambia
         CellSwap.registerNet(); // pacchetto C2S del cambio cella, su entrambi i lati
         EntryHints.register(); // la riga dei tasti torna a mostrarsi dopo l'uscita dal server
         FrameRealign.register(); // registro ed entita' dei telai piazzati allineati, ogni 5 secondi per livello

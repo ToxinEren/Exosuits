@@ -6,7 +6,10 @@ import java.util.Objects;
 import java.util.UUID;
 import net.minecraft.server.level.ServerPlayer;
 
-/** Chi puo' mettere le mani su un telaio (design §5.4): montare, smontare, raccoglierlo ed entrarci. */
+/**
+ * Chi puo' mettere le mani su un telaio (design §5.4): montare, smontare, raccoglierlo ed entrarci ({@link #canUse});
+ * chi ne cambia il blocco ({@link #canToggleLock}).
+ */
 public final class FramePermissions {
     /** Il livello di permesso con cui un giocatore in creativa tocca anche i telai bloccati degli altri. */
     private static final int OPERATOR_LEVEL = 2;
@@ -28,5 +31,16 @@ public final class FramePermissions {
                 || owner.equals(player.getUUID())
                 || state.unlocked()
                 || (player.isCreative() && player.hasPermissions(OPERATOR_LEVEL));
+    }
+
+    /**
+     * Vero se il giocatore puo' bloccare o sbloccare il telaio per gli altri: un operatore (livello di permesso 2) o il
+     * proprietario; un telaio senza proprietario lo cambia solo un operatore. E' la regola di {@code /exoframe lock} e
+     * {@code /exoframe unlock}, che resta la sua; la stazione la usa per la vista ({@code canToggleLock}).
+     */
+    public static boolean canToggleLock(ServerPlayer player, FrameState state) {
+        Objects.requireNonNull(player, "player must not be null");
+        Objects.requireNonNull(state, "state must not be null");
+        return player.hasPermissions(OPERATOR_LEVEL) || player.getUUID().equals(state.owner());
     }
 }

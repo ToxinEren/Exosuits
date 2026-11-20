@@ -8,7 +8,7 @@
 # interfaccia 480x270 e schermata della stazione (316x232) con l'angolo nel punto 82,19 dell'interfaccia, cioe' il
 # riquadro 632x464+164+38 negli scatti. Un punto (x, y) della schermata e' il punto (2 (82 + x), 2 (19 + y)) degli
 # scatti. La stazione sta in 0 -60 1 (la meta' principale) e -1 -60 1 (la laterale, alla destra di chi la posa
-# guardando a sud), con il fronte a nord, verso il giocatore; dal passo 5 al passo 8 il telaio sta sopra la principale,
+# guardando a sud), con il fronte a nord, verso il giocatore; dal passo 5 al passo 9 il telaio sta sopra la principale,
 # con i piedi in 0,5 -59 1,5.
 #
 #   1. attesa       "@attendi 12": la riga in chat del "gamemode creative" di client_shot.sh e l'avviso "Chat
@@ -43,15 +43,21 @@
 #                   pulsanti del gioco base, il server conta la pressione e il gioco base rimanda il contatore; il
 #                   puntatore di nuovo nel punto neutro; scatto premuto, da guardare: il pulsante in basso a destra
 #                   verde con 1
-#   8. chiusura     con lo sguardo sul telaio (inclinazione -40; la schermata resta aperta) /exoframe remove lo toglie,
+#   8. vista        prova di fumo del pacchetto station_view: con lo sguardo sul telaio (inclinazione -40; la schermata
+#                   resta aperta) /exoframe unlock lo sblocca, la vista del telaio cambia e al tick dopo il server la
+#                   manda al client, che la mette nel menu aperto; dopo 2 s il giocatore e' ancora nel server (un
+#                   pacchetto che il client non legge lo farebbe uscire, e il passo dopo fallirebbe) e nessuna riga del
+#                   mod finisce in log-check.txt. Nella 4a-1 la vista nuova non cambia nulla che si veda (il lucchetto
+#                   e' della 4a-2): il contenuto lo provano i JUnit del codec e i test in mondo di StationMenuGameTests
+#   9. chiusura     con lo sguardo sul telaio (inclinazione -40; la schermata resta aperta) /exoframe remove lo toglie,
 #                   e il server chiude la schermata al tick dopo; scatto telaio-tolto mezzo secondo dopo, da guardare:
 #                   nessuna schermata e, sulla barra delle azioni, "The exoframe is no longer available at the station";
 #                   "execute unless entity" vuole nessun telaio rimasto, e kill toglie i pezzi e la cella che il
 #                   comando lascia a terra (prima dei 2 s del ritardo di raccolta)
-#   9. rottura      con il mirino sul fianco nord della laterale (rotazione 63,4, inclinazione 45) un clic sinistro,
+#  10. rottura      con il mirino sul fianco nord della laterale (rotazione 63,4, inclinazione 45) un clic sinistro,
 #                   in creativa, rompe la laterale: la principale sparisce con lei, senza bottino ("execute if block"
 #                   vuole l'aria nelle due meta', "execute unless entity" nessun oggetto a terra)
-#  10. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
+#  11. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
 #
 # Controlli sugli scatti (arm_measure.sh), solo dentro il riquadro della schermata o di una sua parte: attorno si vede
 # il mondo. "Dentro R" vuol dire un riquadro con X >= Rx, Y >= Ry, X + L <= Rx + RL e Y + A <= Ry + RA.
@@ -70,15 +76,18 @@
 # Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la rottura in sopravvivenza, con e senza
 # piccone, i pistoni e i comandi che tolgono una meta' (li provano i test in mondo di StationBlockGameTests); la scelta
 # fra piu' telai, i telai bloccati, la portata misurata al bordo e le altre ragioni che chiudono la schermata (le
-# provano i test in mondo di StationMenuGameTests); la vista del telaio, l'anteprima girevole e il pannello del telaio,
-# che arrivano con i task dopo; la schermata con altre scale dell'interfaccia e altre misure della finestra; una
+# provano i test in mondo di StationMenuGameTests); il contenuto della vista del telaio e un suo cambio che si veda (la
+# schermata non la disegna ancora: il contenuto lo provano i JUnit del codec e i test in mondo di StationMenuGameTests,
+# il cambio visibile arriva con il lucchetto della 4a-2), l'anteprima girevole e il pannello del telaio, che arrivano
+# con i task dopo; la schermata con altre scale dell'interfaccia e altre misure della finestra; una
 # ricarica delle risorse (F3+T) con la schermata aperta; un'esplosione vera. Sono nella checklist per il PC della parte.
 #
-# Dura poco piu' di due minuti a cache calde: misurati 133 s su 1.21.1-neoforge, di cui 128 s l'esecuzione di
-# client_shot.sh (prima delle fasi del telaio 126 s, di cui 121 s client_shot.sh; senza la ricetta, la posa con
-# l'oggetto e la rottura la sequenza misurava 88-107 s sulle quattro varianti, di cui 83-102 s client_shot.sh). Le
-# misure sono uguali al pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto; le stesse nelle
-# esecuzioni con le fasi nuove su 1.21.1-neoforge, anche con il telaio dipinto dietro la schermata), e cosi' il
+# Dura poco piu' di due minuti a cache calde: misurati 135 s su 1.21.1-neoforge e 134 s su 1.20.1-forge, di cui 130 s
+# l'esecuzione di client_shot.sh (prima della fase della vista 133 s su 1.21.1-neoforge, di cui 128 s client_shot.sh;
+# prima delle fasi del telaio 126 s, di cui 121 s client_shot.sh; senza la ricetta, la posa con l'oggetto e la rottura
+# la sequenza misurava 88-107 s sulle quattro varianti, di cui 83-102 s client_shot.sh). Le misure sono uguali al
+# pixel sulle quattro varianti (i valori accanto alle soglie, piu' sotto; le stesse nelle esecuzioni con le fasi nuove
+# su 1.21.1-neoforge e 1.20.1-forge, anche con il telaio dipinto dietro la schermata), e cosi' il
 # ritaglio dell'anteprima: la scala della tuta nell'interfaccia passa da GuiEntityScale, che la applica come il gioco
 # base di ogni versione (senza, su 1.20.1 la tuta usciva piu' scura, magenta 999).
 #
@@ -147,15 +156,17 @@ steps=(
     "@scatto stazione-aperta"
     # 7. pulsante di prova, al suo centro
     "@clic 748 426" "@attendi 1" "$NEUTRAL" "@attendi 1" "@scatto premuto"
-    # 8. chiusura: tolto il telaio con lo sguardo su di lui, il server chiude la schermata e lo dice
+    # 8. vista: a schermata aperta /exoframe unlock cambia il telaio, e il server manda station_view (prova di fumo)
+    "tp $u 0.5 -60 0.5 0 -40" "@attendi 1" "execute as $u run exoframe unlock" "@attendi 2"
+    # 9. chiusura: tolto il telaio con lo sguardo su di lui, il server chiude la schermata e lo dice
     "tp $u 0.5 -60 0.5 0 -40" "@attendi 1" "execute as $u run exoframe remove" "@attendi 0.5"
     "@scatto telaio-tolto" "execute unless entity @e[type=redstone_exoframes:exoframe]"
     "kill @e[type=minecraft:item]"
-    # 9. rottura: il mirino sul fianco nord della laterale; in creativa le due meta' spariscono senza bottino
+    # 10. rottura: il mirino sul fianco nord della laterale; in creativa le due meta' spariscono senza bottino
     "tp $u 0.5 -60 0.5 63.4 45" "@attendi 1" "@click sinistro" "@attendi 1"
     "execute if block 0 -60 1 minecraft:air" "execute if block -1 -60 1 minecraft:air"
     "execute unless entity @e[type=minecraft:item]"
-    # 10. fine, all'aperto per i tre scatti di client_shot.sh
+    # 11. fine, all'aperto per i tre scatti di client_shot.sh
     "tp $u 0.5 -60 -5.5 0 15"
 )
 shots=(stazione-posata nessun-telaio stazione-aperta premuto telaio-tolto)

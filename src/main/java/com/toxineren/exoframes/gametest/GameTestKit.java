@@ -812,7 +812,9 @@ final class GameTestKit {
      * gioco base lancia, e su NeoForge il pacchetto dell'apertura con i dati extra, che non e' del gioco base, si
      * rifiuta verso una connessione senza canali negoziati come quella del giocatore finto. Senza sincronizzatore il
      * menu lavora sul server come quello vero (pulsanti, {@code stillValid}, {@code broadcastChanges}, chiusura) e non
-     * manda pacchetti; che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a1_shots.sh).
+     * manda pacchetti di slot ne' di dati del menu; la vista del telaio parte da {@code broadcastChanges} con
+     * {@code Net}, che su NeoForge 1.21.1 salta il giocatore finto, e il menu conta i suoi invii
+     * ({@code viewsSent}). Che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a1_shots.sh).
      */
     static StationMenu openStation(GameTestHelper helper, ServerPlayer player, BlockPos relativeMain) {
         ServerLevel level = helper.getLevel();
