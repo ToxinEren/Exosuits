@@ -166,12 +166,15 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     /**
      * Il clic sinistro sul pulsante di prova manda il suo numero al server e basta; nel ritaglio dell'anteprima
      * comincia a girare la tuta. Il resto va al gioco base, che sul pannello del telaio non trova slot e non fa nulla.
+     * Una pressione sinistra fuori dal ritaglio smette di girare la tuta: se il rilascio di una rotazione si e' perso,
+     * la rotazione non resta armata, e il rilascio di questa pressione va al gioco base.
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             double x = mouseX - leftPos;
             double y = mouseY - topPos;
+            rotating = false;
             if (StationLayout.TEST_BUTTON.contains(x, y)) {
                 minecraft.gameMode.handleInventoryButtonClick(menu.containerId, StationMenu.TEST_BUTTON);
                 return true;
@@ -202,11 +205,18 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
-    /** Lasciare il tasto sinistro smette di girare la tuta; il rilascio va comunque al gioco base. */
+    /**
+     * Il rilascio del tasto sinistro che chiude una rotazione smette di girare la tuta e non va al gioco base: nel
+     * gioco base e' il rilascio a posare l'oggetto preso sul cursore, quindi lascerebbe cadere la pila (rilascio fuori
+     * dalla schermata) o la poserebbe nello slot sotto il mouse. La pressione che ha cominciato la rotazione non era
+     * andata al gioco base ({@link #mouseClicked}), che non ha nulla in sospeso da chiudere. Ogni altro rilascio va al
+     * gioco base.
+     */
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == InputConstants.MOUSE_BUTTON_LEFT) {
+        if (button == InputConstants.MOUSE_BUTTON_LEFT && rotating) {
             rotating = false;
+            return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
     }
