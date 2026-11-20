@@ -103,9 +103,10 @@
 # telaio e dei suggerimenti, che si guardano negli scatti e non si misurano; pezzi danneggiati, critici, rotti o
 # mancanti (il comando di debug monta sei pezzi intatti); lo spostamento rapido nell'altro verso e con la barra piena
 # (li prova il test in mondo quickMoveSwapsInventoryAndHotbar); la schermata con altre scale dell'interfaccia e altre
-# misure della finestra; una ricarica delle risorse (F3+T) con la schermata aperta; un'esplosione vera; i suoni (il
-# client non ha audio); un secondo giocatore; la morte e l'uscita dal server con la schermata aperta e una pila sul
-# cursore. Sono nella checklist per il PC della parte, docs/test-in-gioco/m4a1-banco.md.
+# misure della finestra; una ricarica delle risorse (F3+T) fra due aperture della schermata (con una schermata aperta
+# il gioco non prende F3+T); un'esplosione vera; i suoni (il client non ha audio); un secondo giocatore; la morte e
+# l'uscita dal server con la schermata aperta e una pila sul cursore. Sono nella checklist per il PC della parte,
+# docs/test-in-gioco/m4a1-banco.md.
 #
 # Dura poco piu' di due minuti a cache calde: misurati 152 s su 1.20.1-forge, 132 s su 1.20.1-fabric, 135 s su
 # 1.21.1-fabric e 137 s su 1.21.1-neoforge, di cui 144, 125, 128 e 130 s l'esecuzione di client_shot.sh. Dentro la
