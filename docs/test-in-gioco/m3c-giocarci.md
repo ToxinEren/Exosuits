@@ -1,6 +1,6 @@
 # Checklist in gioco: milestone 3, parte 3c (giocarci)
 
-Per Jarvis, sul PC Windows di Luigi, con i quattro jar di produzione di dopo l'unione della parte 3c-2 (quelli del branch `m3c-giocarci`, o di `main` dopo l'unione). Non serve aver seguito il lavoro: qui sotto c'è tutto ciò che occorre sapere. I passi sono numerati; accanto a ciascuno c'è ciò che deve succedere. Annota l'esito di ogni passo (OK / non OK, con uno screenshot quando non è OK). Dove un passo dice "annota" o "riporta" senza un risultato atteso, il risultato non è noto in anticipo: scrivi che cosa succede.
+Per Jarvis, sul PC Windows del proprietario, con i quattro jar di produzione di dopo l'unione della parte 3c-2 (quelli del branch `m3c-giocarci`, o di `main` dopo l'unione). Non serve aver seguito il lavoro: qui sotto c'è tutto ciò che occorre sapere. I passi sono numerati; accanto a ciascuno c'è ciò che deve succedere. Annota l'esito di ogni passo (OK / non OK, con uno screenshot quando non è OK). Dove un passo dice "annota" o "riporta" senza un risultato atteso, il risultato non è noto in anticipo: scrivi che cosa succede.
 
 Questa è la checklist completa della parte 3c. Nasce da quella della parte 3c-1 (`m3c1-consumare.md`), rinominata e completata con ciò che aggiunge la parte 3c-2: le ricette, il caricatore di celle e una partita intera in sopravvivenza. I passi da 1 a 75 hanno lo stesso numero e lo stesso testo di prima (è cambiato solo, nel passo 1, da dove si prendono i jar); le sezioni da 16 a 20 e i passi da 76 in poi sono nuovi. Le sezioni 1-15 usano ancora gli oggetti della scheda creativa e i comandi; dalla 16 si fabbrica e si ricarica.
 
@@ -163,7 +163,7 @@ Ripeti le sezioni 1-12 per ognuna delle quattro varianti, ciascuna nella propria
 - [ ] **11.** In alto a sinistra la riga in **verde**, con l'ombra, appena sotto la carica piena: circa "Energia 9999 / 10000 RE (99 %)" (in sopravvivenza la carica scende di 1 RE ogni mezzo secondo, quindi "10000 / 10000 RE (100 %)" resta al più mezzo secondo; la percentuale è arrotondata per difetto), e nessuna seconda riga (i pezzi sono nuovi). Il numero continua a scendere (consumo da fermo, 2 RE al secondo). Riferimento: `m3c-screenshot/1.20.1-forge-riga-energia.png` (lì in inglese e a metà carica). Sopra la salute la barra dell'armatura mostra i punti dei pezzi montati.
 - [ ] **12.** Esci con V (tieni premuto un secondo): la riga dell'energia sparisce. Rientra: la riga dei tasti in chat **non** ricompare. Esci di nuovo con V, poi esci dal mondo (Esc → "Salva ed esci dal mondo", in inglese Save and Quit to Title), rientra nel mondo e rientra nel telaio: la riga dei tasti ricompare una volta (è una nuova sessione).
 - [ ] **13.** Dentro la tuta premi **F1**: la riga dell'energia sparisce con il resto dell'interfaccia; F1 di nuovo: torna. Premi **F3**: su 1.21.1 la schermata di debug copre la riga; su 1.20.1 la riga può restare visibile, disegnata sopra le prime righe di testo di F3. Nessuno dei due è un errore. F3 di nuovo: la riga torna come prima. Apri l'inventario (E): la riga resta visibile in alto a sinistra.
-- [ ] **14.** **Posizione della riga.** Gioca un paio di minuti dentro la tuta, camminando e guardandoti attorno, anche con la chat aperta (T). Annota per Luigi se la riga in alto a sinistra è comoda, se copre qualcosa (per esempio la chat o i messaggi di altre mod) e dove la vorrebbe, se altrove: la posizione si può cambiare.
+- [ ] **14.** **Posizione della riga.** Gioca un paio di minuti dentro la tuta, camminando e guardandoti attorno, anche con la chat aperta (T). Annota per il proprietario se la riga in alto a sinistra è comoda, se copre qualcosa (per esempio la chat o i messaggi di altre mod) e dove la vorrebbe, se altrove: la posizione si può cambiare.
 
 ## 3. Consumi e `/exoframe debug energy`
 
@@ -378,13 +378,13 @@ Per ognuna delle quattro varianti:
 - [ ] le annotazioni del passo 107 (la partita completa) per intero;
 - [ ] ogni riga `ERROR` o `WARN` del log (client e server) che nomina il mod, GeckoLib o un mixin, con qualche riga di contesto; per i passi 68 e 71 la riga `WARN` per intero; una riga `Charger tick failed` per intero, con la traccia che la segue;
 - [ ] versioni realmente usate (loader, Java, dipendenze) se diverse dalla tabella di `m1-setup.md`, e i passi saltati con il motivo;
-- [ ] le risposte di Luigi alle domande qui sotto.
+- [ ] le risposte del proprietario alle domande qui sotto.
 
 Riepilogo finale: una tabella con le quattro varianti per righe e le sezioni 1-20 per colonne, con OK o non OK, più i dettagli dei problemi; "n.d." per le sezioni non fatte su quella variante.
 
-## 22. Domande per Luigi
+## 22. Domande per il proprietario
 
-Nessuna blocca il lavoro: per ognuna c'è scritto cosa fa la mod oggi, e se Luigi non risponde resta così. Le domande 2-7 sono anche nel design (`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`, §8, domande 4-9); le domande 9, 10 e 11 sono lì le domande 3, 10 e 11; la domanda 13 è nata dalla revisione finale della parte 3c-2 e nel design non c'è ancora.
+Nessuna blocca il lavoro: per ognuna c'è scritto cosa fa la mod oggi, e se il proprietario non risponde resta così. Le domande 2-7 sono anche nel design (`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`, §8, domande 4-9); le domande 9, 10 e 11 sono lì le domande 3, 10 e 11; la domanda 13 è nata dalla revisione finale della parte 3c-2 e nel design non c'è ancora.
 
 1. **La riga dell'energia** (passo 14): oggi in alto a sinistra, testo con ombra, verde, gialla o rossa, con sotto il pezzo messo peggio. È comoda lì? Si può spostare (per esempio in basso a sinistra, sopra la barra degli oggetti, o accanto al mirino) o cambiare nei colori.
 2. **Il costo del salto, 15 RE**: correndo e saltando una cella si svuota in meno di quattro minuti. Va bene, o va abbassato?

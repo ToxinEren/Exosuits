@@ -1,6 +1,6 @@
 # Checklist in gioco: milestone 2, seconda metà (strato di compatibilità)
 
-Per Jarvis, sul PC Windows di Luigi, dopo la checklist della milestone 1 (`m1-setup.md`) e con gli stessi quattro jar. Questa milestone non aggiunge nulla di visibile al giocatore: aggiunge il materiale d'armatura segnaposto, il canale di rete per lo stato del telaio e il suo salvataggio sul server. Le prove servono a confermare che questi pezzi non rompono l'avvio, l'ingresso in un mondo e l'uscita.
+Per Jarvis, sul PC Windows del proprietario, dopo la checklist della milestone 1 (`m1-setup.md`) e con gli stessi quattro jar. Questa milestone non aggiunge nulla di visibile al giocatore: aggiunge il materiale d'armatura segnaposto, il canale di rete per lo stato del telaio e il suo salvataggio sul server. Le prove servono a confermare che questi pezzi non rompono l'avvio, l'ingresso in un mondo e l'uscita.
 
 ## Già verificato nella sessione cloud (13 novembre 2026)
 

@@ -1,5 +1,5 @@
-"""Aiuti per la parte bassa delle gambe, misurata sull'immagine di riferimento di Luigi: le misure sono date come
-distanza |x| dal piano di mezzo; ax() le porta alla x della gamba destra, leg() aggiunge la scatola destra e la
+"""Aiuti per la parte bassa delle gambe, misurata sull'immagine di riferimento del proprietario: le misure sono date
+come distanza |x| dal piano di mezzo; ax() le porta alla x della gamba destra, leg() aggiunge la scatola destra e la
 sinistra speculare. Il nome comincia con '_': designs.load_all non lo carica come design."""
 
 

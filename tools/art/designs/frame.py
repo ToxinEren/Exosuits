@@ -1,11 +1,11 @@
 """Telaio nudo: lo scheletro della tuta, sempre visibile, anche sotto i pezzi, ed e' cio' che sta in piedi nel mondo
-senza pezzi montati. E' il telaio della quarta passata della prova d'arte, approvata da Luigi il 13 novembre 2026:
-scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe, con petto a botte, testa incassata,
-spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli attuatori,
-pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette, borchie).
-La parte bassa e laterale della schiena (trave lombare con feritoie, puntoni verso il giogo) e' della quinta passata;
-la cella e il suo alloggiamento no. Dal ginocchio in giu' la gamba riproduce l'immagine di riferimento di Luigi (sesta
-passata, sua decisione esplicita: vale solo per quella parte).
+senza pezzi montati. E' il telaio della quarta passata della prova d'arte, approvata dal proprietario il 13 novembre
+2026: scheletro massiccio, piu' grande del pilota alle braccia, al petto e alle gambe, con petto a botte, testa
+incassata, spalle enormi, vita stretta, gambe e stivali grossi. Solo parti di macchina (travi, alloggiamenti degli
+attuatori, pistoni, mozzi); le piastre sono i pezzi (designs/scrap.py), qui ci sono i punti dove si montano (alette,
+borchie). La parte bassa e laterale della schiena (trave lombare con feritoie, puntoni verso il giogo) e' della quinta
+passata; la cella e il suo alloggiamento no. Dal ginocchio in giu' la gamba riproduce l'immagine di riferimento del
+proprietario (sesta passata, sua decisione esplicita: vale solo per quella parte).
 
 Il renderer scala la tuta di exo.SUIT_SCALE (1.65) attorno ai piedi e disegna il pilota a grandezza normale sollevato
 di exo.PILOT_LIFT_PX (24(S-1) = 15.6 px), senza gambe: nelle coordinate del modello il pilota e' un giocatore scalato
@@ -13,8 +13,8 @@ di 1/S attorno a (0,24,0). A S = 1.65: testa y 24..28.85 (x, z +-2.42); busto y 
 braccia x +-2.42..4.85, y 16.73..24, mani in fondo a y 16.73, sulle impugnature dentro le gabbie del braccio;
 fuori, sul lato esterno, il braccio meccanico con la mano della tuta (fondo a y 6.75). Le gambe del pilota (x +-2.42,
 y 9.45..16.73) sono nascoste nelle prese delle cosce e nel sedile, che sale fino a y 16.5. Testa, sedile e
-impugnature sono dimensionati per S = 1.65 (con S = 1.4 la tuta era alta 2.5 blocchi; Luigi ne vuole almeno 3): con
-un'altra scala vanno ricontrollati. La testa arriva a y 31.25: il telaio nudo e' alto 3.02 blocchi.
+impugnature sono dimensionati per S = 1.65 (con S = 1.4 la tuta era alta 2.5 blocchi; il proprietario ne vuole
+almeno 3): con un'altra scala vanno ricontrollati. La testa arriva a y 31.25: il telaio nudo e' alto 3.02 blocchi.
 Gli attuatori delle spalle stanno nel busto (frameBody), non nelle braccia: per questo gli spallacci sono nel pezzo
 Torso. Ingombro del telaio nudo: x +-12.75, y 0..31.25, z -8..10 (exo.FRAME_MIN/MAX). Fronte verso -z, lato destro a
 x negativa; sym() scrive il lato destro e aggiunge il sinistro. Nessuna scatola ruotata.
@@ -29,9 +29,9 @@ ORDER = 0
 HEAD, BODY, RARM, RLEG = 'frameHead', 'frameBody', 'frameRightArm', 'frameRightLeg'
 
 
-# parte bassa della gamba destra (il sinistro e' speculare), misurata sull'immagine di riferimento di Luigi riportata
-# ai pixel del modello: (|x| minimo, |x| massimo, y minimo, y massimo). Piede del telaio (anima d'acciaio, il guscio di
-# bronzo e' nei pezzi): strato basso diviso attorno alla porta davanti
+# parte bassa della gamba destra (il sinistro e' speculare), misurata sull'immagine di riferimento del proprietario
+# riportata ai pixel del modello: (|x| minimo, |x| massimo, y minimo, y massimo). Piede del telaio (anima d'acciaio, il
+# guscio di bronzo e' nei pezzi): strato basso diviso attorno alla porta davanti
 FOOT_CORE = (
     ('foot_0_out', 4.25, 4.5, 0, 1), ('foot_0_in', 2.25, 2.75, 0, 1),
     ('foot_1', 2.25, 4.5, 1, 1.5), ('foot_2', 2.25, 4.25, 1.5, 1.75),
@@ -197,9 +197,9 @@ def legs(m):
     # ginocchio (dietro lo scudo dello stinco dei pezzi)
     m.sym(RLEG, 'knee_block', (-5.25, 4.5, -2.5), (-0.5, 7, 2.5), 'gun')
     m.sym(RLEG, 'knee_cap', (-4.25, 4.75, -3.75), (-1.25, 7.25, -2.5), 'brass', hub=True)
-    # Dal ginocchio in giu' la gamba riproduce quella dell'immagine di riferimento di Luigi (sua decisione, Task 14),
-    # misurata sul riferimento (|x| = distanza dal piano di mezzo). Qui l'anima d'acciaio; quello che nel riferimento ha
-    # il colore dell'armatura (scudo, puntone, polpaccio, piede, tallone) e' nei pezzi delle gambe.
+    # Dal ginocchio in giu' la gamba riproduce quella dell'immagine di riferimento del proprietario (sua decisione,
+    # Task 14), misurata sul riferimento (|x| = distanza dal piano di mezzo). Qui l'anima d'acciaio; quello che nel
+    # riferimento ha il colore dell'armatura (scudo, puntone, polpaccio, piede, tallone) e' nei pezzi delle gambe.
     leg(m, RLEG, 'shin_outer', 3.5, 4.75, 2.5, 4.5, -1.5, 1.5, 'gun')
     leg(m, RLEG, 'shin_inner', 0.5, 1.75, 2.5, 4.5, -1.75, 1.75, 'gun')
     leg(m, RLEG, 'shin_ram', 2, 3.25, 2.5, 4.75, -3, -1.5, 'steel')

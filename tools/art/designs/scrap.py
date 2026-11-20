@@ -1,9 +1,9 @@
 """Livello Rottame: i sei pezzi, armatura pesante chiusa sul telaio (designs/frame.py). Quarta passata della prova
-d'arte, approvata da Luigi il 13 novembre 2026. Petto a botte a tre lastre con chiglia, vita a segmenti, falde basse
-sui fianchi, spallacci enormi a tre strati con feritoie a lamelle, testa piccola incassata nel collare, avambracci e
-stivali pesanti. Lamiere di recupero: toppe, bulloni, ammaccature dipinte. La schiena
+d'arte, approvata dal proprietario il 13 novembre 2026. Petto a botte a tre lastre con chiglia, vita a segmenti, falde
+basse sui fianchi, spallacci enormi a tre strati con feritoie a lamelle, testa piccola incassata nel collare, avambracci
+e stivali pesanti. Lamiere di recupero: toppe, bulloni, ammaccature dipinte. La schiena
 (scapole, feritoie, piastre lombari e dei fianchi) e' della quinta passata; dal ginocchio in giu' le gambe
-riproducono l'immagine di riferimento di Luigi (sesta passata, sua decisione esplicita, solo per quella parte).
+riproducono l'immagine di riferimento del proprietario (sesta passata, sua decisione esplicita, solo per quella parte).
 
 Ogni scatola si dichiara una volta nell'osso modello exo.piece(slot, regione) e il modello la ripete nei quattro
 stati visivi (ossa piece<Slot>_s0..s3_<regione>, stesse scatole, zone diverse dell'atlante); la pittura degli stati
@@ -20,8 +20,9 @@ from exo import piece
 
 ORDER = 10
 
-# Parte bassa delle gambe (gamba destra; la sinistra e' speculare), misurata sull'immagine di riferimento di Luigi
-# riportata ai pixel del modello: (|x| minimo, |x| massimo, y minimo, y massimo); |x| = distanza dal piano di mezzo.
+# Parte bassa delle gambe (gamba destra; la sinistra e' speculare), misurata sull'immagine di riferimento del
+# proprietario riportata ai pixel del modello: (|x| minimo, |x| massimo, y minimo, y massimo);
+# |x| = distanza dal piano di mezzo.
 # Scudo dello stinco, colletto a U, piastra alta esagonale (davanti, a gradini di 0.25 px verso chi guarda)
 SHIELD = ((2.25, 4, 2.25, 2.5), (1.75, 4.5, 2.5, 2.75), (1.5, 4.75, 2.75, 3), (1.25, 5, 3, 3.5), (1, 5, 3.5, 4.25),
           (0.75, 5, 4.25, 5), (0.5, 4.5, 5, 6.25), (0.5, 1.5, 6.25, 6.75))
@@ -160,8 +161,8 @@ def arms(m):
 def legs(m):
     p1 = piece('RightLeg', 'p1')
     m.sym(p1, 'cuisse', (-5.25, 9, -4.75), (-0.5, 11.75, -4), 'paint')
-    # Dal ginocchio in giu' come nell'immagine di riferimento di Luigi (sua decisione, Task 14), sulle misure: davanti
-    # scudo (z -4.5..-3.75), colletto un gradino piu' avanti, piastra alta ancora un gradino piu' avanti
+    # Dal ginocchio in giu' come nell'immagine di riferimento del proprietario (sua decisione, Task 14), sulle misure:
+    # davanti scudo (z -4.5..-3.75), colletto un gradino piu' avanti, piastra alta ancora un gradino piu' avanti
     for k, (a0, a1, y0, y1) in enumerate(SHIELD):
         leg_box(m, p1, f'shin_shield_{k}', a0, a1, y0, y1, -4.5, -3.75)
     leg_box(m, p1, 'collar_bottom', 2, 3.75, 4.75, 5.25, -4.75, -4.5, tone=DARK,

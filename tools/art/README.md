@@ -171,7 +171,7 @@ def build(m):
   lo stesso disegno con `Model(fine=False)` e verifica che ogni faccia fine sia esattamente quella faccia dipinta alla
   densita' normale e ingrandita, linee a parte, maschera luminosa compresa. Nell'atlante quelle facce occupano 16
   volte i texel: si usa solo sulle scatole che portano feritoie, tacche o giunture (oggi la parte bassa delle gambe,
-  che riproduce l'immagine di riferimento di Luigi per sua decisione). Le misure di quella parte sono date come
+  che riproduce l'immagine di riferimento del proprietario per sua decisione). Le misure di quella parte sono date come
   distanza |x| dal piano di mezzo: `designs/_legs.py` (`ax`, `leg`) le porta alla gamba destra e aggiunge la
   sinistra speculare.
 - Ogni scatola ha un seme suo (dal nome; le copie di stato di un pezzo dal nome dichiarato, quindi lo stesso):

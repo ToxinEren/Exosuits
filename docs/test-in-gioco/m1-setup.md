@@ -1,6 +1,6 @@
 # Checklist di avvio in gioco: milestone 1 (setup)
 
-Per Jarvis, sul PC Windows di Luigi. Obiettivo: verificare che le quattro varianti del mod si avviino (client e server dedicato) e che l'oggetto di prova compaia. Esegui i passi in ordine e spunta le caselle `- [ ]`. Alla fine consegna a Luigi il riepilogo descritto in "Cosa riportare".
+Per Jarvis, sul PC Windows del proprietario. Obiettivo: verificare che le quattro varianti del mod si avviino (client e server dedicato) e che l'oggetto di prova compaia. Esegui i passi in ordine e spunta le caselle `- [ ]`. Alla fine consegna al proprietario il riepilogo descritto in "Cosa riportare".
 
 Contenuto da verificare in ogni variante:
 
@@ -80,7 +80,7 @@ Ripeti la sezione per ognuna delle quattro varianti, ciascuna nella propria ista
 
 ## 4. Cosa riportare
 
-Per ognuna delle quattro varianti riporta a Luigi:
+Per ognuna delle quattro varianti riporta al proprietario:
 
 - [ ] esito (OK / non OK) separato per client e server dedicato;
 - [ ] il percorso del `latest.log` del client e il suo contenuto se c'e' un problema; altrimenti la riga `Redstone Exoframes init (redstone_exoframes)` copiata per intero;

@@ -1,6 +1,6 @@
 # Checklist in gioco: milestone 3, parte 3b (entrare e uscire)
 
-Per Jarvis, sul PC Windows di Luigi, con i quattro jar di produzione di questa parte. Non serve aver seguito il lavoro: qui sotto c'è tutto ciò che occorre sapere. I passi sono numerati; accanto a ciascuno c'è ciò che deve succedere. Annota l'esito di ogni passo (OK / non OK, con uno screenshot quando non è OK).
+Per Jarvis, sul PC Windows del proprietario, con i quattro jar di produzione di questa parte. Non serve aver seguito il lavoro: qui sotto c'è tutto ciò che occorre sapere. I passi sono numerati; accanto a ciascuno c'è ciò che deve succedere. Annota l'esito di ogni passo (OK / non OK, con uno screenshot quando non è OK).
 
 > **Con i jar di dopo l'unione della parte 3c-1** (quelli del branch `m3c-giocarci` o di `main` dopo l'unione) questi passi danno un risultato diverso da quello scritto sotto; i passi restano come sono, e vale quanto segue. (1) Tabella dei messaggi, riga "c'è già una cella": con una seconda cella in mano, il clic su un telaio che ha già una cella non dà più "Quello slot è già occupato": le due celle si scambiano, quella in mano entra nel telaio e quella che c'era arriva nell'inventario; per un pezzo su uno slot occupato (passo 10) il messaggio resta. (2) Tabella dei messaggi e passo 12: entrando senza cella carica il messaggio è "Il telaio ha bisogno di una cella carica (le celle si caricano nel caricatore)" ("The exoframe needs a charged cell (charge cells in a charger)"). (3) Passo 15: la barra dell'armatura sopra la salute non sparisce: mostra i punti dei pezzi montati (qui l'elmo e il braccio). (4) Passo 15: entrando si sente un pistone che si ritrae (non un suono di armatura); i suoni ci sono anche piazzando, montando, smontando e uscendo, quindi la riga "Nessun suono in questa parte" non vale più. (5) Passo 30: il risultato atteso c'è: con la tuta si viene fatti scendere subito dal carrello e dalla barca, e il letto rifiuta il clic, ogni volta con "Esci prima dall'esoscheletro" ("Leave the exoframe first") sulla barra delle azioni. In più, dentro la tuta lo schermo mostra in alto a sinistra la riga dell'energia ("Energia N / 10000 RE (P %)", con sotto il pezzo messo peggio se uno è critico o rotto), e al primo ingresso di ogni sessione in chat compare la riga dei tasti "Tieni premuto V per uscire dal telaio, R per cambiare cella"; negli screenshot di riferimento queste due righe non ci sono, e non è un errore. La cella si scarica mentre si è dentro (sotto il 10 % niente scatto): `/exoframe debug energy 10000` la ricarica. Il comportamento della parte 3c si prova con la checklist completa `docs/test-in-gioco/m3c-giocarci.md`: i passi 1-75 sono quelli della parte 3c-1, dal 76 ci sono le ricette e il caricatore della parte 3c-2.
 
@@ -136,13 +136,13 @@ Per ognuna delle quattro varianti:
 - [ ] ogni riga `ERROR` o `WARN` del log (client e server) che nomina il mod, GeckoLib o un mixin, con qualche riga di contesto;
 - [ ] se un telaio non è dove te lo aspettavi, le righe `Frame <id> ...` del log del server che lo nominano (dicono dove è andato e perché);
 - [ ] versioni realmente usate (loader, Java, dipendenze) se diverse dalla tabella di `m1-setup.md`, e i passi saltati con il motivo;
-- [ ] le risposte di Luigi alle domande qui sotto.
+- [ ] le risposte del proprietario alle domande qui sotto.
 
 Riepilogo finale: una tabella con le quattro varianti per righe e le sezioni 1-5 per colonne, con OK o non OK, più i dettagli dei problemi; nella colonna della sezione 5 scrivi "n.d." per le due varianti su cui non l'hai fatta.
 
-## 7. Domande per Luigi
+## 7. Domande per il proprietario
 
-Nessuna blocca il lavoro: per ognuna c'è scritto cosa fa la mod oggi, e se Luigi non risponde resta così. Le stesse domande sono nel design (`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`): la 4 in §8 (domanda 2), tutte le altre in §11.
+Nessuna blocca il lavoro: per ognuna c'è scritto cosa fa la mod oggi, e se il proprietario non risponde resta così. Le stesse domande sono nel design (`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`): la 4 in §8 (domanda 2), tutte le altre in §11.
 
 1. **Di chi è l'armatura custodita in un telaio sbloccato** (passo 38). L'armatura custodita non ricorda di chi è. Oggi un amico non può entrare in un telaio sbloccato finché c'è dentro l'armatura del proprietario, ma può tirarla fuori lui stesso, accovacciato, e se la ritrova nell'inventario; al contrario, se l'amico muore dentro un telaio sbloccato, la sua armatura resta nel telaio e il proprietario, entrando e uscendo, se la ritrova nei suoi slot. Va bene così, o l'armatura deve restare chiusa nel telaio finché non torna chi l'ha lasciata? (Servirebbe ricordare di chi è ogni pezzo d'armatura custodito.)
 2. **L'ombra.** Sotto la tuta indossata e sotto il telaio piazzato l'ombra è quella di un giocatore normale, piccola e in gran parte coperta dai piedi della tuta. Ne vuoi una più grande per tutte e due?

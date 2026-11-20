@@ -10,10 +10,10 @@ import com.toxineren.exoframes.frame.SuitSize;
  */
 public final class SuitScale {
     /**
-     * Scala della tuta attorno ai piedi: 1,65 perche' la tuta sia alta almeno 3 blocchi (richiesta di Luigi del 13
-     * novembre, prima era 1,4); fino a 1,66 il box in piedi del giocatore (1,8 S blocchi) passa sotto un soffitto a 3.
-     * E' la scala verticale della grandezza reale ({@link SuitSize#HEIGHT_SCALE}, design par. 4.8): una costante sola,
-     * cosi' ingombro e disegno non si separano.
+     * Scala della tuta attorno ai piedi: 1,65 perche' la tuta sia alta almeno 3 blocchi (richiesta del proprietario
+     * del 13 novembre, prima era 1,4); fino a 1,66 il box in piedi del giocatore (1,8 S blocchi) passa sotto un
+     * soffitto a 3. E' la scala verticale della grandezza reale ({@link SuitSize#HEIGHT_SCALE}, design par. 4.8): una
+     * costante sola, cosi' ingombro e disegno non si separano.
      */
     public static final float S = SuitSize.HEIGHT_SCALE;
 

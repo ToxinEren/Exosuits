@@ -60,7 +60,7 @@ class SuitScaleTest {
     }
 
     /**
-     * Richiesta di Luigi: la tuta e' alta almeno 3 blocchi, gia' il telaio nudo (ossa frame* della geometria
+     * Richiesta del proprietario: la tuta e' alta almeno 3 blocchi, gia' il telaio nudo (ossa frame* della geometria
      * generata). Nel gioco si disegna scalata di S attorno ai piedi, e un blocco vale 16 / 0,9375 pixel del modello.
      */
     @Test
