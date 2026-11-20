@@ -613,3 +613,24 @@ Le anteprime (MOCK-UP, in `anteprime/2026-11-19-m4/`; elenco in testa) sono dise
 - GUI della stazione, 316x232: ci sta in 320x240 (margini 2 e 4), in 427x240 (55 e 4), in 480x270 (82 e 19); i cinquantasei widget non si sovrappongono e stanno tutti dentro la schermata.
 
 Esito del controllo: tutto libero. Le immagini mostrano anche ciò che il controllo non misura: la riga della chat subito sopra il gruppo (`hud-destra-1-energia-piena.png`), la sagoma con un pezzo rotto, uno critico e uno non montato (`hud-destra-3-pezzo-rotto.png`), la sola barra senza elmo (`hud-destra-4-senza-elmo.png`), lo scambio di lato con la mano sinistra (`hud-sinistra-2-energia-bassa-pezzo-danneggiato.png`), ogni immagine con un ingrandimento x2 del gruppo; la schermata con il suggerimento di una tinta (`gui-stazione.png`) e alla grandezza minima (`gui-stazione-640x480.png`); la stazione con il telaio a portata e la zona dei 2 blocchi (`blocco-stazione.png`). Sono anteprime di disposizione e di stile, non la grafica: quella la decide il proprietario sugli script della parte 4d (D8).
+
+## 13. Riporti della parte 4a-1
+
+La 4a-1 è su `main` (fino a `f6da189`); le carte della sua esecuzione sono sul ramo `archivio/m3c-fascicoli`, in `docs/archivio/m4a1-esecuzione/`. Ciò che resta per le parti dopo, dalle revisioni dei task e dalla revisione finale:
+
+- **Per la 4a-2:**
+  - **Il lucchetto.** La regola di chi può bloccare e sbloccare oggi sta in due copie: `FramePermissions.canToggleLock` (con `player.hasPermissions(2)`) e il comando in `ExoframeCommand` (con `source.hasPermission(2)`). Quando arriva il pulsante del lucchetto, il comando chiama `canToggleLock` (tenendo esplicita la differenza della sorgente), oppure i due Javadoc si nominano a vicenda.
+  - **La prova misurata di `station_view`.** Nella 4a-1 il pacchetto che arriva a schermata aperta ha solo la prova di fumo `/exoframe unlock`; con il lucchetto c'è un cambio che si vede, e la sequenza lo misura.
+  - **Gli spazi vuoti del pannello.** L'icona tenue del tipo di pezzo di §5.3 arriva qui: nella 4a-1 c'è il fondo scuro con il bordo grigio.
+  - **L'intestazione del pannello centrale è stretta.**
+    - "Braccio sinistro: vuoto" occupa 114 pixel in un campo di 110.
+    - Con `tiers.maxDurability` da 10 000 in su, i numeri della durata toccano la parola della condizione; lo stesso vale per la cella con un `energy.cellCapacity` molto grande.
+  - **`StationScreen` è già di 443 righe.** Con i widget della 4a-2 il disegno del pannello del telaio e dell'intestazione va in classi sue.
+  - **I gesti del mouse.**
+    - Ogni widget che segue un trascinamento usa la distanza dal punto premuto, come l'anteprima: su 1.21.1 `mouseDragged` arriva sommato per fotogramma.
+    - Il rilascio che chiude un gesto della schermata non arriva al gioco base, che altrimenti getterebbe o poserebbe la pila sul cursore.
+  - **Il pulsante di prova 102 se ne va** quando il 102 ha la sua azione. Il controllo `pulsante` di `m4a1_shots.sh` diventa quello di un pulsante vero, per esempio la scelta 0-7.
+- **Per la 4c:** il piano (`docs/superpowers/plans/2026-11-20-m4c-hud.md`) segue i valori provvisori delle domande 8-10. La sua decisione 1 ("Senza cella" sulla riga della barra vuota, perché "Nessuna cella" non entra nella riga) aspetta la conferma del proprietario prima del Task 1.
+- **Limiti accettati della 4a-1** (in `docs/compat.md` e nel Javadoc di `StationBlock`):
+  - su Forge 1.20.1, un piccone che si rompe proprio sul colpo che rompe la metà laterale fa perdere la stazione;
+  - su NeoForge, la regola della rottura usa `hasCorrectToolForDrops` a un argomento, che non manda `PlayerEvent.HarvestCheck`.
