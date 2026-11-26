@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Aiuti comuni alle sequenze del client che controllano gli scatti con arm_measure.sh (m3d_shots.sh, m4a1_shots.sh):
-# trasformano le righe delle misure in controlli "ok" o "KO". Si carica con source dalla sequenza, non si esegue.
+# Aiuti comuni alle sequenze del client che controllano gli scatti con arm_measure.sh (m3d_shots.sh, m4a1_shots.sh,
+# m4c_shots.sh): trasformano le righe delle misure in controlli "ok" o "KO". Si carica con source dalla sequenza, non
+# si esegue.
 #
 # Prima di usare take_measure il chiamante imposta measure, il percorso di arm_measure.sh. Caricare il file svuota
 # l'elenco failed (i controlli falliti, per nome, che verdict riempie) e definisce:

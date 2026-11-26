@@ -26,9 +26,9 @@
 #                         (senza gradino resta a Y -60 contro lo scalino, a piu' di 3,9 da quel punto)
 #   7. corsa              Ctrl+W 2 s a 999 RE (sotto il 10 %, LOW): niente scatto, fra 6 e 8,2 blocchi; poi a 5 000 RE
 #                         lo scatto c'e': piu' di 8,6 blocchi (le soglie del Task 23)
-#   8. riga dell'energia  carica letta prima e dopo 5 s di cammino (/exoframe debug energy): dopo < prima; scatti
-#                         riga-energia (verde, numero sotto 5 000), riga-energia-bassa (500 RE, gialla, sotto il 5 %),
-#                         riga-energia-esaurita (0 RE, rossa, 0 %); poi di nuovo 5 000 RE
+#   8. HUD dell'energia   carica letta prima e dopo 5 s di cammino (/exoframe debug energy): dopo < prima; scatti
+#                         hud-energia (verde, percentuale sotto il 50 %), hud-energia-bassa (500 RE, 5 %: rosso, sotto
+#                         il 10 %), hud-energia-esaurita (0 RE, grigio, 0 %); poi di nuovo 5 000 RE
 #   9. barre              give di una cella da 5 000 RE e di un elmo Rottame a 90/180, inventario aperto: scatto
 #                         barre-inventario (cella con la barra rossa a meta', elmo con la barra di durata a meta')
 #  10. cambio cella       carica a 1 000 RE, R tenuto 3 s (scatto cambio-cella-tenuto a 1 s: l'avanzamento sulla barra
@@ -36,16 +36,18 @@
 #                         fermi) e nell'inventario una cella sola (la vecchia al posto della nuova); scatto
 #                         cambio-cella-fatto
 #
-# La riga dell'energia sta in alto a sinistra (Task 22). Alla fine il giocatore torna in 0,5 -60 -5,5 per i tre scatti
-# di client_shot.sh. Gli avvisi "moved too quickly" del server dopo un tp sono un artefatto noto della ricognizione;
-# "moved wrongly" non deve comparire in server.log: se compare (client e server non d'accordo sul movimento della
-# tuta, per esempio in acqua) lo script scrive una riga ERRORE ed esce con 1, anche se client_shot.sh e' uscito con 0
-# (la riga e' del gioco e non nomina la mod, quindi check_log.py non la vede). Dura circa due minuti a cache calde
-# (misurati 116-127 s sulle quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA
-# obbligatoria). Istruzioni in tools/client/README.md.
+# L'HUD sta in basso, nell'angolo opposto alla mano principale (parte 4c). Alla fine il giocatore torna in 0,5 -60 -5,5
+# per i tre scatti di client_shot.sh. Gli avvisi "moved too quickly" del server dopo un tp sono un artefatto noto della
+# ricognizione; "moved wrongly" non deve comparire in server.log: se compare (client e server non d'accordo sul
+# movimento della tuta, per esempio in acqua) lo script scrive una riga ERRORE ed esce con 1, anche se client_shot.sh e'
+# uscito con 0 (la riga e' del gioco e non nomina la mod, quindi check_log.py non la vede). Dura circa due minuti a
+# cache calde (misurati 116-127 s sulle quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh
+# (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
+# E con le preferenze del client predefinite: un EXO_SHOT_CLIENT_PREFS ereditato potrebbe nascondere l'HUD degli scatti.
+unset EXO_SHOT_CLIENT_PREFS
 
 here=$(cd "$(dirname "$0")" && pwd)
 
@@ -99,11 +101,11 @@ steps=(
     "$(at 0.5 -60 -5.5 8.2)" "$(beyond 0.5 -60 -5.5 6)"
     "$(set_energy 5000)" "tp $u 0.5 -60 -5.5 180 0" "@attendi 1" "@tieni ctrl+w 2" "$P"
     "$(beyond 0.5 -60 -5.5 8.6)"
-    # 8. la riga dell'energia: il numero cala camminando; poi bassa ed esaurita
+    # 8. l'HUD dell'energia: la carica cala camminando; poi bassa ed esaurita
     "$(energy prima)" "tp $u 0.5 -60 -5.5 180 0" "@attendi 1" "@tieni w 5" "$(energy dopo)"
-    "execute if score #dopo exo_shot < #prima exo_shot" "@scatto riga-energia"
-    "$(set_energy 500)" "@attendi 1" "@scatto riga-energia-bassa"
-    "$(set_energy 0)" "@attendi 1" "@scatto riga-energia-esaurita"
+    "execute if score #dopo exo_shot < #prima exo_shot" "@scatto hud-energia"
+    "$(set_energy 500)" "@attendi 1" "@scatto hud-energia-bassa"
+    "$(set_energy 0)" "@attendi 1" "@scatto hud-energia-esaurita"
     "$(set_energy 5000)"
     # 9. barre della cella e del pezzo nell'inventario
     "give $u $cell" "give $u $piece" "@attendi 1" "@tieni e 0.2" "@attendi 1" "@scatto barre-inventario"

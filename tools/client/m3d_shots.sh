@@ -8,6 +8,12 @@
 # gioco non disegna la mano). I pezzi della tuta sono dipinti di magenta (FF00FF), un colore che nient'altro sullo
 # schermo ha: il magenta dice dove sono i pezzi. Da invisibile il gioco non disegna nessun braccio: lo scatto "senza
 # braccio", con lo stesso mondo e la stessa interfaccia, e' quello fatto con l'effetto di invisibilita' (senza icona).
+# Con la tuta lo schermo ha anche l'HUD della tuta (design M4 par. 5.12), nell'angolo in basso opposto alla mano
+# principale, visibile in tutti gli scatti (la sequenza non preme H): e' uguale nei due scatti di ogni coppia misurata,
+# salvo braccio-nudo (il telaio senza elmo: la sola barra) contro tuta-senza (l'HUD intero, con la sagoma), e per
+# questo il telaio nudo ha il suo scatto senza braccio, nudo-senza, con lo stesso HUD di braccio-nudo. Il criterio (b)
+# guarda il rettangolo dell'HUD della mano dello scatto (hud= di arm_measure.sh): il braccio non ci entra mai, per
+# costruzione, perche' l'HUD sta nell'angolo opposto alla mano principale.
 #
 # Esecuzione A, mano principale a destra, scatti in <cartella>:
 #   1. senza tuta     base-prima (il braccio del gioco) e base-senza (invisibile)
@@ -15,7 +21,8 @@
 #                     avviato, prima di ogni F5 e dell'inventario: il modello del giocatore nasce con il segno young
 #                     acceso e lo spegne solo il disegno in terza persona; se il codice non lo spegnesse da se' il
 #                     braccio verrebbe a meta' misura, e solo qui lo si vedrebbe (controllo criteri, copertura >= 3 %)
-#   3. telaio nudo    braccio-nudo: il braccio d'acciaio del telaio, senza pezzi e senza il braccio del pilota
+#   3. telaio nudo    braccio-nudo: il braccio d'acciaio del telaio, senza pezzi e senza il braccio del pilota; e
+#                     nudo-senza (invisibile)
 #   4. altro oggetto  bastone: un bastone in mano, nessun braccio
 #   5. mappa          mappa: una mappa a due mani, guardando in basso (inclinazione 50: con 15 mappa e mani stanno
 #                     sotto lo schermo, anche nel gioco base); le due braccia della tuta ai lati
@@ -55,7 +62,7 @@
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se le due esecuzioni sono uscite con
 # 0 e ogni controllo e' ok, altrimenti "FAIL <variante>: ..." su stderr (uscita 1). Se l'esecuzione A fallisce la B non
-# parte; i controlli girano solo se ci sono tutti e quindici gli scatti. Con M3D_SOLO_CONTROLLI=1 lo script salta le
+# parte; i controlli girano solo se ci sono tutti e sedici gli scatti. Con M3D_SOLO_CONTROLLI=1 lo script salta le
 # due esecuzioni e rifa' i controlli sugli scatti che la cartella ha gia' (per fissare le soglie senza riavviare il
 # client). Uscita 2: uso sbagliato.
 #
@@ -71,6 +78,9 @@
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
+# E con le preferenze del client predefinite: con un EXO_SHOT_CLIENT_PREFS ereditato che nasconde l'HUD i controlli
+# fallirebbero senza una ragione scritta.
+unset EXO_SHOT_CLIENT_PREFS
 
 here=$(cd "$(dirname "$0")" && pwd)
 measure="$here/arm_measure.sh"
@@ -142,8 +152,9 @@ steps_a=(
     "@attendi $FIRST_WAIT" "@scatto base-prima" "$INV" "@attendi 1" "@scatto base-senza" "$VIS" "@attendi 1"
     # 2. tuta dipinta, prima di ogni F5 e dell'inventario: il segno young (commento di testa)
     "$WEAR" "@attendi 2" "@scatto braccio-rottame" "$INV" "@attendi 1" "@scatto tuta-senza" "$VIS" "@attendi 1"
-    # 3. telaio nudo
+    # 3. telaio nudo, e lo stesso da invisibile: il suo HUD e' la sola barra (commento di testa)
     "execute as $u run exoframe debug wear nudo" "@attendi 2" "@scatto braccio-nudo"
+    "$INV" "@attendi 1" "@scatto nudo-senza" "$VIS" "@attendi 1"
     # 4. un altro oggetto. L'attesa: il bastone sblocca otto ricette, e l'avviso delle ricette, che ha il titolo
     # magenta, dura 5 s piu' l'entrata e l'uscita
     "$WEAR" "item replace entity $u weapon.mainhand with minecraft:stick" "@attendi 8" "@scatto bastone"
@@ -166,8 +177,8 @@ steps_b=(
     "@attendi $FIRST_WAIT" "@scatto base-mancino" "$INV" "@attendi 1" "@scatto base-senza" "$VIS" "@attendi 1"
     "$WEAR" "@attendi 2" "@scatto braccio-mancino" "$INV" "@attendi 1" "@scatto tuta-senza" "$VIS"
 )
-shots_a=(base-prima base-senza braccio-rottame tuta-senza braccio-nudo bastone mappa terza-persona base-dopo
-    telaio-piazzato inventario)
+shots_a=(base-prima base-senza braccio-rottame tuta-senza braccio-nudo nudo-senza bastone mappa terza-persona
+    base-dopo telaio-piazzato inventario)
 shots_b=(base-mancino base-senza braccio-mancino tuta-senza)
 
 # --- le due esecuzioni ----------------------------------------------------------------------------------------------
@@ -203,19 +214,19 @@ a="$out"
 b="$out/mancino"
 # Gli aiuti delle misure (take_measure, val, box, inside, verdict) e l'elenco failed: tools/client/measure_lib.sh.
 source "$here/measure_lib.sh" || exit 2
-# Criteri (b) e (c) sulla riga di una sagoma: nulla in mirino, barra ed energia; copertura fra il 3 % e il 14 %.
+# Criteri (b) e (c) sulla riga di una sagoma: nulla in mirino, barra e HUD; copertura fra il 3 % e il 14 %.
 criteria_bc() {
     local c
     c=$(val "$1" copertura)
     [[ "$c" =~ ^[0-9]+\.[0-9][0-9]$ ]] || return 1
     c=$((10#${c/./}))
-    [ "$(val "$1" mirino)" -eq 0 ] && [ "$(val "$1" barra)" -eq 0 ] && [ "$(val "$1" energia)" -eq 0 ] \
+    [ "$(val "$1" mirino)" -eq 0 ] && [ "$(val "$1" barra)" -eq 0 ] && [ "$(val "$1" hud)" -eq 0 ] \
         && [ "$c" -ge "$COVER_MIN" ] && [ "$c" -le "$COVER_MAX" ]
 }
 # La parte misurabile del criterio (a): il riquadro nel quarto in basso a destra, o a sinistra per il mancino.
 lower_right() { box "$1"; [ "$BL" -gt 0 ] && [ "$BX" -ge 480 ] && [ "$BY" -ge 270 ]; }
 lower_left() { box "$1"; [ "$BL" -gt 0 ] && [ $((BX + BL)) -le 480 ] && [ "$BY" -ge 270 ]; }
-CRITERIA="mirino=0 barra=0 energia=0, copertura fra 3.00 e 14.00"
+CRITERIA="mirino=0 barra=0 hud=0, copertura fra 3.00 e 14.00"
 RIGHT="riquadro con X >= 480 e Y >= 270"
 # Il braccio di base non e' disegnato insieme a quello della tuta: riga di "uguali".
 not_base_arm() {
@@ -229,8 +240,8 @@ checks() {
     m1=$(take_measure sagoma "$a/base-prima.png" "$a/base-senza.png")
     good=1
     [ "$(val "$m1" pixel)" -ge "$CONTROL_MIN_PIXEL" ] && [ "$(val "$m1" mirino)" -eq 0 ] \
-        && [ "$(val "$m1" barra)" -eq 0 ] && [ "$(val "$m1" energia)" -eq 0 ] && lower_right "$m1" && good=0
-    want="pixel >= $CONTROL_MIN_PIXEL, mirino=0 barra=0 energia=0, $RIGHT: se non e' cosi' e' sbagliato lo strumento"
+        && [ "$(val "$m1" barra)" -eq 0 ] && [ "$(val "$m1" hud)" -eq 0 ] && lower_right "$m1" && good=0
+    want="pixel >= $CONTROL_MIN_PIXEL, mirino=0 barra=0 hud=0, $RIGHT: se non e' cosi' e' sbagliato lo strumento"
     verdict controllo "$good" "$m1" "$want o lo scatto senza braccio, non la mod"
 
     m1=$(take_measure magenta "$a/braccio-rottame.png")
@@ -250,7 +261,7 @@ checks() {
     verdict solo-tuta "$good" "$m1" "$SAME: il braccio del gioco non si disegna insieme a quello della tuta"
 
     m1=$(take_measure magenta "$a/braccio-nudo.png")
-    m2=$(take_measure sagoma "$a/braccio-nudo.png" "$a/tuta-senza.png")
+    m2=$(take_measure sagoma "$a/braccio-nudo.png" "$a/nudo-senza.png")
     m3=$(take_measure uguali "$a/base-prima.png" "$a/braccio-nudo.png" "$a/base-senza.png")
     good=1
     [ "$(val "$m1" magenta)" -eq 0 ] && criteria_bc "$m2" && lower_right "$m2" && not_base_arm "$m3" && good=0
@@ -299,7 +310,7 @@ checks() {
     want="riquadro largo >= $PLACED_MIN_W; magenta fra il $PLACED_MAGENTA_MIN_PCT % e il $PLACED_MAGENTA_MAX_PCT %"
     verdict telaio-piazzato "$good" "$m1; $m2, il $pct % di braccio-rottame" "$want di quello di braccio-rottame"
 
-    m1=$(take_measure sagoma "$b/base-mancino.png" "$b/base-senza.png")
+    m1=$(take_measure sagoma "$b/base-mancino.png" "$b/base-senza.png" sinistra)
     box "$m1"
     good=1
     [ "$(val "$m1" pixel)" -ge "$CONTROL_MIN_PIXEL" ] && [ $((BX + BL)) -le 480 ] && good=0
@@ -308,7 +319,7 @@ checks() {
     verdict mancino-controllo "$good" "$m1" "$want"
 
     m1=$(take_measure magenta "$b/braccio-mancino.png" 480x540+480+0)
-    m2=$(take_measure sagoma "$b/braccio-mancino.png" "$b/tuta-senza.png")
+    m2=$(take_measure sagoma "$b/braccio-mancino.png" "$b/tuta-senza.png" sinistra)
     good=1
     [ "$(val "$m1" magenta)" -eq 0 ] && criteria_bc "$m2" && lower_left "$m2" && good=0
     want="magenta=0 nella meta' destra; $CRITERIA, riquadro con X + L <= 480 e Y >= 270"

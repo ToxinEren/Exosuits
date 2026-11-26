@@ -45,23 +45,24 @@ public final class FirstPersonArm {
      * 13: (a) le nocche e le dita del pugno della tuta intere sullo schermo e un tratto di avambraccio in vista, nel
      * quarto in basso a destra; il palmo e l'avambraccio possono uscire dal bordo destro o da quello in basso, come il
      * braccio del gioco base esce dal bordo in basso, e il pollice non serve (a ogni grandezza resta dietro il palmo);
-     * (b) nessun pixel nel mirino, nella barra degli oggetti e nella riga dell'energia; (c) fra il 3 % e il 14 % dello
-     * schermo. Cosi' (a) l'ha decisa chi coordina, dopo aver visto che nessuna grandezza tiene il palmo lontano dal
-     * bordo destro senza passare dietro la barra. <b>1,3 con lo spostamento 4,5 l'ha scelto chi coordina, guardando gli
-     * scatti</b>, fra le grandezze che passano, e non "il K piu' grande". Le misure sono di
-     * {@code tools/client/arm_measure.sh sagoma}, il braccio con i sei pezzi e, fra parentesi, il telaio nudo; il
-     * riquadro e' quello con i pezzi; "bordo da y" e' la prima riga in cui lo scatto differisce da quello senza braccio
-     * nelle colonne x 952-959.
+     * (b) nessun pixel nel mirino, nella barra degli oggetti e nel rettangolo dell'HUD della mano, design M4 §5.12
+     * (nella 3d era la riga dell'energia, in alto a sinistra); (c) fra il 3 % e il 14 % dello schermo. Cosi' (a) l'ha
+     * decisa chi coordina, dopo aver visto che nessuna grandezza tiene il palmo lontano dal bordo destro senza passare
+     * dietro la barra. <b>1,3 con lo spostamento 4,5 l'ha scelto chi coordina, guardando gli scatti</b>, fra le
+     * grandezze che passano, e non "il K piu' grande". Le misure sono di {@code tools/client/arm_measure.sh sagoma},
+     * il braccio con i sei pezzi e, fra parentesi, il telaio nudo; il riquadro e' quello con i pezzi; "bordo da y" e'
+     * la prima riga in cui lo scatto differisce da quello senza braccio nelle colonne x 952-959.
      * <ul>
      * <li>Con il palmo sul centro della mano di base ({@link #SIDE_SHIFT_PX} 0) nessun K passa (b), perche'
      * l'avambraccio finisce dietro la barra degli oggetti: 1,65 copertura 13,26 (11,87), barra 13175 (7965), riquadro
      * 469x237+491+303; 1,3 copertura 9,61 (8,55), barra 8468 (4469), riquadro 406x205+554+335; 1,0 copertura 7,05
      * (6,00), barra 4868 (1877), riquadro 358x177+602+363 (il telaio nudo non tocca il bordo destro; con i pezzi
      * bordo da y 514).</li>
-     * <li>1,3 con 4,5, scelto: barra 0 (0), mirino 0, energia 0, copertura 8,77 (7,72), riquadro 286x205+674+335
-     * (260x205+700+335). Si vedono intere la fila di nocche d'ottone e le tre dita scure, che arrivano a x 886; il
-     * palmo d'acciaio e' al bordo destro da y 420 circa (bordo da y 407 (418): con i pezzi e' la piastra del dorso che
-     * lo copre), e sotto l'avambraccio esce dal bordo destro e da quello in basso. Il pollice non si vede.</li>
+     * <li>1,3 con 4,5, scelto: barra 0 (0), mirino 0, energia 0 (il rettangolo della riga dell'energia di allora,
+     * 360x30+0+0), copertura 8,77 (7,72), riquadro 286x205+674+335 (260x205+700+335). Si vedono intere la fila di
+     * nocche d'ottone e le tre dita scure, che arrivano a x 886; il palmo d'acciaio e' al bordo destro da y 420 circa
+     * (bordo da y 407 (418): con i pezzi e' la piastra del dorso che lo copre), e sotto l'avambraccio esce dal bordo
+     * destro e da quello in basso. Il pollice non si vede.</li>
      * <li>1,65 con 6,5 (a 6,0 barra 731): passa, copertura 10,33 (9,10), riquadro 288x237+672+303; nocche e dita
      * sullo schermo, ma il braccio copre un decimo dello schermo con il palmo contro il bordo destro da meta' altezza
      * (bordo da y 336 (361)).</li>

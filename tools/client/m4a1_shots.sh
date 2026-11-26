@@ -128,6 +128,8 @@
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
+# E con le preferenze del client predefinite: un EXO_SHOT_CLIENT_PREFS ereditato potrebbe nascondere l'HUD degli scatti.
+unset EXO_SHOT_CLIENT_PREFS
 
 here=$(cd "$(dirname "$0")" && pwd)
 measure="$here/arm_measure.sh"

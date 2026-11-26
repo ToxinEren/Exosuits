@@ -13,7 +13,7 @@ import net.minecraft.server.level.ServerPlayer;
  * cella del telaio indossato. Serve al client vero del cloud e alla checklist per portare la cella a {@code LOW} e a
  * {@code EMPTY} senza aspettare che si scarichi. La carica si imposta sempre con
  * {@link FrameStateAccess#changeWorn}: un cambio strutturale, che sincronizza subito il proprietario, cosi' il client
- * vede subito gli indicatori nuovi (scatto, riga dell'energia).
+ * vede subito gli indicatori nuovi (scatto, HUD).
  */
 public final class DebugEnergy {
     /** Esito di {@link #set}. */
