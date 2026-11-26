@@ -94,9 +94,9 @@
 #                       insieme: J cambia solo gli angoli. In ogni angolo, poi, tanti pixel della tinta della vignetta
 #                       (0A0C0E, il colore della texture) in pieno quanti in senza-vignetta: la vignetta e'
 #                       traslucida, perche' disegnata opaca (la fusione spenta) dipingerebbe gli angoli della sua tinta
-#                       (misurati 0, 0, 400 e 0 nei due scatti: i 400 in basso a sinistra sono la cornice della barra,
-#                       0C0D0F, disegnata sopra la vignetta). In quello in basso a sinistra il gruppo sta sopra la
-#                       vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
+#                       (misurati 0, 0, 400 e 0 nei due scatti, sulle quattro varianti: i 400 in basso a sinistra sono
+#                       la cornice della barra, 0C0D0F, disegnata sopra la vignetta). In quello in basso a sinistra il
+#                       gruppo sta sopra la vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
 #   mancino-gruppo      mancino contro mancino-nascosto: il gruppo nell'angolo in basso a destra, la sagoma sul bordo
 #                       destro, la percentuale verde a sinistra del sottogruppo dell'energia (l'interno non e'
 #                       specchiato)
@@ -110,23 +110,25 @@
 #                       andrebbe da un angolo all'altro dello schermo). Il riferimento senza HUD non e' uno
 #                       scatto senza la tuta: senza la tuta gli occhi del giocatore sono piu' bassi (con la tuta la
 #                       loro altezza e' x1,65, SuitSize), e uno scatto senza la tuta cambia lo sfondo sotto il gruppo
-#                       (misurati 7132 pixel diversi nel gruppo). I due scatti confrontati hanno la tuta, l'HUD
-#                       nascosto e la vignetta spenta (nella fase "nascosto" della A e nel file da cui parte la C);
-#                       vengono da due esecuzioni, e due client che partono dallo stesso mondo nello stesso posto
-#                       disegnano la stessa scena al pixel (misurato: 0 pixel diversi su tutto lo schermo)
+#                       (misurati 7132 pixel diversi nel gruppo, su 1.21.1-neoforge). I due scatti confrontati hanno
+#                       la tuta, l'HUD nascosto e la vignetta spenta (nella fase "nascosto" della A e nel file da cui
+#                       parte la C); vengono da due esecuzioni, e due client che partono dallo stesso mondo nello
+#                       stesso posto disegnano la stessa scena al pixel (misurato sulle quattro varianti: 0 pixel
+#                       diversi su tutto lo schermo)
 #
 # Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); una sagoma mista (lo stato del comando di
 # debug vale per tutti e sei i pezzi); i pezzi non montati con l'elmo che funziona; il telaio senza cella (oggi non si
 # indossa; lo prova HudModelTest); le altre grandezze dell'interfaccia (le prova HudLayoutTest); la vignetta sopra o
 # sotto gli elementi del gioco base (l'icona dell'effetto si guarda in vignetta-effetti, non si misura; gli avvisi,
 # l'indicatore del salvataggio e i sottotitoli non ci sono); i sottotitoli e l'indicatore del salvataggio sopra o
-# sotto il gruppo; F1, F3, F3+H, F3+T; H con
-# l'inventario aperto; il tasto della vignetta assegnato nelle impostazioni dei controlli; il file delle preferenze
-# rovinato, di una versione piu' nuova o in una cartella di sola lettura (li provano ClientPrefsFileTest e la
-# checklist per il PC della parte); la mappa a due mani; il consumo fino all'avviso in sopravvivenza.
+# sotto il gruppo; F1, F3, F3+H, F3+T; H con l'inventario aperto; il tasto della vignetta assegnato nelle impostazioni
+# dei controlli; il file delle preferenze rovinato, di una versione piu' nuova o in una cartella di sola lettura (li
+# provano ClientPrefsFileTest e la checklist per il PC della parte, docs/test-in-gioco/m4c-hud.md); la mappa a due
+# mani; il consumo fino all'avviso in sopravvivenza.
 #
-# Dura circa sei minuti a cache calde (misurati 356 s su 1.21.1-neoforge e 363 s su 1.20.1-forge: 147-153 s
-# l'esecuzione A, 93-94 s la B, 80-81 s la C).
+# Dura circa sei minuti a cache calde: misurati 375 e 368 s su 1.20.1-forge, 343 s su 1.20.1-fabric, 348 s su
+# 1.21.1-fabric e 352 s su 1.21.1-neoforge (138-153 s l'esecuzione A, 87-97 s la B, 74-82 s la C, poi una
+# quarantina di secondi i controlli; nei task di prima della parte 4c 356 s su 1.21.1-neoforge e 363 s su forge).
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se le tre esecuzioni sono uscite con
@@ -191,7 +193,10 @@ VIGNETTE_TINT=0A0C0E
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
 # Ciascuna e' la meta', arrotondata per difetto alla decina, del valore misurato su 1.21.1-neoforge, la prima variante
-# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola.
+# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola. Sulle quattro varianti le misure sono
+# uguali al pixel (esecuzioni di fine parte 4c, 26 novembre 2026), salvo la vignetta nei due angoli in basso, scritta
+# per variante accanto a VIGNETTE_MIN, e i pixel della differenza di barra-bassa, che non hanno soglia (1992 con
+# l'avviso spento nello scatto, 2052 con l'avviso acceso: dipende dal mezzo secondo in cui cade lo scatto).
 
 # I pixel dell'HUD intero contro l'HUD nascosto: gruppo, terza-persona e mancino-gruppo (misurati 12320 in tutti e
 # tre: ogni pixel del gruppo, 176x70).
@@ -218,7 +223,11 @@ SPARE_COLOUR_MIN=40
 BAR_ONLY_MIN=4690
 # La vignetta accesa contro la vignetta spenta, in ciascuno dei quattro angoli: vignetta (misurati 4260 in alto a
 # sinistra e in alto a destra, sul cielo; 653 in basso a sinistra, dove il gruppo sta sopra la vignetta e dove l'erba
-# e' scura; 2451 in basso a destra, sull'erba e sul braccio della tuta).
+# e' scura; 2451 in basso a destra, sull'erba e sul braccio della tuta). Sulle quattro varianti: 4260 nei due angoli in
+# alto; in basso a sinistra 651 e 654 su 1.20.1-forge, 653 su 1.20.1-fabric, 649 su 1.21.1-fabric e 653 su
+# 1.21.1-neoforge, che cambiano di qualche pixel anche fra due esecuzioni della stessa variante; in basso a destra 2475
+# sulle due 1.20.1 e 2451 sulle due 1.21.1 (l'erba e il braccio sotto quell'angolo differiscono di poco fra le due
+# versioni).
 VIGNETTE_MIN=320
 # Fissa: 500 RE di 10 000 sono 3 pixel dell'interfaccia, 6 dello schermo (misurati 6; la barra piena ne ha 122).
 LOW_FILL_MAX_W=10
@@ -435,7 +444,7 @@ checks() {
     m3=$(take_measure colore "$a/esaurita.png" "$GREY" "$PERCENT_AREA_RIGHT")
     good=1
     # il riquadro del grigio e' l'avviso fisso, 8x8 da (2, 8) dell'energia, con le cifre di "0%" dopo il suo posto
-    # (misurato uguale su 1.21.1-neoforge e 1.20.1-forge): da soli farebbero 128 e 120 pixel, abbastanza tutti e due per
+    # (misurato uguale sulle quattro varianti): da soli farebbero 128 e 120 pixel, abbastanza tutti e due per
     # TEXT_MIN, e solo il riquadro vede che ne manca uno o che l'avviso si e' spostato
     [ "$(val "$m1" colore)" -eq 0 ] && [ "$(val "$m2" colore)" -eq 0 ] && [ "$(val "$m3" colore)" -ge "$TEXT_MIN" ] \
         && is_box "$m3" "$WARNING_PERCENT_RIGHT" && good=0

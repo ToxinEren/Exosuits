@@ -6,6 +6,8 @@ Per capire quali jar hai: con quelli nuovi, indossata la tuta, in prima persona 
 
 **Attenzione agli scatti delle checklist precedenti:** gli scatti di riferimento in prima persona di `m3a-vedere-il-telaio.md`, `m3b-entrare-e-uscire.md` e `m3c-giocarci.md` mostrano ancora, con la tuta addosso, il braccio nudo del giocatore. Con questi jar lì c'è il braccio della tuta: non è un errore.
 
+> **Con i jar di dopo l'unione della parte 4c** (quelli del branch `m4-stazione` o di `main` dopo l'unione) i passi restano come sono, e vale quanto segue. Passo 3: al posto della riga dell'energia in alto a sinistra compare l'HUD della tuta in basso a sinistra, e i quattro angoli dello schermo si scuriscono un po': è la vignetta del casco (checklist `docs/test-in-gioco/m4c-hud.md`). Passo 7: la seconda riga gialla non c'è più: con lo stato 2 la sagoma dei pezzi, nell'HUD, è rossa. Passo 19: sparisce l'HUD. Nella tabella di "Già verificato" il controllo `criteri` guarda, al posto della riga, il rettangolo dell'HUD della mano principale, `176x70+4+466` (`176x70+780+466` da mancino). Gli scatti di riferimento in `m3d-screenshot/` hanno gli stessi nomi e ora mostrano l'HUD e la vignetta (in `braccio-nudo`, il telaio senza elmo, solo la parte dell'energia dell'HUD, senza vignetta): sono rifatti con i jar della parte 4c.
+
 ## Cosa c'è da vedere
 
 Dalla parte 3d chi indossa la tuta vede in prima persona **il braccio della tuta** al posto del proprio:

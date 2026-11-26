@@ -8,6 +8,8 @@ Per capire quali jar hai: con quelli nuovi, nella scheda creativa "Redstone Exof
 
 I testi sono scritti in italiano, come li mostra il gioco in italiano, e fra parentesi in inglese, come nel gioco in inglese e negli scatti di riferimento.
 
+> **Con i jar di dopo l'unione della parte 4c** (quelli del branch `m4-stazione` o di `main` dopo l'unione) i passi restano come sono, e vale quanto segue. In "Cosa non c'è ancora" la voce "L'HUD nuovo" non vale più: l'HUD della tuta c'è, in basso nell'angolo opposto alla mano principale al posto della riga dell'energia in alto a sinistra, e si prova con la checklist `docs/test-in-gioco/m4c-hud.md`.
+
 ## Cosa c'è da vedere
 
 Dalla parte 4a-1 c'è la **stazione di manutenzione**, il banco dove nelle parti successive si ripareranno e dipingeranno i telai:

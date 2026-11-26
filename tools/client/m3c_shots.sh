@@ -41,7 +41,7 @@
 # ricognizione; "moved wrongly" non deve comparire in server.log: se compare (client e server non d'accordo sul
 # movimento della tuta, per esempio in acqua) lo script scrive una riga ERRORE ed esce con 1, anche se client_shot.sh e'
 # uscito con 0 (la riga e' del gioco e non nomina la mod, quindi check_log.py non la vede). Dura circa due minuti a
-# cache calde (misurati 116-127 s sulle quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh
+# cache calde (misurati 107-127 s sulle quattro varianti). Le variabili d'ambiente sono quelle di client_shot.sh
 # (EXO_ACCEPT_EULA obbligatoria). Istruzioni in tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.

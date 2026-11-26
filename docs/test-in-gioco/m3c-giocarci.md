@@ -6,6 +6,19 @@ Questa è la checklist completa della parte 3c. Nasce da quella della parte 3c-1
 
 **Se hai già fatto i passi 1-75 con i jar della parte 3c-1**, quegli esiti restano validi, con gli stessi numeri. Con i jar nuovi rifai solo i passi 1, 2, 5 e 7 (jar, avvio e log), poi fai le sezioni 16-20 e i passi 108-112, che sono passi nuovi messi in coda alle sezioni 1, 7, 12 e 15 (anche il passo 113 è un passo aggiunto in coda, ma alla sezione 17: lo fai con quella). Per capire quali jar hai: con quelli nuovi la scheda creativa "Redstone Exoframes" ha in fondo il **Caricatore di celle**.
 
+> **Con i jar di dopo l'unione della parte 4c** (quelli del branch `m4-stazione` o di `main` dopo l'unione) la riga dell'energia in alto a sinistra non c'è più: al suo posto, con la tuta addosso, c'è l'HUD della tuta in basso, nell'angolo opposto alla mano principale (in basso a sinistra per chi usa la destra), con la percentuale della carica, la barra, le celle di scorta e, con l'elmo, la sagoma dei pezzi e la vignetta scura negli angoli dello schermo (checklist `docs/test-in-gioco/m4c-hud.md`). Questi passi danno quindi un risultato diverso da quello scritto sotto; i passi restano come sono, e vale quanto segue.
+>
+> - Passo 11: in basso a sinistra c'è l'HUD, con la percentuale verde e la barra piena verde, a destra le celle cariche rimaste nell'inventario ("×2"), e a sinistra la sagoma dei sei pezzi, verde; i RE non si leggono più sullo schermo: li scrive `/exoframe debug energy`.
+> - Passo 12: uscendo con V sparisce l'HUD; la riga dei tasti nomina anche H: "Tieni premuto V per uscire dal telaio, R per cambiare cella; H nasconde l'HUD".
+> - Passo 13: F1 nasconde l'HUD, e lo nasconde anche H (premuto di nuovo, lo mostra); con F3 l'HUD in basso resta visibile, sulle due versioni; con l'inventario aperto resta sotto la schermata.
+> - Passo 14: la posizione da annotare è quella dell'HUD in basso, la domanda 8 di `m4c-hud.md`.
+> - Passo 24: con l'energia bassa percentuale e barra diventano **rosse**, non gialle, e davanti alla percentuale lampeggia l'avviso, un triangolo con il punto esclamativo.
+> - Passo 26: con l'energia esaurita percentuale e barra sono **grigie**, "0 %" e la barra vuota, con l'avviso fisso.
+> - Passo 46: la seconda riga non c'è più: il torso critico è **rosso** nella sagoma, e poi **grigio** quando è fuori uso; i messaggi sulla barra delle azioni restano.
+> - Passo 61: la carica si legge come percentuale, circa "79 %", e a destra nel gruppo le celle cariche dell'inventario, "×2" prima e dopo il cambio.
+>
+> Gli scatti `m3c-screenshot/*riga-energia*.png` hanno gli stessi nomi e ora mostrano l'HUD: sono rifatti con i jar della parte 4c, verdi i due `riga-energia` (sotto metà carica), rosso `riga-energia-bassa` (500 RE) e grigio `riga-energia-esaurita` (0 RE), non gialla e rossa come dice la descrizione degli scatti più sotto. Gli altri scatti della 3c mostrano ancora la riga in alto a sinistra, e non è un errore.
+
 ## Cosa c'è da vedere
 
 Dalla parte 3b il telaio si piazza, si arma a mano, ci si entra e se ne esce (checklist `m3b-entrare-e-uscire.md`). Dalla parte 3c la tuta **consuma** e **si consuma**, e in sopravvivenza **si fabbrica** e **si ricarica**:
