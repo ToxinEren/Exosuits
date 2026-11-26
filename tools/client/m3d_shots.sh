@@ -10,10 +10,21 @@
 # braccio", con lo stesso mondo e la stessa interfaccia, e' quello fatto con l'effetto di invisibilita' (senza icona).
 # Con la tuta lo schermo ha anche l'HUD della tuta (design M4 par. 5.12), nell'angolo in basso opposto alla mano
 # principale, visibile in tutti gli scatti (la sequenza non preme H): e' uguale nei due scatti di ogni coppia misurata,
-# salvo braccio-nudo (il telaio senza elmo: la sola barra) contro tuta-senza (l'HUD intero, con la sagoma), e per
-# questo il telaio nudo ha il suo scatto senza braccio, nudo-senza, con lo stesso HUD di braccio-nudo. Il criterio (b)
-# guarda il rettangolo dell'HUD della mano dello scatto (hud= di arm_measure.sh): il braccio non ci entra mai, per
-# costruzione, perche' l'HUD sta nell'angolo opposto alla mano principale.
+# salvo braccio-nudo (il telaio senza elmo: la sola barra) contro tuta-senza (l'HUD intero, con la sagoma), e per questo
+# il telaio nudo ha il suo scatto senza braccio, nudo-senza, con lo stesso HUD di braccio-nudo. Il criterio (b) guarda
+# il rettangolo dell'HUD della mano dello scatto (hud= di arm_measure.sh): il braccio non ci entra mai, per costruzione,
+# perche' l'HUD sta nell'angolo opposto alla mano principale. Negli scatti con l'elmo in prima persona (braccio-rottame,
+# tuta-senza, bastone, mappa, telaio-piazzato, inventario sotto la schermata, braccio-mancino e il suo tuta-senza) c'e'
+# anche la vignetta del casco nei quattro angoli dello schermo, accesa dalle preferenze predefinite, uguale nei due
+# scatti di ogni coppia; con il telaio nudo (senza elmo) e in terza persona non c'e' (misurato su 1.21.1-neoforge contro
+# gli scatti di prima della vignetta: cambiano solo i quattro angoli degli scatti con l'elmo in prima persona). Nei due
+# angoli in basso scurisce anche il braccio della tuta, ma per arm_measure.sh il magenta scurito resta magenta: il
+# magenta del braccio non cambia, quello della mappa a sinistra perde 8 pixel. Il controllo solo-tuta e' un po' meno
+# sensibile nell'angolo in basso a destra (144x80+816+460): li' la vignetta scurisce braccio-rottame e non base-prima,
+# quindi un braccio del gioco base disegnato in quell'angolo non conterebbe fra gli "uguali"; il resto della sua sagoma
+# sta fuori dall'angolo: accettato. Misurato, la perdita e' nulla: il braccio del gioco base entra nell'angolo con 762
+# dei suoi 18075 pixel (22x68+816+472), sul lato interno, dove la texture ha un'opacita' di al piu' 2/255 e la vignetta
+# non cambia nessun pixel (lo scuro che arm_measure.sh vede sta in 92x56+868+484).
 #
 # Esecuzione A, mano principale a destra, scatti in <cartella>:
 #   1. senza tuta     base-prima (il braccio del gioco) e base-senza (invisibile)
@@ -66,10 +77,10 @@
 # due esecuzioni e rifa' i controlli sugli scatti che la cartella ha gia' (per fissare le soglie senza riavviare il
 # client). Uscita 2: uso sbagliato.
 #
-# Dura circa tre minuti e mezzo a cache calde (misurati 207-225 s sulle quattro varianti: 111-119 s l'esecuzione A,
-# 76-86 s la B; 232 s una volta, la prima sequenza dopo una build). Le misure sono uguali al pixel sulle quattro
+# Dura circa tre minuti e mezzo a cache calde (misurati 204-225 s sulle quattro varianti: 111-119 s l'esecuzione A,
+# 75-86 s la B; 232 s una volta, la prima sequenza dopo una build). Le misure sono uguali al pixel sulle quattro
 # varianti (i valori accanto alle soglie, piu' sotto), salvo due, che cambiano di poco anche fra due esecuzioni della
-# stessa variante: il magenta della terza persona (fra 23157 e 23745, sempre nel riquadro 318x312+321+221) e quello
+# stessa variante: il magenta della terza persona (fra 23147 e 23745, sempre nel riquadro 318x312+321+221) e quello
 # dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10850) e
 # 1.20.1 no (su Forge largo 166-176 pixel da x 318-323, magenta 18633-18831; su Fabric 166-174 da x 319-323, magenta
 # 18712-18810; alto 202 da y 66). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria);
@@ -112,9 +123,10 @@ COVER_MAX=1400
 # pixel della sua sagoma che la tuta non copre: se ne ammette al piu' uno su venti (misurati 0 su 18075, con i pezzi
 # e con il telaio nudo).
 SAME_FACTOR=20
-# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati 23637 a sinistra, dove il gruppo dell'HUD
-# della tuta sta sopra il braccio e ne copre una parte, come vuole il design M4 par. 5.12, e 28977 a destra; 28407 a
-# sinistra prima dell'HUD); un braccio solo ne lascerebbe una a zero.
+# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati 23629 a sinistra, dove il gruppo dell'HUD
+# della tuta sta sopra il braccio e ne copre una parte, come vuole il design M4 par. 5.12, e la vignetta ne scurisce
+# l'angolo in basso, e 28977 a destra; a sinistra 23637 prima della vignetta e 28407 prima dell'HUD); un braccio solo
+# ne lascerebbe una a zero.
 MAP_MIN_HALF=300
 # Una tuta intera e' larga piu' del doppio di un braccio solo, quindi la larghezza del riquadro distingue "intera" da
 # "un braccio solo". In terza persona, da dietro, il magenta della tuta e' largo 318 pixel.

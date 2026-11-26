@@ -37,8 +37,8 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 ## Texture placeholder: `gen_placeholders.py`
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
-byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva degli oggetti
-e dell'icona. Scrive ventitré file:
+byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva. Scrive
+ventiquattro file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -56,6 +56,11 @@ e dell'icona. Scrive ventitré file:
   `station_side.png` (una fascia di rame e tre feritoie) e i fronti delle due metà, `station_front_main.png` (un
   pannello con una spia di redstone e un cassetto) e `station_front_side.png` (un pannello con una griglia di metallo
   e un cassetto), segnaposto fino alla grafica della parte 4d;
+- `src/main/resources/assets/redstone_exoframes/textures/gui/hud_vignette.png` (144x80): i quattro angoli della
+  vignetta del casco dell'HUD, di 72x40 ciascuno e ciascuno al suo posto (alto a sinistra, alto a destra, basso a
+  sinistra, basso a destra: l'HUD li disegna senza specchiarli), traslucidi, scuri dal pixel d'angolo dello schermo
+  verso l'interno e con due riflessi chiari del vetro nei due in alto, con la formula delle anteprime del design
+  (`draw_vignette` di `docs/superpowers/specs/anteprime/2026-11-19-m4/anteprime.py`); segnaposto fino alla parte 4d;
 - `src/main/resources-mc1.20.1/assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png` e
   `_layer_2.png` (64x32), solo nei jar 1.20.1: completamente trasparenti, perché il layer armatura di vanilla non
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
@@ -66,7 +71,8 @@ qui ma da `tools/art/build.py`.
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventitré file con quelli committati, pixel per pixel.
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventiquattro file con quelli committati, pixel per
+pixel.
 
 ## Dati per versione: `gen_data.py`
 

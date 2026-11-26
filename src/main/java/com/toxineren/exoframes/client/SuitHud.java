@@ -1,9 +1,11 @@
 package com.toxineren.exoframes.client;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.client.HudLayout.Rect;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.FrameIndicators;
+import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.client.ClientCompat;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.core.armor.PieceSlot;
@@ -21,6 +23,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
@@ -29,18 +32,19 @@ import net.minecraft.world.item.ItemStack;
 /**
  * L'HUD della tuta (design M4 §5.12): al posto della riga dell'energia di M3, per chi indossa la tuta, un gruppo
  * nell'angolo in basso opposto alla mano principale ({@link HudLayout}) con la barra dell'energia, la percentuale, le
- * celle di scorta e l'avviso e, con un elmo che funziona, la sagoma dei sei pezzi colorata per condizione. Che cosa
- * disegnare lo decide {@link HudModel}, calcolato una volta per tick del client (il partialTick non serve: l'HUD
- * cambia a tick) dalla copia dello stato del server ({@code clientView}) e dagli indicatori che il server manda
- * ({@code clientIndicators}): il client non confronta la carica con soglie sue (DEC-23). Si disegna dal gancio
- * dell'HUD di {@code ClientRenderHooks} a ogni fotogramma, con soli rettangoli pieni e testi a scala 1, senza toccare
- * la pila delle pose; nulla con l'interfaccia nascosta (F1), con l'HUD nascosto da H ({@link ClientPrefs}), da
- * spettatore. Sagoma, avviso e icona della cella sono segnaposto fino alla grafica della parte 4d (Decisione 14 del
- * piano). Una {@code RuntimeException} nel tick o nel disegno non chiude il gioco: quel tick l'HUD sparisce, o quel
- * fotogramma non si disegna, con un ERROR una volta per sessione ciascuno (si azzerano all'uscita dal mondo). Solo
- * client. {@link #register()} gira una volta durante l'init della mod, che su Forge e NeoForge e' un thread del
- * caricamento delle mod; tutto il resto (tick, disegno, azzeramento e lo stato che condividono) gira sul thread del
- * client.
+ * celle di scorta e l'avviso e, con un elmo che funziona, la sagoma dei sei pezzi colorata per condizione e, in prima
+ * persona, la vignetta del casco nei quattro angoli dello schermo. Che cosa disegnare lo decide {@link HudModel},
+ * calcolato una volta per tick del client (il partialTick non serve: l'HUD cambia a tick) dalla copia dello stato del
+ * server ({@code clientView}) e dagli indicatori che il server manda ({@code clientIndicators}): il client non
+ * confronta la carica con soglie sue (DEC-23). Si disegna dal gancio dell'HUD di {@code ClientRenderHooks} a ogni
+ * fotogramma, con rettangoli pieni, testi e la texture della vignetta, tutto a scala 1, senza toccare la pila delle
+ * pose; nulla con l'interfaccia nascosta (F1), con l'HUD nascosto da H ({@link ClientPrefs}), da spettatore. Sagoma,
+ * avviso, icona della cella e texture della vignetta sono segnaposto fino alla grafica della parte 4d (Decisioni 4 e
+ * 14 del piano). Una {@code RuntimeException} nel tick o nel disegno non chiude il gioco: quel tick l'HUD sparisce, o
+ * quel fotogramma non si disegna, con un ERROR una volta per sessione ciascuno (si azzerano all'uscita dal mondo), e
+ * la fusione accesa per la vignetta si spegne comunque. Solo client. {@link #register()} gira una volta durante
+ * l'init della mod, che su Forge e NeoForge e' un thread del caricamento delle mod; tutto il resto (tick, disegno,
+ * azzeramento e lo stato che condividono) gira sul thread del client.
  */
 final class SuitHud {
     /** La percentuale dell'energia, con il numero come argomento. */
@@ -49,6 +53,15 @@ final class SuitHud {
     static final String NO_CELL = "hud." + RedstoneExoframes.MOD_ID + ".no_cell";
     /** Il segno davanti al numero delle celle di scorta: il segno di moltiplicazione (U+00D7). */
     private static final String TIMES = "\u00d7";
+    /**
+     * La texture della vignetta del casco, generata da tools/gen_placeholders.py: i quattro angoli di
+     * {@link HudLayout#VIGNETTE_W} x {@link HudLayout#VIGNETTE_H} gia' al loro posto, nell'ordine di
+     * {@link HudLayout#vignetteCorners} due per riga (alto a sinistra, alto a destra; basso a sinistra, basso a
+     * destra), cosi' il disegno non specchia nulla (Decisione 4 del piano).
+     */
+    static final ResourceLocation VIGNETTE_TEXTURE = Ids.of("textures/gui/hud_vignette.png");
+    private static final int VIGNETTE_TEXTURE_W = 2 * HudLayout.VIGNETTE_W;
+    private static final int VIGNETTE_TEXTURE_H = 2 * HudLayout.VIGNETTE_H;
 
     /** Il modello dell'ultimo tick: quello che il disegno mostra fino al tick dopo. */
     private static HudModel model = HudModel.NONE;
@@ -126,8 +139,10 @@ final class SuitHud {
     }
 
     /**
-     * Disegna il modello dell'ultimo tick nell'angolo della mano principale di adesso: la piastra del livello, con
-     * {@link HudLevel#FULL} la sagoma, poi il sottogruppo dell'energia.
+     * Disegna il modello dell'ultimo tick: per prima, con {@link HudLevel#FULL}, in prima persona e con la preferenza
+     * accesa ({@link ClientPrefs#vignette()}), la vignetta, sotto tutto il resto; poi, nell'angolo della mano
+     * principale di adesso, la piastra del livello, con {@link HudLevel#FULL} la sagoma, poi il sottogruppo
+     * dell'energia.
      */
     private static void render(GuiGraphics graphics) {
         try {
@@ -140,6 +155,10 @@ final class SuitHud {
             }
             int w = graphics.guiWidth();
             int h = graphics.guiHeight();
+            if (shown.level() == HudLevel.FULL && minecraft.options.getCameraType().isFirstPerson()
+                    && ClientPrefs.vignette()) {
+                drawVignette(graphics, w, h);
+            }
             boolean mainRight = player.getMainArm() == HumanoidArm.RIGHT;
             framed(graphics, HudLayout.plate(w, h, mainRight, shown.level()), HudModel.PLATE_EDGE, HudModel.PLATE);
             if (shown.level() == HudLevel.FULL) {
@@ -152,6 +171,34 @@ final class SuitHud {
                 RedstoneExoframes.LOGGER.error("Suit HUD drawing failed with {}; the HUD is skipped for this frame "
                         + "(logged once per session)", e.getClass().getName(), e);
             }
+        }
+    }
+
+    /**
+     * La vignetta del casco (design M4 §5.12, "Vignetta"): i quattro angoli della texture, ciascuno nel suo angolo
+     * dell'interfaccia ({@link HudLayout#vignetteCorners}), a scala 1. {@code blit} non accende la fusione e la texture
+     * e' traslucida: la fusione si accende qui e si spegne in un {@code finally}, cosi' un'eccezione fra un
+     * {@code blit} e l'altro non la lascia accesa per cio' che si disegna dopo. Il gancio dell'HUD disegna dopo tutto
+     * l'HUD del gioco base, e la differenza fra le versioni e' voluta (design M4 §10): su 1.21.1 gli elementi del
+     * gioco base che toccano gli angoli (le icone degli effetti in alto a destra, l'indicatore del salvataggio e i
+     * sottotitoli in basso a destra) stanno sopra la vignetta, e su 1.20.1 sotto. Gli avvisi in alto a destra (i
+     * toast) stanno sopra su tutte e due le versioni: il gioco base li disegna dopo l'HUD e dopo le schermate
+     * ({@code GameRenderer.render}).
+     */
+    private static void drawVignette(GuiGraphics graphics, int w, int h) {
+        List<Rect> corners = HudLayout.vignetteCorners(w, h);
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        try {
+            for (int i = 0; i < corners.size(); i++) {
+                Rect corner = corners.get(i);
+                // nella texture l'angolo i sta nella colonna i % 2 e nella riga i / 2
+                graphics.blit(VIGNETTE_TEXTURE, corner.x0(), corner.y0(), i % 2 * HudLayout.VIGNETTE_W,
+                        i / 2 * HudLayout.VIGNETTE_H, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H, VIGNETTE_TEXTURE_W,
+                        VIGNETTE_TEXTURE_H);
+            }
+        } finally {
+            RenderSystem.disableBlend();
         }
     }
 

@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # La sequenza della parte 4c ("l'HUD") nel client vero: tre esecuzioni di client_shot.sh e poi i controlli che lo
 # script fa da se' sugli scatti con arm_measure.sh e sui file delle preferenze del client, che client_shot.sh copia
-# accanto agli scatti. Prova l'HUD della tuta (design M4 par. 5.12: posto, sagoma, barra, avviso, celle di scorta, i
-# due livelli, le due mani, la terza persona), i suoi due tasti e il file delle preferenze; la vignetta arriva con il
-# Task 4 del piano della 4c.
+# accanto agli scatti. Prova l'HUD della tuta (design M4 par. 5.12: posto, sagoma, barra, avviso, celle di scorta, la
+# vignetta del casco, i due livelli, le due mani, la terza persona), i suoi due tasti e il file delle preferenze.
 #
 #   EXO_ACCEPT_EULA=true bash tools/client/m4c_shots.sh <variante> <cartella>
 #
@@ -28,7 +27,8 @@
 #                      aperta il gioco base non registra il clic di H (KeyboardHandler.keyPress chiama KeyMapping.click
 #                      solo senza schermate), quindi le preferenze non cambiano; lo vede alla fine il controllo
 #                      chat-e-tasti, perche' con quella h contata l'HUD tornerebbe visibile
-#   3. pieno           la tuta integra, l'HUD intero: scatto pieno
+#   3. pieno           la tuta integra, l'HUD intero con la vignetta, accesa dalle preferenze predefinite: scatto
+#                      pieno
 #   4. senza vignetta  J spegne la vignetta: scatto senza-vignetta, il riferimento dei confronti che seguono
 #   5. nascosto        H nasconde l'HUD: scatto nascosto; H lo mostra di nuovo
 #   6. stati dei pezzi danneggiato (sagoma gialla) e critico (rossa)
@@ -38,24 +38,28 @@
 #   8. scorta          prima-della-cella ("x0" grigio), poi una cella da 5 000 RE nell'inventario: scorta ("x1"
 #                      bianco); la cella si toglie
 #   9. senza elmo      J riaccende la vignetta; i sei pezzi rotti, quindi l'elmo rotto: la sola barra, sulla sua
-#                      piastra (senza-elmo); H la nasconde (senza-elmo-nascosto) e la mostra
-#  10. terza persona   la tuta integra, F5 (da dietro): terza; H nasconde: terza-nascosto; H mostra, F5 due volte
-#                      torna alla prima persona
-#  11. fine            J spegne la vignetta: scatto messaggio-vignetta un secondo dopo, da guardare: "Helmet vignette
+#                      piastra, e niente vignetta, che vuole un elmo che funziona (senza-elmo); H la nasconde
+#                      (senza-elmo-nascosto) e la mostra
+#  10. terza persona   la tuta integra, F5 (da dietro): barra e sagoma, e niente vignetta, che vale solo in prima
+#                      persona (terza); H nasconde: terza-nascosto; H mostra, F5 due volte torna alla prima persona
+#  11. effetti         un effetto (fortuna: nulla cambia nel mondo e nella vista) mette la sua icona nell'angolo in
+#                      alto a destra: scatto vignetta-effetti, con la vignetta, da guardare: l'icona sopra la vignetta
+#                      su 1.21.1 e sotto, scurita, su 1.20.1 (design M4 par. 5.12 e 10); poi l'effetto si toglie
+#  12. fine            J spegne la vignetta: scatto messaggio-vignetta un secondo dopo, da guardare: "Helmet vignette
 #                      off" sulla barra delle azioni; H nasconde l'HUD: scatto messaggio-nascosto un secondo dopo, da
 #                      guardare: "Exoframe HUD hidden: H to show it"; poi tp in 0,5 -60 -5,5 per i tre scatti di
 #                      client_shot.sh. Il client riscrive il file delle preferenze a ogni tasto, e client_shot.sh lo
 #                      copia in <cartella>/redstone_exoframes-client.json: alla fine HUD nascosto e vignetta spenta
 # Esecuzione B, mano principale a sinistra (EXO_SHOT_MAIN_HAND=left), dalle preferenze predefinite, scatti in
 # <cartella>/mancino: "@attendi 12", la tuta integra e J (vignetta spenta): mancino; H nasconde: mancino-nascosto; H
-# mostra; danneggiata: mancino-danneggiato; J e l'elmo rotto: mancino-senza-elmo; H nasconde:
-# mancino-senza-elmo-nascosto; poi tp in 0,5 -60 -5,5. Parte solo se la A e' uscita con 0.
+# mostra; danneggiata: mancino-danneggiato; J (vignetta di nuovo accesa) e l'elmo rotto: mancino-senza-elmo, senza
+# vignetta; H nasconde: mancino-senza-elmo-nascosto; poi tp in 0,5 -60 -5,5. Parte solo se la A e' uscita con 0.
 # Esecuzione C, il riavvio: un client nuovo, mano destra, che parte dal file scritto dal client nella A
 # (EXO_SHOT_CLIENT_PREFS=<cartella>/redstone_exoframes-client.json), scatti in <cartella>/riavvio: "@attendi 12", la
 # tuta integra: riavvio-nascosto (l'HUD che il file teneva nascosto); H lo mostra: scatto riavvio-messaggio un secondo
-# dopo, da guardare: "Exoframe HUD shown"; riavvio-visibile; poi tp in 0,5 -60 -5,5. La C parte solo se la A e' uscita
-# con 0 e ha lasciato il file. Si prova cosi' la catena vera (tasto, scrittura, lettura all'avvio), non la lettura di un
-# file scritto a mano (Decisione 10 del piano).
+# dopo, da guardare: "Exoframe HUD shown"; riavvio-visibile (senza vignetta: il file la teneva spenta); poi tp in 0,5
+# -60 -5,5. La C parte solo se la A e' uscita con 0 e ha lasciato il file. Si prova cosi' la catena vera (tasto,
+# scrittura, lettura all'avvio), non la lettura di un file scritto a mano (Decisione 10 del piano).
 #
 # Controlli. I riquadri e i colori esatti vengono da client/HudLayout e client/HudModel (costanti qui sotto); le soglie
 # di quantita' dalla misura. Un riquadro "dentro" un rettangolo: non vuoto, e con X, Y, X + L e Y + A dentro i suoi.
@@ -78,17 +82,28 @@
 #   scorta              prima-della-cella contro scorta: cambia solo l'area delle celle di scorta, grigio prima e
 #                       bianco dopo
 #   solo-barra          senza-elmo contro senza-elmo-nascosto: il riquadro e' il sottogruppo dell'energia, niente
-#                       nella sagoma
+#                       nella sagoma e niente negli angoli: la vignetta e' accesa, ma senza un elmo che funziona non
+#                       c'e' (disegnata, il riquadro arriverebbe agli angoli dello schermo)
 #   terza-persona       terza contro terza-nascosto, nel gruppo e in tre angoli dello schermo che il gruppo non tocca:
-#                       solo riquadri, perche' in terza persona la tuta non e' ferma al pixel fra due scatti
+#                       barra e sagoma ci sono, e negli angoli niente: la vignetta e' accesa, ma in terza persona non
+#                       c'e'. Solo riquadri, perche' in terza persona la tuta non e' ferma al pixel fra due scatti
+#   vignetta            pieno contro senza-vignetta: in ciascuno dei quattro angoli dello schermo (72x40
+#                       dell'interfaccia) abbastanza pixel diversi, con il riquadro sui due bordi dello schermo del suo
+#                       angolo (lo scuro parte dall'angolo, come vuole la texture: un angolo disegnato altrove, o
+#                       specchiato, non ci arriva), e nello schermo intero tanti pixel quanti nei quattro angoli
+#                       insieme: J cambia solo gli angoli. In quello in basso a sinistra il gruppo sta sopra la
+#                       vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
 #   mancino-gruppo      mancino contro mancino-nascosto: il gruppo nell'angolo in basso a destra, la sagoma sul bordo
 #                       destro, la percentuale verde a sinistra del sottogruppo dell'energia (l'interno non e'
 #                       specchiato)
 #   mancino-sagoma      mancino-danneggiato contro mancino: cambia solo la sagoma, a destra, gialla
-#   mancino-solo-barra  mancino-senza-elmo contro mancino-senza-elmo-nascosto: il sottogruppo dell'energia, a destra
+#   mancino-solo-barra  mancino-senza-elmo contro mancino-senza-elmo-nascosto: il sottogruppo dell'energia, a destra,
+#                       e niente negli angoli (la vignetta, accesa, senza elmo non c'e')
 #   riavvio             nascosto della A contro riavvio-nascosto della C, nel gruppo: niente (il client della C e'
 #                       partito con l'HUD nascosto dal file, come quello della A dopo H); riavvio-visibile contro
-#                       riavvio-nascosto: il riquadro e' il gruppo (H lo mostra). Il riferimento senza HUD non e' uno
+#                       riavvio-nascosto: il riquadro e' il gruppo, senza gli angoli (H mostra l'HUD, e la vignetta,
+#                       spenta nella A, resta spenta dopo il riavvio: dai predefiniti sarebbe accesa, e il riquadro
+#                       andrebbe da un angolo all'altro dello schermo). Il riferimento senza HUD non e' uno
 #                       scatto senza la tuta: senza la tuta gli occhi del giocatore sono piu' bassi (con la tuta la
 #                       loro altezza e' x1,65, SuitSize), e uno scatto senza la tuta cambia lo sfondo sotto il gruppo
 #                       (misurati 7132 pixel diversi nel gruppo). I due scatti confrontati hanno la tuta, l'HUD
@@ -96,16 +111,18 @@
 #                       vengono da due esecuzioni, e due client che partono dallo stesso mondo nello stesso posto
 #                       disegnano la stessa scena al pixel (misurato: 0 pixel diversi su tutto lo schermo)
 #
-# Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la vignetta (Task 4); una sagoma mista
-# (lo stato del comando di debug vale per tutti e sei i pezzi); i pezzi non montati con l'elmo che funziona; il telaio
-# senza cella (oggi non si indossa; lo prova HudModelTest); le altre grandezze dell'interfaccia (le prova
-# HudLayoutTest); i sottotitoli e l'indicatore del salvataggio sopra o sotto il gruppo; F1, F3, F3+H, F3+T; H con
+# Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); una sagoma mista (lo stato del comando di
+# debug vale per tutti e sei i pezzi); i pezzi non montati con l'elmo che funziona; il telaio senza cella (oggi non si
+# indossa; lo prova HudModelTest); le altre grandezze dell'interfaccia (le prova HudLayoutTest); la vignetta sopra o
+# sotto gli elementi del gioco base (l'icona dell'effetto si guarda in vignetta-effetti, non si misura; gli avvisi,
+# l'indicatore del salvataggio e i sottotitoli non ci sono); i sottotitoli e l'indicatore del salvataggio sopra o
+# sotto il gruppo; F1, F3, F3+H, F3+T; H con
 # l'inventario aperto; il tasto della vignetta assegnato nelle impostazioni dei controlli; il file delle preferenze
 # rovinato, di una versione piu' nuova o in una cartella di sola lettura (li provano ClientPrefsFileTest e la
 # checklist per il PC della parte); la mappa a due mani; il consumo fino all'avviso in sopravvivenza.
 #
-# Dura circa sei minuti a cache calde (misurati 354 s su 1.21.1-neoforge e 373 s su 1.20.1-forge: 146-154 s
-# l'esecuzione A, 93-98 s la B, 79-84 s la C).
+# Dura circa sei minuti a cache calde (misurati 356 s su 1.21.1-neoforge e 363 s su 1.20.1-forge: 147-153 s
+# l'esecuzione A, 93-94 s la B, 80-81 s la C).
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se le tre esecuzioni sono uscite con
@@ -148,10 +165,14 @@ GROUP_LEFT=176x70+780+466
 SILHOUETTE_LEFT=42x70+914+466
 ENERGY_LEFT=134x70+780+466
 PERCENT_AREA_LEFT=58x18+784+482
-# Tre angoli dello schermo, 72x40 dell'interfaccia (HudLayout.vignetteCorners), che il gruppo della mano destra non
-# tocca.
+# La finestra di client_shot.sh, e i quattro angoli della vignetta, 72x40 dell'interfaccia
+# (HudLayout.vignetteCorners), dove la texture li mette con lo scuro dal bordo dello schermo: il gruppo della mano
+# destra tocca solo quello in basso a sinistra.
+SCREEN_W=960
+SCREEN_H=540
 CORNER_TOP_LEFT=144x80+0+0
 CORNER_TOP_RIGHT=144x80+816+0
+CORNER_BOTTOM_LEFT=144x80+0+460
 CORNER_BOTTOM_RIGHT=144x80+816+460
 # Il bordo sinistro del riempimento: la barra bassa parte da qui.
 IFS='x+' read -r _ _ BAR_FILL_X _ <<<"$BAR_FILL_RIGHT"
@@ -189,6 +210,10 @@ SPARE_COLOUR_MIN=40
 # La sola barra contro la sola barra nascosta: solo-barra (misurati 9380: ogni pixel del sottogruppo dell'energia,
 # 134x70).
 BAR_ONLY_MIN=4690
+# La vignetta accesa contro la vignetta spenta, in ciascuno dei quattro angoli: vignetta (misurati 4260 in alto a
+# sinistra e in alto a destra, sul cielo; 653 in basso a sinistra, dove il gruppo sta sopra la vignetta e dove l'erba
+# e' scura; 2451 in basso a destra, sull'erba e sul braccio della tuta).
+VIGNETTE_MIN=320
 # Fissa: 500 RE di 10 000 sono 3 pixel dell'interfaccia, 6 dello schermo (misurati 6; la barra piena ne ha 122).
 LOW_FILL_MAX_W=10
 
@@ -234,7 +259,9 @@ steps_a=(
     # 10. terza persona (da dietro), poi di nuovo la prima
     "$(wear 0)" "@tieni F5 0.2" "@attendi 4" "@scatto terza" "@tieni h 0.2" "@attendi 4" "@scatto terza-nascosto"
     "@tieni h 0.2" "@tieni F5 0.2" "@tieni F5 0.2"
-    # 11. fine: J spegne la vignetta e H nasconde l'HUD, ciascuno con il suo messaggio sulla barra delle azioni
+    # 11. effetti: l'icona di un effetto nell'angolo in alto a destra, con la vignetta
+    "effect give $u minecraft:luck 60 0" "@attendi 4" "@scatto vignetta-effetti" "effect clear $u"
+    # 12. fine: J spegne la vignetta e H nasconde l'HUD, ciascuno con il suo messaggio sulla barra delle azioni
     "@tieni j 0.2" "@attendi 1" "@scatto messaggio-vignetta" "@attendi 3"
     "@tieni h 0.2" "@attendi 1" "@scatto messaggio-nascosto" "@attendi 3"
     "$AWAY"
@@ -257,7 +284,7 @@ steps_c=(
     "$AWAY"
 )
 shots_a=(pieno senza-vignetta nascosto danneggiato critico bassa esaurita prima-della-cella scorta senza-elmo
-    senza-elmo-nascosto terza terza-nascosto messaggio-vignetta messaggio-nascosto)
+    senza-elmo-nascosto terza terza-nascosto vignetta-effetti messaggio-vignetta messaggio-nascosto)
 shots_b=(mancino mancino-nascosto mancino-danneggiato mancino-senza-elmo mancino-senza-elmo-nascosto)
 shots_c=(riavvio-nascosto riavvio-messaggio riavvio-visibile)
 
@@ -315,9 +342,24 @@ prefs() {
 }
 # Vero se il riquadro della misura e' esattamente il rettangolo dato.
 is_box() { [ "$(val "$1" riquadro)" = "$2" ]; }
+# from_corner <riga> <sinistra|destra> <alto|basso>: vero se la misura di un angolo della vignetta ha almeno
+# VIGNETTE_MIN pixel e il suo riquadro tocca i due bordi dello schermo dati (sinistra X = 0, destra X + L = SCREEN_W,
+# alto Y = 0, basso Y + A = SCREEN_H): lo scuro parte dall'angolo dello schermo.
+from_corner() {
+    box "$1"
+    [ "$(val "$1" pixel)" -ge "$VIGNETTE_MIN" ] || return 1
+    case "$2" in
+        sinistra) [ "$BX" -eq 0 ] || return 1 ;;
+        destra) [ $((BX + BL)) -eq "$SCREEN_W" ] || return 1 ;;
+    esac
+    case "$3" in
+        alto) [ "$BY" -eq 0 ] ;;
+        basso) [ $((BY + BA)) -eq "$SCREEN_H" ] ;;
+    esac
+}
 
 checks() {
-    local m m1 m2 m3 m4 m5 good want
+    local m m1 m2 m3 m4 m5 good want sum
 
     m=$(prefs "$a/$PREFS")
     good=1
@@ -412,7 +454,8 @@ checks() {
     good=1
     is_box "$m1" "$ENERGY_RIGHT" && [ "$(val "$m1" pixel)" -ge "$BAR_ONLY_MIN" ] && [ "$(val "$m2" pixel)" -eq 0 ] \
         && good=0
-    want="riquadro=$ENERGY_RIGHT e pixel >= $BAR_ONLY_MIN: la sola barra, senza sagoma; nella sagoma pixel=0"
+    want="riquadro=$ENERGY_RIGHT e pixel >= $BAR_ONLY_MIN: la sola barra, senza sagoma e senza la vignetta, che e'"
+    want+=" accesa; nella sagoma pixel=0"
     verdict solo-barra "$good" "$m1; sagoma $m2" "$want"
 
     m1=$(take_measure differenza "$a/terza.png" "$a/terza-nascosto.png" "$GROUP_RIGHT")
@@ -422,8 +465,24 @@ checks() {
     good=1
     is_box "$m1" "$GROUP_RIGHT" && [ "$(val "$m1" pixel)" -ge "$GROUP_MIN" ] && [ "$(val "$m2" pixel)" -eq 0 ] \
         && [ "$(val "$m3" pixel)" -eq 0 ] && [ "$(val "$m4" pixel)" -eq 0 ] && good=0
-    want="riquadro=$GROUP_RIGHT e pixel >= $GROUP_MIN: barra e sagoma anche in terza persona; pixel=0 nei tre angoli"
+    want="riquadro=$GROUP_RIGHT e pixel >= $GROUP_MIN: barra e sagoma anche in terza persona; pixel=0 nei tre angoli:"
+    want+=" la vignetta, accesa, in terza persona non c'e'"
     verdict terza-persona "$good" "$m1; angoli $m2; $m3; $m4" "$want"
+
+    m=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png")
+    m1=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_TOP_LEFT")
+    m2=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_TOP_RIGHT")
+    m3=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_BOTTOM_LEFT")
+    m4=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_BOTTOM_RIGHT")
+    sum=$(($(val "$m1" pixel) + $(val "$m2" pixel) + $(val "$m3" pixel) + $(val "$m4" pixel)))
+    good=1
+    from_corner "$m1" sinistra alto && from_corner "$m2" destra alto && from_corner "$m3" sinistra basso \
+        && from_corner "$m4" destra basso && [ "$(val "$m" pixel)" -eq "$sum" ] && good=0
+    want="in ogni angolo pixel >= $VIGNETTE_MIN e il riquadro dal suo angolo dello schermo (alto a sinistra X=0 e"
+    want+=" Y=0, alto a destra X+L=$SCREEN_W e Y=0, basso a sinistra X=0 e Y+A=$SCREEN_H, basso a destra"
+    want+=" X+L=$SCREEN_W e Y+A=$SCREEN_H); nello schermo intero pixel uguale alla somma dei quattro: nulla fuori"
+    want+=" dagli angoli"
+    verdict vignetta "$good" "schermo $m, somma degli angoli $sum; angoli $m1; $m2; $m3; $m4" "$want"
 
     m1=$(take_measure differenza "$b/mancino.png" "$b/mancino-nascosto.png")
     m2=$(take_measure differenza "$b/mancino.png" "$b/mancino-nascosto.png" "$SILHOUETTE_LEFT")
@@ -456,7 +515,7 @@ checks() {
     good=1
     [ "$(val "$m1" pixel)" -eq 0 ] && is_box "$m2" "$GROUP_RIGHT" && good=0
     want="pixel=0 nel gruppo: il client della C e' partito con l'HUD nascosto, come quello della A dopo H;"
-    want+=" riquadro=$GROUP_RIGHT: H lo mostra"
+    want+=" riquadro=$GROUP_RIGHT: H lo mostra, senza la vignetta, spenta nel file della A"
     verdict riavvio "$good" "$m1; $m2" "$want"
 }
 
