@@ -27,8 +27,8 @@
 #   7. corsa              Ctrl+W 2 s a 999 RE (sotto il 10 %, LOW): niente scatto, fra 6 e 8,2 blocchi; poi a 5 000 RE
 #                         lo scatto c'e': piu' di 8,6 blocchi (le soglie del Task 23)
 #   8. HUD dell'energia   carica letta prima e dopo 5 s di cammino (/exoframe debug energy): dopo < prima; scatti
-#                         hud-energia (verde, percentuale sotto il 50 %), hud-energia-bassa (500 RE, 5 %: rosso, sotto
-#                         il 10 %), hud-energia-esaurita (0 RE, grigio, 0 %); poi di nuovo 5 000 RE
+#                         hud-energia (verde, percentuale sotto il 50 %), hud-energia-bassa (500 RE: rosso, sotto il
+#                         10 %), hud-energia-esaurita (0 RE, grigio, 0 %); poi di nuovo 5 000 RE
 #   9. barre              give di una cella da 5 000 RE e di un elmo Rottame a 90/180, inventario aperto: scatto
 #                         barre-inventario (cella con la barra rossa a meta', elmo con la barra di durata a meta')
 #  10. cambio cella       carica a 1 000 RE, R tenuto 3 s (scatto cambio-cella-tenuto a 1 s: l'avanzamento sulla barra

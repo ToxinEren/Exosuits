@@ -38,7 +38,9 @@ import net.minecraft.world.item.ItemStack;
  * spettatore. Sagoma, avviso e icona della cella sono segnaposto fino alla grafica della parte 4d (Decisione 14 del
  * piano). Una {@code RuntimeException} nel tick o nel disegno non chiude il gioco: quel tick l'HUD sparisce, o quel
  * fotogramma non si disegna, con un ERROR una volta per sessione ciascuno (si azzerano all'uscita dal mondo). Solo
- * client, solo sul thread del client.
+ * client. {@link #register()} gira una volta durante l'init della mod, che su Forge e NeoForge e' un thread del
+ * caricamento delle mod; tutto il resto (tick, disegno, azzeramento e lo stato che condividono) gira sul thread del
+ * client.
  */
 final class SuitHud {
     /** La percentuale dell'energia, con il numero come argomento. */
@@ -64,7 +66,8 @@ final class SuitHud {
 
     /**
      * Aggancia il disegno all'HUD del gioco e il calcolo del modello al tick del client, e l'azzeramento all'uscita
-     * dal mondo. Una volta, da {@link RedstoneExoframesClient#init()}.
+     * dal mondo. Una volta, da {@link RedstoneExoframesClient#init()}: durante l'init della mod, su Forge e NeoForge
+     * in un thread del caricamento delle mod.
      */
     static void register() {
         ClientCompat.renderHooks().addHudRenderer(SuitHud::render);

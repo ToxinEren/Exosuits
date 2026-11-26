@@ -51,11 +51,11 @@
 # mostra; danneggiata: mancino-danneggiato; J e l'elmo rotto: mancino-senza-elmo; H nasconde:
 # mancino-senza-elmo-nascosto; poi tp in 0,5 -60 -5,5. Parte solo se la A e' uscita con 0.
 # Esecuzione C, il riavvio: un client nuovo, mano destra, che parte dal file scritto dal client nella A
-# (EXO_SHOT_CLIENT_PREFS=<cartella>/redstone_exoframes-client.json), scatti in <cartella>/riavvio: "@attendi 12",
-# riavvio-senza-tuta; la tuta integra: riavvio-nascosto (l'HUD che il file teneva nascosto); H lo mostra: scatto
-# riavvio-messaggio un secondo dopo, da guardare: "Exoframe HUD shown"; riavvio-visibile; poi tp in 0,5 -60 -5,5. La C
-# parte solo se la A e' uscita con 0 e ha lasciato il file. Si prova cosi' la catena vera (tasto, scrittura, lettura
-# all'avvio), non la lettura di un file scritto a mano (Decisione 10 del piano).
+# (EXO_SHOT_CLIENT_PREFS=<cartella>/redstone_exoframes-client.json), scatti in <cartella>/riavvio: "@attendi 12", la
+# tuta integra: riavvio-nascosto (l'HUD che il file teneva nascosto); H lo mostra: scatto riavvio-messaggio un secondo
+# dopo, da guardare: "Exoframe HUD shown"; riavvio-visibile; poi tp in 0,5 -60 -5,5. La C parte solo se la A e' uscita
+# con 0 e ha lasciato il file. Si prova cosi' la catena vera (tasto, scrittura, lettura all'avvio), non la lettura di un
+# file scritto a mano (Decisione 10 del piano).
 #
 # Controlli. I riquadri e i colori esatti vengono da client/HudLayout e client/HudModel (costanti qui sotto); le soglie
 # di quantita' dalla misura. Un riquadro "dentro" un rettangolo: non vuoto, e con X, Y, X + L e Y + A dentro i suoi.
@@ -86,9 +86,15 @@
 #                       specchiato)
 #   mancino-sagoma      mancino-danneggiato contro mancino: cambia solo la sagoma, a destra, gialla
 #   mancino-solo-barra  mancino-senza-elmo contro mancino-senza-elmo-nascosto: il sottogruppo dell'energia, a destra
-#   riavvio             riavvio-senza-tuta contro riavvio-nascosto, nel gruppo: niente (il client e' partito con
-#                       l'HUD nascosto); riavvio-visibile contro riavvio-nascosto: il riquadro e' il gruppo (H lo
-#                       mostra)
+#   riavvio             nascosto della A contro riavvio-nascosto della C, nel gruppo: niente (il client della C e'
+#                       partito con l'HUD nascosto dal file, come quello della A dopo H); riavvio-visibile contro
+#                       riavvio-nascosto: il riquadro e' il gruppo (H lo mostra). Il riferimento senza HUD non e' uno
+#                       scatto senza la tuta: senza la tuta gli occhi del giocatore sono piu' bassi (con la tuta la
+#                       loro altezza e' x1,65, SuitSize), e uno scatto senza la tuta cambia lo sfondo sotto il gruppo
+#                       (misurati 7132 pixel diversi nel gruppo). I due scatti confrontati hanno la tuta, l'HUD
+#                       nascosto e la vignetta spenta (nella fase "nascosto" della A e nel file da cui parte la C);
+#                       vengono da due esecuzioni, e due client che partono dallo stesso mondo nello stesso posto
+#                       disegnano la stessa scena al pixel (misurato: 0 pixel diversi su tutto lo schermo)
 #
 # Non prova: il jar di produzione (il client gira nell'ambiente di sviluppo); la vignetta (Task 4); una sagoma mista
 # (lo stato del comando di debug vale per tutti e sei i pezzi); i pezzi non montati con l'elmo che funziona; il telaio
@@ -98,7 +104,8 @@
 # rovinato, di una versione piu' nuova o in una cartella di sola lettura (li provano ClientPrefsFileTest e la
 # checklist per il PC della parte); la mappa a due mani; il consumo fino all'avviso in sopravvivenza.
 #
-# Dura circa otto minuti a cache calde (misurati: vedi tools/client/README.md).
+# Dura circa sei minuti a cache calde (misurati 354 s su 1.21.1-neoforge e 373 s su 1.20.1-forge: 146-154 s
+# l'esecuzione A, 93-98 s la B, 79-84 s la C).
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se le tre esecuzioni sono uscite con
@@ -156,27 +163,32 @@ WHITE=FFFFFF
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
 # Ciascuna e' la meta', arrotondata per difetto alla decina, del valore misurato su 1.21.1-neoforge, la prima variante
-# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola. Provvisorie a 10 fino alla misura.
+# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola.
 
-# I pixel dell'HUD intero contro l'HUD nascosto: gruppo, terza-persona e mancino-gruppo.
-GROUP_MIN=10
-# La sagoma contro la sagoma nascosta (piastra e pezzi): gruppo e mancino-gruppo.
-SIL_MIN=10
-# I soli pezzi che cambiano colore: sagoma e mancino-sagoma.
-SIL_CHANGE_MIN=10
-# Il colore pieno dei pezzi: sagoma (verde prima, giallo dopo), critico e mancino-sagoma.
-SIL_COLOUR_MIN=10
-# La percentuale: testo, barra-esaurita (con l'avviso) e mancino-gruppo.
-TEXT_MIN=10
-# Le cinque righe del colore pieno della barra piena: barra-normale.
-BAR_MIN=10
-# "x0" che diventa "x1": scorta.
-SPARE_MIN=10
-# Il grigio di "x0" e il bianco di "x1": scorta.
-SPARE_COLOUR_MIN=10
-# La sola barra contro la sola barra nascosta: solo-barra.
-BAR_ONLY_MIN=10
-# Fissa: 500 RE di 10 000 sono 3 pixel dell'interfaccia, 6 dello schermo (la barra piena ne ha 122).
+# I pixel dell'HUD intero contro l'HUD nascosto: gruppo, terza-persona e mancino-gruppo (misurati 12320 in tutti e
+# tre: ogni pixel del gruppo, 176x70).
+GROUP_MIN=6160
+# La sagoma contro la sagoma nascosta, piastra e pezzi: gruppo e mancino-gruppo (misurati 2940 nei due: ogni pixel
+# della sagoma, 42x70).
+SIL_MIN=1470
+# I soli pezzi che cambiano colore, pieno e contorno: sagoma e mancino-sagoma (misurati 1024 nei due).
+SIL_CHANGE_MIN=510
+# Il colore pieno dei pezzi: sagoma (verde prima, giallo dopo), critico (rosso) e mancino-sagoma (giallo) (misurati
+# 424 in tutti e quattro).
+SIL_COLOUR_MIN=210
+# La percentuale: testo (verde, misurati 244), barra-esaurita (grigio, con l'avviso fisso: 248) e mancino-gruppo
+# (verde: 244).
+TEXT_MIN=120
+# Le cinque righe del colore pieno della barra piena: barra-normale (misurati 1220).
+BAR_MIN=610
+# "x0" che diventa "x1": scorta (misurati 228).
+SPARE_MIN=110
+# Il grigio di "x0" e il bianco di "x1": scorta (misurati 112 e 84).
+SPARE_COLOUR_MIN=40
+# La sola barra contro la sola barra nascosta: solo-barra (misurati 9380: ogni pixel del sottogruppo dell'energia,
+# 134x70).
+BAR_ONLY_MIN=4690
+# Fissa: 500 RE di 10 000 sono 3 pixel dell'interfaccia, 6 dello schermo (misurati 6; la barra piena ne ha 122).
 LOW_FILL_MAX_W=10
 
 # --- passi ----------------------------------------------------------------------------------------------------------
@@ -236,8 +248,8 @@ steps_b=(
 )
 steps_c=(
     "@attendi $FIRST_WAIT"
-    # il file della A tiene l'HUD nascosto: senza la tuta e con la tuta
-    "@scatto riavvio-senza-tuta" "$(wear 0)" "@attendi 4" "@scatto riavvio-nascosto"
+    # la tuta integra: il file della A tiene l'HUD nascosto
+    "$(wear 0)" "@attendi 4" "@scatto riavvio-nascosto"
     # H mostra l'HUD che il file della A teneva nascosto
     "@tieni h 0.2" "@attendi 1" "@scatto riavvio-messaggio" "@attendi 3"
     "@scatto riavvio-visibile"
@@ -246,7 +258,7 @@ steps_c=(
 shots_a=(pieno senza-vignetta nascosto danneggiato critico bassa esaurita prima-della-cella scorta senza-elmo
     senza-elmo-nascosto terza terza-nascosto messaggio-vignetta messaggio-nascosto)
 shots_b=(mancino mancino-nascosto mancino-danneggiato mancino-senza-elmo mancino-senza-elmo-nascosto)
-shots_c=(riavvio-senza-tuta riavvio-nascosto riavvio-messaggio riavvio-visibile)
+shots_c=(riavvio-nascosto riavvio-messaggio riavvio-visibile)
 
 a="$out"
 b="$out/mancino"
@@ -433,11 +445,13 @@ checks() {
     is_box "$m1" "$ENERGY_LEFT" && [ "$(val "$m2" pixel)" -eq 0 ] && good=0
     verdict mancino-solo-barra "$good" "$m1; sagoma $m2" "riquadro=$ENERGY_LEFT; nella sagoma pixel=0"
 
-    m1=$(take_measure differenza "$c/riavvio-senza-tuta.png" "$c/riavvio-nascosto.png" "$GROUP_RIGHT")
+    # il riferimento senza HUD ha la tuta, come riavvio-nascosto: vedi il commento di testa
+    m1=$(take_measure differenza "$a/nascosto.png" "$c/riavvio-nascosto.png" "$GROUP_RIGHT")
     m2=$(take_measure differenza "$c/riavvio-visibile.png" "$c/riavvio-nascosto.png")
     good=1
     [ "$(val "$m1" pixel)" -eq 0 ] && is_box "$m2" "$GROUP_RIGHT" && good=0
-    want="pixel=0 nel gruppo: il client e' partito con l'HUD nascosto; riquadro=$GROUP_RIGHT: H lo mostra"
+    want="pixel=0 nel gruppo: il client della C e' partito con l'HUD nascosto, come quello della A dopo H;"
+    want+=" riquadro=$GROUP_RIGHT: H lo mostra"
     verdict riavvio "$good" "$m1; $m2" "$want"
 }
 

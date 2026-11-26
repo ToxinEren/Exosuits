@@ -69,9 +69,9 @@
 # Dura circa tre minuti e mezzo a cache calde (misurati 207-225 s sulle quattro varianti: 111-119 s l'esecuzione A,
 # 76-86 s la B; 232 s una volta, la prima sequenza dopo una build). Le misure sono uguali al pixel sulle quattro
 # varianti (i valori accanto alle soglie, piu' sotto), salvo due, che cambiano di poco anche fra due esecuzioni della
-# stessa variante: il magenta della terza persona (fra 23538 e 23745, sempre nel riquadro 318x312+321+221) e quello
-# dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10843) e
-# 1.20.1 no (su Forge largo 170-174 pixel da x 320-321, magenta 18796-18830; su Fabric 166-174 da x 319-323, magenta
+# stessa variante: il magenta della terza persona (fra 23157 e 23745, sempre nel riquadro 318x312+321+221) e quello
+# dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo riquadro (98x140+356+120, magenta fra 10782 e 10850) e
+# 1.20.1 no (su Forge largo 166-176 pixel da x 318-323, magenta 18633-18831; su Fabric 166-174 da x 319-323, magenta
 # 18712-18810; alto 202 da y 66). Le variabili d'ambiente sono quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria);
 # EXO_SHOT_MAIN_HAND la imposta questo script per tutte e due le esecuzioni, qualunque valore abbia nell'ambiente di chi
 # lo chiama. Istruzioni in tools/client/README.md.
@@ -112,14 +112,15 @@ COVER_MAX=1400
 # pixel della sua sagoma che la tuta non copre: se ne ammette al piu' uno su venti (misurati 0 su 18075, con i pezzi
 # e con il telaio nudo).
 SAME_FACTOR=20
-# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati 28407 a sinistra e 28977 a destra); un
-# braccio solo ne lascerebbe una a zero.
+# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati 23637 a sinistra, dove il gruppo dell'HUD
+# della tuta sta sopra il braccio e ne copre una parte, come vuole il design M4 par. 5.12, e 28977 a destra; 28407 a
+# sinistra prima dell'HUD); un braccio solo ne lascerebbe una a zero.
 MAP_MIN_HALF=300
 # Una tuta intera e' larga piu' del doppio di un braccio solo, quindi la larghezza del riquadro distingue "intera" da
 # "un braccio solo". In terza persona, da dietro, il magenta della tuta e' largo 318 pixel.
 THIRD_PERSON_MIN_W=130
 # Nell'anteprima dell'inventario il magenta della tuta e' largo 98 pixel (su 1.21.1 e' la larghezza del riquadro
-# dell'anteprima, che ritaglia la tuta; su 1.20.1, che non ritaglia, fra 166 e 172). Il rettangolo misurato e' la meta'
+# dell'anteprima, che ritaglia la tuta; su 1.20.1, che non ritaglia, fra 166 e 176). Il rettangolo misurato e' la meta'
 # sinistra della finestra dell'inventario, dalla sua cima fino a sopra le caselle: non contiene ne' il braccio in
 # basso a destra ne' la riga in chat.
 INVENTORY_RECT=216x210+304+60

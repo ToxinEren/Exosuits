@@ -11,7 +11,9 @@ import java.util.Optional;
  * casco. Si leggono una volta all'avvio dal file {@code config/redstone_exoframes-client.json} della cartella di config
  * della piattaforma ({@link ClientPrefsFile}); un file con problemi lascia i predefiniti e un WARN. Ogni cambio fatto
  * con i tasti di {@link HudKeys} riscrive il file subito; una scrittura non riuscita lascia un WARN, e il valore nuovo
- * resta in uso fino alla chiusura del gioco. Solo client, solo sul thread del client.
+ * resta in uso fino alla chiusura del gioco. Solo client. {@link #load()} gira una volta durante l'init della mod, che
+ * su Forge e NeoForge e' un thread del caricamento delle mod, prima che il gioco legga i valori; tutto il resto gira
+ * sul thread del client.
  */
 final class ClientPrefs {
     /** L'inizio del problema di {@link ClientPrefsFile#save}, che il WARN della scrittura non ripete. */
@@ -23,7 +25,10 @@ final class ClientPrefs {
     private ClientPrefs() {
     }
 
-    /** Legge il file delle preferenze. Una volta, da {@link RedstoneExoframesClient#init()}, prima dei tasti. */
+    /**
+     * Legge il file delle preferenze. Una volta, da {@link RedstoneExoframesClient#init()}, prima dei tasti: durante
+     * l'init della mod, su Forge e NeoForge in un thread del caricamento delle mod.
+     */
     static void load() {
         file = Compat.platform().configDir().resolve(ClientPrefsFile.FILE_NAME);
         ClientPrefsFile.Loaded loaded = ClientPrefsFile.load(file);
