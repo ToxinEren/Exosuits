@@ -91,7 +91,11 @@
 #                       dell'interfaccia) abbastanza pixel diversi, con il riquadro sui due bordi dello schermo del suo
 #                       angolo (lo scuro parte dall'angolo, come vuole la texture: un angolo disegnato altrove, o
 #                       specchiato, non ci arriva), e nello schermo intero tanti pixel quanti nei quattro angoli
-#                       insieme: J cambia solo gli angoli. In quello in basso a sinistra il gruppo sta sopra la
+#                       insieme: J cambia solo gli angoli. In ogni angolo, poi, tanti pixel della tinta della vignetta
+#                       (0A0C0E, il colore della texture) in pieno quanti in senza-vignetta: la vignetta e'
+#                       traslucida, perche' disegnata opaca (la fusione spenta) dipingerebbe gli angoli della sua tinta
+#                       (misurati 0, 0, 400 e 0 nei due scatti: i 400 in basso a sinistra sono la cornice della barra,
+#                       0C0D0F, disegnata sopra la vignetta). In quello in basso a sinistra il gruppo sta sopra la
 #                       vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
 #   mancino-gruppo      mancino contro mancino-nascosto: il gruppo nell'angolo in basso a destra, la sagoma sul bordo
 #                       destro, la percentuale verde a sinistra del sottogruppo dell'energia (l'interno non e'
@@ -182,6 +186,8 @@ YELLOW=FFFF55
 RED=FF5555
 GREY=8A8A8A
 WHITE=FFFFFF
+# La tinta della vignetta, RRGGBB: VIGNETTE_TINT (10, 12, 14) di tools/gen_placeholders.py, il colore della texture.
+VIGNETTE_TINT=0A0C0E
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
 # Ciascuna e' la meta', arrotondata per difetto alla decina, del valore misurato su 1.21.1-neoforge, la prima variante
@@ -359,7 +365,7 @@ from_corner() {
 }
 
 checks() {
-    local m m1 m2 m3 m4 m5 good want sum
+    local m m1 m2 m3 m4 m5 good want sum got tints tint_good corner t1 t2
 
     m=$(prefs "$a/$PREFS")
     good=1
@@ -475,14 +481,28 @@ checks() {
     m3=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_BOTTOM_LEFT")
     m4=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_BOTTOM_RIGHT")
     sum=$(($(val "$m1" pixel) + $(val "$m2" pixel) + $(val "$m3" pixel) + $(val "$m4" pixel)))
+    # La vignetta e' traslucida (la fusione accesa): disegnata opaca dipingerebbe gli angoli della sua tinta, quindi in
+    # ogni angolo i pixel di quel colore sono tanti in pieno quanti in senza-vignetta (0, 0, 400 e 0: i 400 in basso a
+    # sinistra sono la cornice della barra, 0C0D0F, disegnata sopra la vignetta).
+    tints=""
+    tint_good=0
+    for corner in "$CORNER_TOP_LEFT" "$CORNER_TOP_RIGHT" "$CORNER_BOTTOM_LEFT" "$CORNER_BOTTOM_RIGHT"; do
+        t1=$(val "$(take_measure colore "$a/pieno.png" "$VIGNETTE_TINT" "$corner")" colore)
+        t2=$(val "$(take_measure colore "$a/senza-vignetta.png" "$VIGNETTE_TINT" "$corner")" colore)
+        tints+=" $t1/$t2"
+        { [ "$t1" -ge 0 ] && [ "$t1" -eq "$t2" ]; } || tint_good=1
+    done
     good=1
     from_corner "$m1" sinistra alto && from_corner "$m2" destra alto && from_corner "$m3" sinistra basso \
-        && from_corner "$m4" destra basso && [ "$(val "$m" pixel)" -eq "$sum" ] && good=0
+        && from_corner "$m4" destra basso && [ "$(val "$m" pixel)" -eq "$sum" ] && [ "$tint_good" -eq 0 ] && good=0
     want="in ogni angolo pixel >= $VIGNETTE_MIN e il riquadro dal suo angolo dello schermo (alto a sinistra X=0 e"
     want+=" Y=0, alto a destra X+L=$SCREEN_W e Y=0, basso a sinistra X=0 e Y+A=$SCREEN_H, basso a destra"
     want+=" X+L=$SCREEN_W e Y+A=$SCREEN_H); nello schermo intero pixel uguale alla somma dei quattro: nulla fuori"
-    want+=" dagli angoli"
-    verdict vignetta "$good" "schermo $m, somma degli angoli $sum; angoli $m1; $m2; $m3; $m4" "$want"
+    want+=" dagli angoli; in ogni angolo tanti pixel della tinta $VIGNETTE_TINT in pieno quanti in senza-vignetta: la"
+    want+=" vignetta e' traslucida (opaca, con la fusione spenta, dipingerebbe gli angoli della sua tinta)"
+    got="schermo $m, somma degli angoli $sum; angoli $m1; $m2; $m3; $m4; tinta $VIGNETTE_TINT in"
+    got+=" pieno/senza-vignetta per angolo$tints"
+    verdict vignetta "$good" "$got" "$want"
 
     m1=$(take_measure differenza "$b/mancino.png" "$b/mancino-nascosto.png")
     m2=$(take_measure differenza "$b/mancino.png" "$b/mancino-nascosto.png" "$SILHOUETTE_LEFT")
