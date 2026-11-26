@@ -74,7 +74,7 @@
 #                       (500 RE di 10 000 sono 3 pixel dell'interfaccia); niente verde nella barra, niente rosso nella
 #                       sagoma. L'avviso lampeggia: nessuna misura esatta del sottogruppo
 #   barra-esaurita      niente verde nella barra (vuota), niente rosso (non e' LOW), il grigio della percentuale e
-#                       dell'avviso fisso
+#                       dell'avviso fisso, nel loro riquadro esatto
 #   scorta              prima-della-cella contro scorta: cambia solo l'area delle celle di scorta, grigio prima e
 #                       bianco dopo
 #   solo-barra          senza-elmo contro senza-elmo-nascosto: il riquadro e' il sottogruppo dell'energia, niente
@@ -139,6 +139,7 @@ GROUP_RIGHT=176x70+4+466             # il gruppo, 88x35 in (2, 233)
 SILHOUETTE_RIGHT=42x70+4+466         # la sagoma, verso il bordo
 ENERGY_RIGHT=134x70+46+466           # l'energia, verso l'interno; e' anche la piastra con la sola barra
 PERCENT_AREA_RIGHT=58x18+50+482      # la percentuale piu' larga, con o senza avviso
+WARNING_PERCENT_RIGHT=42x16+50+482   # nell'area della percentuale, l'avviso fisso e "0%" in grigio (esaurita)
 SPARE_AREA_RIGHT=50x18+126+482       # l'icona della cella e "xN" fino a due cifre
 BAR_FILL_RIGHT=122x12+52+508         # il riempimento della barra, la prima riga piu' chiara
 BAR_FILL_BODY_RIGHT=122x10+52+510    # le sue cinque righe del colore pieno, con la barra piena
@@ -385,9 +386,13 @@ checks() {
     m2=$(take_measure colore "$a/esaurita.png" "$RED" "$ENERGY_RIGHT")
     m3=$(take_measure colore "$a/esaurita.png" "$GREY" "$PERCENT_AREA_RIGHT")
     good=1
+    # il riquadro del grigio e' l'avviso fisso, 8x8 da (2, 8) dell'energia, con le cifre di "0%" dopo il suo posto
+    # (misurato uguale su 1.21.1-neoforge e 1.20.1-forge): da soli farebbero 128 e 120 pixel, abbastanza tutti e due per
+    # TEXT_MIN, e solo il riquadro vede che ne manca uno o che l'avviso si e' spostato
     [ "$(val "$m1" colore)" -eq 0 ] && [ "$(val "$m2" colore)" -eq 0 ] && [ "$(val "$m3" colore)" -ge "$TEXT_MIN" ] \
-        && good=0
-    want="verde nella barra 0 (vuota); rosso nell'energia 0 (non e' LOW); grigio >= $TEXT_MIN (percentuale e avviso)"
+        && is_box "$m3" "$WARNING_PERCENT_RIGHT" && good=0
+    want="verde nella barra 0 (vuota); rosso nell'energia 0 (non e' LOW); grigio >= $TEXT_MIN con"
+    want+=" riquadro=$WARNING_PERCENT_RIGHT (l'avviso fisso e la percentuale)"
     verdict barra-esaurita "$good" "verde nella barra $m1; rosso $m2; grigio $m3" "$want"
 
     m1=$(take_measure differenza "$a/prima-della-cella.png" "$a/scorta.png" "$GROUP_RIGHT")
