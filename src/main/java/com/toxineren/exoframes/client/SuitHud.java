@@ -179,13 +179,15 @@ final class SuitHud {
      * dell'interfaccia ({@link HudLayout#vignetteCorners}), a scala 1. {@code blit} non accende la fusione e la texture
      * e' traslucida: la fusione si accende qui e si spegne in un {@code finally}, cosi' un'eccezione fra un
      * {@code blit} e l'altro non la lascia accesa per cio' che si disegna dopo. Il gancio dell'HUD disegna dopo tutto
-     * l'HUD del gioco base, e la differenza fra le versioni e' voluta (design M4 §10): su 1.21.1 gli elementi del
-     * gioco base che toccano gli angoli (le icone degli effetti in alto a destra, l'indicatore del salvataggio e i
-     * sottotitoli in basso a destra) stanno sopra la vignetta; su 1.20.1 le icone degli effetti e i sottotitoli stanno
-     * sotto, e l'indicatore del salvataggio sta sotto con Fabric e con Forge non si disegna affatto ({@code ForgeGui}
-     * non chiama il {@code Gui.render} del gioco base, l'unico che lo disegna). Gli avvisi in alto a destra (i toast)
-     * stanno sopra su tutte e due le versioni: il gioco base li disegna dopo l'HUD e dopo le schermate
-     * ({@code GameRenderer.render}).
+     * l'HUD del gioco base, e la differenza fra i loader e' voluta (design M4 §5.12 e §10): solo su NeoForge 1.21.1
+     * gli elementi del gioco base che toccano gli angoli (le icone degli effetti in alto a destra, l'indicatore del
+     * salvataggio e i sottotitoli in basso a destra) stanno sopra la vignetta, perche' NeoForge manda il suo evento
+     * dentro il gestore degli strati, con il test di profondita' acceso, e gli strati del gioco base stanno a z piu'
+     * alte; su Fabric 1.21.1, dove Fabric API lo manda alla fine di {@code Gui.render}, dopo che il test di profondita'
+     * si e' spento, e sulle due 1.20.1 la vignetta copre le icone degli effetti, i sottotitoli e l'indicatore del
+     * salvataggio, che con Forge 1.20.1 non si disegna affatto ({@code ForgeGui} non chiama il {@code Gui.render} del
+     * gioco base, l'unico che lo disegna). Gli avvisi in alto a destra (i toast) stanno sopra su tutte e quattro le
+     * varianti: il gioco base li disegna dopo l'HUD e dopo le schermate ({@code GameRenderer.render}).
      */
     private static void drawVignette(GuiGraphics graphics, int w, int h) {
         List<Rect> corners = HudLayout.vignetteCorners(w, h);
