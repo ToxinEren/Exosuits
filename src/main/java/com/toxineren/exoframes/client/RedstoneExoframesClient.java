@@ -25,6 +25,9 @@ public final class RedstoneExoframesClient {
         EntityRendererRegistry.register(ModEntities.EXOFRAME, ExoframeEntityRenderer::new);
         ExitKey.register();
         CellSwapKey.register();
+        // Le preferenze si leggono prima dei tasti che le cambiano.
+        ClientPrefs.load();
+        HudKeys.register();
         // La schermata della stazione vuole il tipo del menu, che su Forge e NeoForge qui non c'e' ancora: listen la
         // registra appena il tipo e' registrato, in tempo per l'evento delle schermate di NeoForge (design §5.20).
         ModMenus.STATION.listen(type -> MenuRegistry.registerScreenFactory(type, StationScreen::new));

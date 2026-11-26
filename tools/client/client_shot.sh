@@ -11,9 +11,10 @@
 # i log: gradle-server.log e gradle-client.log (uscita di Gradle e del gioco), server.log e client.log (latest.log
 # delle due cartelle di esecuzione), rcon.log (comandi e risposte), xvfb.log (uscita di Xvfb), log-check.txt
 # (avvisi ed errori del mod o dei mixin nei due log fuori da tools/log_allowlist.txt, vuoto se non ce ne sono: se non
-# e' vuoto l'esecuzione esce con 1). Prima di cominciare cancella dalla
-# cartella solo questi file, per nome (e gli scatti dei passi @scatto). Alla fine chiude server, client e Xvfb, anche
-# dopo un errore o Ctrl-C.
+# e' vuoto l'esecuzione esce con 1) e redstone_exoframes-client.json (il file delle preferenze del client com'e' dopo
+# i tre scatti finali, se il client ne ha uno: una sequenza lo controlla, e lo puo' ridare a un'esecuzione dopo con
+# EXO_SHOT_CLIENT_PREFS). Prima di cominciare cancella dalla cartella solo questi file, per nome (e gli scatti dei
+# passi @scatto). Alla fine chiude server, client e Xvfb, anche dopo un errore o Ctrl-C.
 #
 # Fra i comandi possono stare passi del client, che cominciano con @ e si eseguono nello stesso ordine:
 #   @click destro|sinistro             un clic del mouse dove punta il mirino
@@ -48,7 +49,11 @@
 # il file di config della mod (config/redstone_exoframes.json) si toglie nelle due cartelle: ogni esecuzione parte dai
 # predefiniti, che il mod riscrive all'avvio. Salvo EXO_SHOT_SERVER_CONFIG: se e' impostata, il file che indica si
 # copia nella cartella del server al posto di quello tolto, e il solo server parte con quei valori (il client resta ai
-# predefiniti: cosi' si prova cio' che il client riceve dal server).
+# predefiniti: cosi' si prova cio' che il client riceve dal server). Allo stesso modo nella cartella del client si
+# toglie il file delle preferenze del client (config/redstone_exoframes-client.json): ogni esecuzione parte con l'HUD
+# visibile e la vignetta accesa, salvo EXO_SHOT_CLIENT_PREFS, il cui file si copia li' al posto di quello tolto. In
+# options.txt il tasto della vignetta, che la mod lascia senza tasto, e' J (key_key.redstone_exoframes.vignette), e la
+# prima riga e' la versione dei dati del gioco della variante (version), senza la quale il gioco scarta tutto il file.
 # Una sola esecuzione per variante alla volta (lucchetto sulla cartella del server); esecuzioni su varianti diverse
 # in parallelo vogliono porte diverse (EXO_SHOT_PORT).
 #
@@ -67,6 +72,11 @@
 #   EXO_SHOT_SERVER_CONFIG
 #                     file di config della mod per il solo server (copiato in run-shot-server/config/); senza, i
 #                     predefiniti. Un file che non c'e' o non si legge ferma lo script prima di avviare qualunque cosa
+#   EXO_SHOT_CLIENT_PREFS
+#                     file delle preferenze del client (copiato in run-shot-client/config/
+#                     redstone_exoframes-client.json); senza, HUD visibile e vignetta accesa. Un file che non c'e' o
+#                     non si legge, o che e' quello che lo script scrive nella cartella, ferma lo script prima di
+#                     avviare qualunque cosa
 #   EXO_SHOT_MAIN_HAND
 #                     left o right, default right: la mano principale del giocatore (mainHand in options.txt del
 #                     client); con left il gioco disegna a sinistra il braccio della prima persona. Un altro valore
@@ -74,10 +84,10 @@
 #
 # Uscite: 0 scatti salvati e log puliti; 1 errore durante l'esecuzione (build, avvio, ingresso, comando rifiutato,
 # passo non riuscito, scatto, avvisi del mod fuori elenco in log-check.txt); 2 uso o ambiente sbagliati (variante,
-# passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, file di EXO_SHOT_SERVER_CONFIG che
-# manca, EXO_SHOT_MAIN_HAND che non e' left ne' right, porta occupata, Xvfb che non parte, OpenGL core 3.2 assente);
-# 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa non e' andato. Istruzioni
-# complete in tools/client/README.md.
+# passo sconosciuto o scritto male, tasto sconosciuto, programmi mancanti, EULA, file di EXO_SHOT_SERVER_CONFIG o di
+# EXO_SHOT_CLIENT_PREFS che manca, EXO_SHOT_MAIN_HAND che non e' left ne' right, porta occupata, Xvfb che non parte,
+# OpenGL core 3.2 assente); 130 Ctrl-C; 143 TERM. Ogni errore stampa su stderr una riga "ERRORE: ..." che dice cosa
+# non e' andato. Istruzioni complete in tools/client/README.md.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -97,7 +107,8 @@ if [ "${1:-}" = --selftest ]; then
     tmp=$(mktemp -d) || { echo "ERRORE: cartella temporanea non creata" >&2; exit 2; }
     trap 'rm -rf "$tmp"' EXIT
     good=("@punta 0 0" "@punta 959 539" "@clic 10 20" "@clic 10 20 destro" "@clic 10 20 maiuscole"
-        "@clic 10 20 sinistro maiuscole" "@trascina 1 2 3 4" "@click destro" "@tieni v 1" "@scatto a" "@attendi 0.5")
+        "@clic 10 20 sinistro maiuscole" "@trascina 1 2 3 4" "@click destro" "@tieni v 1" "@tieni h 1" "@tieni j 1"
+        "@tieni t 0.2" "@scatto a" "@attendi 0.5")
     bad=("@punta 960 0" "@punta 0 540" "@punta -1 0" "@punta 1" "@punta a b" "@clic 10" "@clic 10 20 medio"
         "@clic 10 20 maiuscole destro" "@trascina 1 2 3" "@trascina 1 2 3 999" "@scatto a b")
     failed=0
@@ -148,6 +159,13 @@ if [ "$known" -eq 0 ]; then
     usage
     fatal "variante sconosciuta '$variant'"
 fi
+# La versione dei dati del gioco della variante (world_version di version.json nel jar del client), per la riga version
+# di options.txt (vedi piu' sotto).
+case "$variant" in
+    1.20.1-*) data_version=3465 ;;
+    1.21.1-*) data_version=3955 ;;
+    *) fatal "versione dei dati del gioco sconosciuta per la variante '$variant': va aggiunta qui" ;;
+esac
 
 # --- finestra -------------------------------------------------------------------------------------------------------
 # Prima dei passi: le loro coordinate devono stare dentro la finestra.
@@ -269,6 +287,14 @@ if [ -n "$server_config" ]; then
     [ -f "$server_config" ] && [ -r "$server_config" ] \
         || fatal "EXO_SHOT_SERVER_CONFIG: file non trovato o non leggibile: $server_config"
 fi
+# Preferenze del client: come la config del server, il percorso si rende assoluto appena letto e un file che non c'e'
+# ferma qui.
+client_prefs=${EXO_SHOT_CLIENT_PREFS:-}
+if [ -n "$client_prefs" ]; then
+    case "$client_prefs" in /*) ;; *) client_prefs="$PWD/$client_prefs" ;; esac
+    [ -f "$client_prefs" ] && [ -r "$client_prefs" ] \
+        || fatal "EXO_SHOT_CLIENT_PREFS: file non trovato o non leggibile: $client_prefs"
+fi
 rport=$((port + 10))
 # Password RCON nuova a ogni esecuzione: non si stampa, non va sulla riga di comando (rcon.py la legge dalla variabile
 # d'ambiente EXO_RCON_PASSWORD) e resta solo in server.properties, nella cartella del server, con permessi 600.
@@ -285,13 +311,18 @@ sdir="$vdir/run-shot-server"
 cdir="$vdir/run-shot-client"
 mkdir -p "$sdir" "$cdir" "$out" || fatal "non riesco a creare le cartelle"
 out=$(cd "$out" && pwd)
+# Il file di EXO_SHOT_CLIENT_PREFS non puo' essere la copia che lo script scrive nella cartella: qui sotto la toglie.
+if [ -n "$client_prefs" ] && [ "$client_prefs" -ef "$out/redstone_exoframes-client.json" ]; then
+    fatal "EXO_SHOT_CLIENT_PREFS: $client_prefs e' il file che lo script toglie e riscrive nella cartella degli" \
+          "scatti: copialo altrove"
+fi
 
 exec 9>"$sdir/.lock"
 flock -n 9 || fatal "un'altra esecuzione di client_shot.sh usa gia' la variante $variant"
 
 # Si tolgono solo i file che lo script scrive, per nome: la cartella e' dell'utente e puo' contenere altro.
 for f in back.png front.png quarter.png gradle-server.log gradle-client.log server.log client.log rcon.log xvfb.log \
-        log-check.txt "${step_names[@]/%/.png}"; do
+        log-check.txt redstone_exoframes-client.json "${step_names[@]/%/.png}"; do
     rm -f "$out/$f"
 done
 
@@ -307,6 +338,14 @@ rm -f "$sdir/config/redstone_exoframes.json" "$cdir/config/redstone_exoframes.js
 if [ -n "$server_config" ]; then
     mkdir -p "$sdir/config" && cp "$server_config" "$sdir/config/redstone_exoframes.json" \
         || fatal "EXO_SHOT_SERVER_CONFIG: non riesco a copiare $server_config in $sdir/config/"
+fi
+# Preferenze del client ai predefiniti (HUD visibile, vignetta accesa): il client riscrive il file a ogni cambio fatto
+# con i tasti dell'HUD, e quello di un'esecuzione resterebbe per la successiva. Con EXO_SHOT_CLIENT_PREFS il client
+# parte dal file indicato.
+rm -f "$cdir/config/redstone_exoframes-client.json"
+if [ -n "$client_prefs" ]; then
+    mkdir -p "$cdir/config" && cp "$client_prefs" "$cdir/config/redstone_exoframes-client.json" \
+        || fatal "EXO_SHOT_CLIENT_PREFS: non riesco a copiare $client_prefs in $cdir/config/"
 fi
 echo "eula=true" >"$sdir/eula.txt"
 # Server e RCON ascoltano solo su 127.0.0.1 (server-ip vale per entrambi): l'account offline ha op e RCON esegue
@@ -335,8 +374,14 @@ EOF
 # options.txt: niente schermate di benvenuto, narratore o tutorial, nessuna pausa senza fuoco, grafica "Dettagliata"
 # (graphicsMode:1; 0 sarebbe "Rapida"), distanza di rendering 4 e 30 fps per il rendering software, mouse non grezzo
 # (xdotool muove il puntatore per lo scatto a tre quarti), salto automatico spento (un gradino non diventa un salto),
-# la mano principale di EXO_SHOT_MAIN_HAND (il valore fra virgolette, come lo scrive il gioco).
+# la mano principale di EXO_SHOT_MAIN_HAND (il valore fra virgolette, come lo scrive il gioco), il tasto della
+# vignetta della mod su J (la mod non gliene da' uno, e J e' libero nel gioco base; H, il tasto che nasconde l'HUD,
+# resta al suo predefinito). La prima riga e' la versione dei dati del gioco, come la scrive il gioco stesso: senza, il
+# gioco prende il file per uno di prima della 1.13 e lo passa per tutte le conversioni delle opzioni, e quella dei
+# tasti (OptionsKeyLwjgl3Fix) vuole in ogni riga key_ il numero di un tasto di LWJGL 2: con key.keyboard.j lancia, e il
+# gioco scarta tutto il file ("Failed to load options"; guiScale, mainHand e onboardAccessibility compresi).
 cat >"$cdir/options.txt" <<EOF
+version:$data_version
 onboardAccessibility:false
 narrator:0
 tutorialStep:none
@@ -355,6 +400,7 @@ soundCategory_master:0.0
 rawMouseInput:false
 autoJump:false
 mainHand:"$main_hand"
+key_key.redstone_exoframes.vignette:key.keyboard.j
 EOF
 
 # --- chiusura -------------------------------------------------------------------------------------------------------
@@ -634,6 +680,14 @@ key F5 # di nuovo da dietro
 for _ in $(seq 12); do xdotool mousemove_relative -- 60 0; sleep 0.15; done
 sleep 2
 shot quarter
+
+# Il file delle preferenze come l'ha lasciato il client, se c'e', accanto agli scatti: una sequenza lo controlla, e lo
+# puo' ridare a un'esecuzione dopo con EXO_SHOT_CLIENT_PREFS. Il client lo riscrive nel tick del tasto, molto prima.
+if [ -f "$cdir/config/redstone_exoframes-client.json" ]; then
+    cp "$cdir/config/redstone_exoframes-client.json" "$out/redstone_exoframes-client.json" \
+        || fail "non riesco a copiare il file delle preferenze del client in $out"
+    log "copiato redstone_exoframes-client.json"
+fi
 
 # Log del client e del server: le righe WARN/ERROR che nominano il mod o la sua entita' (anche quelle di vanilla, come
 # "UUID of added entity already exists: ExoframeEntity[...]"), gli errori di applicazione dei mixin e le tracce che

@@ -430,9 +430,9 @@ public final class CellGameTests {
     }
 
     /**
-     * La riga dei tasti in chat (design §12.13) al primo ingresso della sessione, con i due tasti come
-     * {@code Component.keybind}; un altro ingresso nella stessa sessione non la ripete, dopo la fine della sessione
-     * ({@code PlayerEvent.PLAYER_QUIT}) si ripete.
+     * La riga dei tasti in chat (design §12.13, e design M4 §5.12 per H) al primo ingresso della sessione, con i tre
+     * tasti come {@code Component.keybind}: uscita, cambio cella e HUD; un altro ingresso nella stessa sessione non la
+     * ripete, dopo la fine della sessione ({@code PlayerEvent.PLAYER_QUIT}) si ripete.
      */
     private static void keysHintOncePerSession(GameTestHelper helper) {
         ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
@@ -443,9 +443,10 @@ public final class CellGameTests {
                         && c.getKey().equals(EntryHints.KEYS_HINT))
                 .findFirst().orElseThrow();
         Object[] args = ((TranslatableContents) hint.getContents()).getArgs();
-        helper.assertTrue(args.length == 2 && keybind(args[0]).equals("key.redstone_exoframes.exit")
-                && keybind(args[1]).equals("key.redstone_exoframes.cell_swap"),
-                "the keys hint does not name the two keys: " + Arrays.toString(args));
+        helper.assertTrue(args.length == 3 && keybind(args[0]).equals("key.redstone_exoframes.exit")
+                && keybind(args[1]).equals("key.redstone_exoframes.cell_swap")
+                && keybind(args[2]).equals("key.redstone_exoframes.hide_hud"),
+                "the keys hint does not name the three keys: " + Arrays.toString(args));
 
         helper.assertTrue(FrameEntry.exit(player), "exit refused");
         helper.assertTrue(FrameEntry.enter(player, (ExoframeEntity) helper.getLevel().getEntity(id)), "enter refused");
