@@ -10,7 +10,6 @@ import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.function.ToIntFunction;
 
 /**
@@ -91,14 +90,14 @@ final class StationLayout {
     static final int TEST_IDLE = 0xFF3A3F46;
     /** Il pulsante di prova dopo la prima pressione confermata dal server. */
     static final int TEST_DONE = 0xFF2E8B57;
-    /** Un pezzo integro: il verde della legenda dell'HUD (design §5.12). */
-    static final int CONDITION_INTACT = 0xFF55FF55;
-    /** Un pezzo danneggiato: il giallo della legenda. */
-    static final int CONDITION_DAMAGED = 0xFFFFFF55;
-    /** Un pezzo critico: il rosso della legenda. */
-    static final int CONDITION_CRITICAL = 0xFFFF5555;
-    /** Un pezzo rotto: il grigio della legenda. */
-    static final int CONDITION_BROKEN = 0xFF8A8A8A;
+    /** Un pezzo integro: il verde della legenda, che e' quella dell'HUD (design §5.3 e §5.12). */
+    static final int CONDITION_INTACT = HudModel.GREEN;
+    /** Un pezzo danneggiato: il giallo della legenda dell'HUD. */
+    static final int CONDITION_DAMAGED = HudModel.YELLOW;
+    /** Un pezzo critico: il rosso della legenda dell'HUD. */
+    static final int CONDITION_CRITICAL = HudModel.RED;
+    /** Un pezzo rotto: il grigio della legenda dell'HUD. */
+    static final int CONDITION_BROKEN = HudModel.GREY;
 
     /** Tutti i colori che la schermata disegna da se', per il controllo del magenta e dell'opacita'. */
     static final List<Integer> ALL_COLOURS = List.of(BACKGROUND, PANEL, EDGE, PREVIEW_BG, SLOT_BG, SLOT_EDGE,
@@ -121,14 +120,12 @@ final class StationLayout {
         return (guiHeight - HEIGHT) / 2;
     }
 
-    /** Il colore della condizione di un pezzo, con la legenda dell'HUD (design §5.12). */
+    /**
+     * Il colore della condizione di un pezzo: la legenda e' quella dell'HUD, design §5.3 e §5.12
+     * ({@link HudModel#conditionColor}), cosi' un cambio di colore si fa in un posto solo.
+     */
     static int conditionColor(PieceCondition condition) {
-        return switch (Objects.requireNonNull(condition, "condition must not be null")) {
-            case INTACT -> CONDITION_INTACT;
-            case DAMAGED -> CONDITION_DAMAGED;
-            case CRITICAL -> CONDITION_CRITICAL;
-            case BROKEN -> CONDITION_BROKEN;
-        };
+        return HudModel.conditionColor(condition);
     }
 
     /**
