@@ -44,7 +44,8 @@
 #                      persona (terza); H nasconde: terza-nascosto; H mostra, F5 due volte torna alla prima persona
 #  11. effetti         un effetto (fortuna: nulla cambia nel mondo e nella vista) mette la sua icona nell'angolo in
 #                      alto a destra: scatto vignetta-effetti, con la vignetta, da guardare: l'icona sopra la vignetta
-#                      su 1.21.1 e sotto, scurita, su 1.20.1 (design M4 par. 5.12 e 10); poi l'effetto si toglie
+#                      su NeoForge 1.21.1 e sotto, scurita, su Fabric 1.21.1 e su 1.20.1 (dipende dal loader,
+#                      design M4 par. 5.12 e 10); poi l'effetto si toglie
 #  12. fine            J spegne la vignetta: scatto messaggio-vignetta un secondo dopo, da guardare: "Helmet vignette
 #                      off" sulla barra delle azioni; H nasconde l'HUD: scatto messaggio-nascosto un secondo dopo, da
 #                      guardare: "Exoframe HUD hidden: H to show it"; poi tp in 0,5 -60 -5,5 per i tre scatti di
