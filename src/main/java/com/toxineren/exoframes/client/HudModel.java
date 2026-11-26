@@ -70,7 +70,10 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
     static final int CELL_BODY = 0xFF3C3F44;
     /** Il tappo dell'icona della cella (design §5.12, riga "celle di scorta"; colore delle anteprime, §12). */
     static final int CELL_CAP = 0xFF969696;
-    /** La carica dell'icona della cella, il rosso della redstone (design §5.12, riga "celle di scorta"; §12). */
+    /**
+     * La carica dell'icona della cella, il rosso della stazione: lo stesso valore di {@code StationLayout.CELL_RED}
+     * (design §5.12, riga "celle di scorta"); unificare le due costanti e' un riporto per la 4d (design §14).
+     */
     static final int CELL_CHARGE = 0xFFC81E1E;
 
     /** Il riempimento pieno della barra, in pixel dell'interfaccia (design §5.12, "Elementi", riga "barra": 61x6). */

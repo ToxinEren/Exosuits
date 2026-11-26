@@ -271,7 +271,7 @@ Un preset è, per ognuno dei sei slot, una coppia facoltativa di colori (primari
 | piastra di fondo | tutto il gruppo, 88x35 (con `BAR_ONLY` solo il sottogruppo dell'energia, 67x35) | nero al 60 % (`99101216`) con un bordo di 1 pixel di rame al 43 % (`6EB87333`) |
 | sagoma | dentro il sottogruppo della sagoma: elmo 6x6 a (8,3); torso 8x11 a (7,10); braccio sinistro 3x11 a (3,10); braccio destro 3x11 a (16,10); gamba sinistra 3x11 a (7,22); gamba destra 3x11 a (12,22) | vista da dietro, il braccio sinistro a sinistra; ogni pezzo pieno del colore della sua condizione con un contorno di 1 pixel a un terzo di quel colore; un pezzo non montato: fondo scuro (`5A000000`) e contorno grigio (`FF464646`). Solo con `FULL` |
 | avviso | 8x8 a (2,8) del sottogruppo dell'energia | triangolo con il punto esclamativo, nel colore dell'energia; con `LOW` lampeggia, mezzo secondo acceso e mezzo spento a partire dal tick in cui lo stato è diventato `LOW`; con `EMPTY` fisso; altrimenti non c'è |
-| percentuale | da (2,8), o da (12,8) dopo l'avviso | carica per difetto, `hud.redstone_exoframes.percent` ("%s %%" in italiano, "%s%%" in inglese), con ombra, nel colore dell'energia; senza cella "Nessuna cella" in grigio |
+| percentuale | da (2,8), o da (12,8) dopo l'avviso | carica per difetto, `hud.redstone_exoframes.percent` ("%s %%" in italiano, "%s%%" in inglese), con ombra, nel colore dell'energia; senza cella il testo `hud.redstone_exoframes.no_cell`, "Senza cella" ("No cell"), in grigio, con ombra, da (2,20), sulla riga della barra (che senza cella è vuota), al posto della percentuale; "Nessuna cella" è largo 69 pixel in una riga di 63 (decisione 1 del piano della 4c) |
 | celle di scorta | allineate a destra a (65,8) | un'icona di cella 5x8 e "×N", bianco, grigio se N è 0 (HUD-02, L-07: le celle dell'inventario, barra, inventario e seconda mano, con carica maggiore di zero, contate dal client sui dati degli stack una volta per tick) |
 | barra | cornice 63x8 a (2,20); riempimento 61x6 | bordo `FF0C0D0F`, fondo `FF282A2E`, riempimento in proporzione a carica / capacità della copia dello stato, nel colore dell'energia, con la prima riga più chiara; senza cella vuota; prima del primo pacchetto con gli indicatori, bianca come la riga di oggi |
 | vignetta | quattro angoli di 72x40, fissi: `(0,0)`, `(w−72,0)`, `(0,h−40)`, `(w−72,h−40)` | §"Vignetta" qui sotto; solo con `FULL` e in prima persona |
@@ -373,7 +373,7 @@ In `en_us.json` e `it_it.json`, stesse chiavi nello stesso ordine (`LangFilesTes
 | `message.redstone_exoframes.frame_item_full` | Questo telaio porta pezzi o una cella: si posa solo vuoto | This exoframe carries pieces or a cell: only an empty one can be placed |
 | `message.redstone_exoframes.hud_hidden`, `.hud_shown`, `.vignette_on`, `.vignette_off` | HUD della tuta nascosto: %s per mostrarlo; HUD della tuta visibile; Vignetta del casco accesa; Vignetta del casco spenta | Exoframe HUD hidden: %s to show it; Exoframe HUD shown; Helmet vignette on; Helmet vignette off |
 | `key.redstone_exoframes.hide_hud`, `key.redstone_exoframes.vignette` | Nascondi l'HUD della tuta; Vignetta del casco | Hide exoframe HUD; Helmet vignette |
-| `hud.redstone_exoframes.percent` (nuova), `hud.redstone_exoframes.no_cell` (testo nuovo) | %s %%; Nessuna cella | %s%%; No cell |
+| `hud.redstone_exoframes.percent` (nuova), `hud.redstone_exoframes.no_cell` (testo nuovo) | %s %%; Senza cella | %s%%; No cell |
 | `tooltip.redstone_exoframes.station.what`, `.where`, `.open` | Ripara, vernicia e monta i pezzi di un telaio piazzato; Il telaio va sopra la stazione o entro 2 blocchi; Clic destro per aprirla | Repairs, paints and fits the pieces of a placed exoframe; The exoframe goes on the station or within 2 blocks; Right-click to open |
 | `tooltip.redstone_exoframes.repair_kit.what`, `.where` | Ripara una parte del pezzo messo peggio; Clic destro dentro la tuta o su un telaio piazzato | Repairs part of the most damaged piece; Right-click inside the exoframe or on a placed one |
 | `tooltip.redstone_exoframes.exoframe.unlocked`, `.reinforced` | Sbloccato; Rinforzato | Unlocked; Reinforced |
@@ -630,7 +630,27 @@ La 4a-1 è su `main` (fino a `f6da189`); le carte della sua esecuzione sono sul 
     - Ogni widget che segue un trascinamento usa la distanza dal punto premuto, come l'anteprima: su 1.21.1 `mouseDragged` arriva sommato per fotogramma.
     - Il rilascio che chiude un gesto della schermata non arriva al gioco base, che altrimenti getterebbe o poserebbe la pila sul cursore.
   - **Il pulsante di prova 102 se ne va** quando il 102 ha la sua azione. Il controllo `pulsante` di `m4a1_shots.sh` diventa quello di un pulsante vero, per esempio la scelta 0-7.
-- **Per la 4c:** il piano (`docs/superpowers/plans/2026-11-20-m4c-hud.md`) segue i valori provvisori delle domande 8-10. La sua decisione 1 ("Senza cella" sulla riga della barra vuota, perché "Nessuna cella" non entra nella riga) aspetta la conferma del proprietario prima del Task 1.
+- **Per la 4c:** il piano (`docs/superpowers/plans/2026-11-20-m4c-hud.md`) segue i valori provvisori delle domande 8-10. La sua decisione 1 ("Senza cella" sulla riga della barra vuota, perché "Nessuna cella" non entra nella riga) è stata seguita: chiesta al proprietario prima del Task 1, finora senza obiezioni; cambiarla costa un testo e una costante.
 - **Limiti accettati della 4a-1** (in `docs/compat.md` e nel Javadoc di `StationBlock`):
   - su Forge 1.20.1, un piccone che si rompe proprio sul colpo che rompe la metà laterale fa perdere la stazione;
   - su NeoForge, la regola della rottura usa `hasCorrectToolForDrops` a un argomento, che non manda `PlayerEvent.HarvestCheck`.
+
+## 14. Riporti della parte 4c
+
+Le carte dell'esecuzione della 4c sono sul ramo `archivio/m3c-fascicoli`, in `docs/archivio/m4c-esecuzione/`. Ciò che resta per le parti dopo, dalla revisione finale (decisione R22); sono righe brevi, per chi le raccoglie.
+
+- **Per la 4d, che ridisegna la grafica dell'HUD:**
+  - Fissare in `HudLayoutTest`, a grafica finita, i rettangoli della sagoma e dell'avviso e la larghezza vera di due cifre delle celle di scorta (oggi `TWO_DIGIT_SPARE` = 18 è dedotta, non misurata).
+  - Fissare il corpo della barra `122x10+52+510` (`BAR_FILL` senza la prima riga) in `screenRectsAtNineSixtyMatchTheSequence`; il riquadro `barra-esaurita` `42x16+50+482` dipende dalla larghezza di "0%" e si fissa solo con una larghezza misurata nel gioco.
+  - Fissare il riquadro `testo` `46x14+50+482` in `m4c_shots.sh` (si controlla con `M4C_SOLO_CONTROLLI=1` sugli scatti che ci sono).
+  - Un'unica costante per il rosso della carica della cella: oggi `HudModel.CELL_CHARGE` e `StationLayout.CELL_RED`, con lo stesso valore.
+- **Test in più, quando si toccano quei file:**
+  - In `ClientPrefsFileTest`, un file con una voce giusta e una sbagliata (`{"hudHidden": "yes", "vignette": false}`): ne vengono i predefiniti.
+  - In `HudLayoutTest`, un `intersects` vero e un `contains` falso.
+- **Dalla prova sul PC (DEC-48: ciò che trova diventa il primo compito della parte dopo):** che cosa si vede su Fabric 1.21.1 dei sottotitoli e dell'indicatore del salvataggio, e su NeoForge 1.21.1 di F3 sopra il gruppo; sono dedotti dal bytecode, non visti nel cloud (le decisioni sono nelle carte archiviate sopra).
+- **Ciò che l'esecuzione ha smentito del piano** (il piano resta com'era stato scritto):
+  - "×0" è largo 12, non 11.
+  - `options.txt` vuole la riga `version:` perché le righe `key_` contino.
+  - Se gli strati del gioco base stanno sopra o sotto l'HUD dipende dal loader, non dalla versione (§5.12).
+  - Il controllo `riavvio` confronta il `nascosto` della prova A con il `riavvio-nascosto` della C, e `riavvio-senza-tuta` non c'è più (la tuta alza la camera).
+- **Le domande 8-10 del proprietario** restano ai valori provvisori; la decisione 1 ("Senza cella") è seguita.

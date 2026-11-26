@@ -34,10 +34,13 @@ class HudLayoutTest {
     private static final int WIDEST_PERCENT = 27;
     /** "9 %", la percentuale piu' larga con l'avviso: con LOW la carica e' sotto il 10 %, con EMPTY e' zero. */
     private static final int WIDEST_PERCENT_WITH_WARNING = 15;
-    /** Il segno di moltiplicazione e una cifra: le celle di scorta da 0 a 9. */
-    private static final int ONE_DIGIT_SPARE = 11;
-    /** Il segno di moltiplicazione e due cifre: le celle di scorta da 10 a 99. */
-    private static final int TWO_DIGIT_SPARE = 17;
+    /** Il segno di moltiplicazione e una cifra: le celle di scorta da 0 a 9. Misurata nel gioco ("x0" e' largo 12). */
+    private static final int ONE_DIGIT_SPARE = 12;
+    /**
+     * Il segno di moltiplicazione e due cifre: le celle di scorta da 10 a 99. Dedotta, non misurata: una cifra di 6
+     * pixel in piu' di {@link #ONE_DIGIT_SPARE}.
+     */
+    private static final int TWO_DIGIT_SPARE = 18;
     /** "Senza cella", il testo senza cella piu' largo ("No cell" e' 33). */
     private static final int NO_CELL_TEXT = 57;
 
@@ -131,10 +134,10 @@ class HudLayoutTest {
         assertTrue(textRow.contains(HudLayout.WARNING));
         assertFalse(textRow.intersects(frame));
 
-        assertEquals(54, HudLayout.spareTextX(ONE_DIGIT_SPARE));
-        assertEquals(48, cellIconX(ONE_DIGIT_SPARE));
-        assertEquals(48, HudLayout.spareTextX(TWO_DIGIT_SPARE));
-        assertEquals(42, cellIconX(TWO_DIGIT_SPARE));
+        assertEquals(53, HudLayout.spareTextX(ONE_DIGIT_SPARE));
+        assertEquals(47, cellIconX(ONE_DIGIT_SPARE));
+        assertEquals(47, HudLayout.spareTextX(TWO_DIGIT_SPARE));
+        assertEquals(41, cellIconX(TWO_DIGIT_SPARE));
 
         Rect percent = text(HudLayout.TEXT_X, HudLayout.TEXT_Y, WIDEST_PERCENT);
         Rect percentAfterWarning = text(HudLayout.TEXT_X_AFTER_WARNING, HudLayout.TEXT_Y, WIDEST_PERCENT_WITH_WARNING);
