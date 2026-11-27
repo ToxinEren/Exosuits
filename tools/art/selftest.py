@@ -22,9 +22,12 @@ pretende che i controlli lo segnalino. Esce con 1 se un difetto passa inosservat
 Prove della stazione di manutenzione (tools/art/station.py, bench.Bench.check), sulla direzione del mod (officina):
  11. una tasca del fronte aperta verso terra (arriva alla riga del suolo);
  12. una tasca del fronte unita a una tasca del piano, senza aprirsi verso il piano;
- 13. station.py si ferma su una stazione che non passa i controlli: esce con 1 e non scrive nessun file.
+ 13. station.py si ferma su una stazione che non passa i controlli: esce con 1 e non scrive nessun file;
+ 14. facce della stazione con un vertice a T (un vertice di una faccia dentro un lato di un'altra): una faccia divisa a
+     meta' e' segnalata da bench.t_junctions, e station.py senza la divisione dei rettangoli (le facce di prima) esce
+     con 1 senza scrivere nulla.
 
-Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12) verificano prima la loro premessa (che cosa copre la
+Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12, 14) verificano prima la loro premessa (che cosa copre la
 parte iniettata; per la stazione, che senza il difetto passi il controllo): se il disegno cambia e la premessa non vale
 piu', la prova fallisce dicendolo, invece di passare senza provare nulla. 1a e 1b verificano la premessa sulla faccia
 nord e contano solo una segnalazione su quella faccia: la coppia iniettata e' complanare anche su altre facce, e una
@@ -378,6 +381,61 @@ def station_stops():
     if written:
         return False, f'station.py ha scritto {written} nonostante il difetto'
     return True, 'uscita 1, nessun file scritto'
+
+
+@case('14. facce della stazione con un vertice a T: il controllo le trova e station.py le rifiuta')
+def station_t_junction():
+    import contextlib
+    import io
+    import tempfile
+    import bench
+    import station
+    models = station_bench().models()
+    if bench.t_junctions(models):
+        raise Premise(f'i modelli della stazione {STATION_DIRECTION} hanno gia\' un vertice a T')
+    # difetto 1: la prima faccia lunga almeno 2 lungo un asse, divisa in due a meta': i due vertici nuovi stanno dentro
+    # i lati delle facce accanto (in modelli senza vertici a T quei lati coincidono con i suoi)
+    for half in ('main', 'side'):
+        for n, e in enumerate(models[half]['elements']):
+            k = next((k for k in range(3) if e['to'][k] - e['from'][k] >= 2), None)
+            if k is not None:
+                break
+        else:
+            continue
+        break
+    else:
+        raise Premise('nessuna faccia lunga almeno 2')
+    mid = (e['from'][k] + e['to'][k]) // 2
+    first, second = dict(e, to=list(e['to'])), dict(e, **{'from': list(e['from'])})
+    first['to'][k] = second['from'][k] = mid
+    models[half]['elements'][n:n + 1] = [first, second]
+    hits = bench.t_junctions(models)
+    if not hits:
+        return False, f'nessuna segnalazione per la faccia {e["from"]} {e["to"]} di station_{half} divisa a meta\''
+    # difetto 2: station.py senza la divisione dei rettangoli (le facce com'erano prima, con i vertici a T che nel gioco
+    # lasciavano vedere il cielo): deve uscire con 1 senza scrivere nulla
+    saved_conform, saved_argv = bench._conform, sys.argv
+    bench._conform = lambda rects: rects
+    try:
+        if not bench.t_junctions(station_bench().models()):
+            raise Premise('senza la divisione i rettangoli non hanno vertici a T: la prova non distingue nulla')
+        with tempfile.TemporaryDirectory() as out:
+            sys.argv = ['station.py', '--direction', STATION_DIRECTION, '--out', out]
+            try:
+                with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                    station.main()
+            except SystemExit as exc:
+                code = exc.code
+            else:
+                code = 0
+            written = [os.path.join(d, f) for d, _, fs in os.walk(out) for f in fs]
+    finally:
+        bench._conform, sys.argv = saved_conform, saved_argv
+    if code != 1:
+        return False, f'station.py senza la divisione e\' uscito con {code} invece di 1'
+    if written:
+        return False, f'station.py ha scritto {written} nonostante i vertici a T'
+    return True, f'{hits[0]}; station.py senza la divisione: uscita 1, nessun file scritto'
 
 
 def main():

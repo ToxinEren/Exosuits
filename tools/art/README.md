@@ -88,9 +88,11 @@ inietta un difetto alla volta in una copia del modello costruita in memoria e pr
 11. stazione di manutenzione (`bench.Bench.check`, sulla direzione del mod, `officina`, sotto): una tasca del fronte
     aperta verso terra;
 12. una tasca del fronte unita a una tasca del piano, senza aprirsi verso il piano;
-13. `station.py` si ferma su una stazione che non passa i controlli: esce con 1 senza scrivere nessun file.
+13. `station.py` si ferma su una stazione che non passa i controlli: esce con 1 senza scrivere nessun file;
+14. facce della stazione con un vertice a T (sotto, "Stazione di manutenzione"): una faccia divisa a meta' e'
+    segnalata da `bench.t_junctions`, e `station.py` senza la divisione dei rettangoli esce con 1 senza scrivere nulla.
 
-Le prove 1a, 1b, 1c, 11 e 12 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
+Le prove 1a, 1b, 1c, 11, 12 e 14 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
 iniettata; per la stazione, che senza il difetto passi il controllo) e falliscono dicendolo se il disegno cambia; 1a e
 1b contano solo la segnalazione sulla faccia di cui hanno verificato la premessa (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova
 registrata. Un controllo nuovo va aggiunto anche li'.
@@ -361,7 +363,8 @@ JSON con `exo.dumps_json`, PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 
   principale a sinistra, x 0..16, la laterale a destra, come le posa il gioco), una griglia di voxel piena in cui
   un design scava tasche (`cut`) e rialza parti (`fill`) da una faccia, e dipinge le tele delle facce. Le facce
   scoperte dei voxel diventano elementi piatti con una faccia sola, uniti in rettangoli: nessuna sovrapposizione
-  complanare per costruzione. UV: il fondo delle tasche e i piani esterni prendono la proiezione piana della tela
+  complanare per costruzione; poi i rettangoli si dividono finche' non resta nessun vertice a T (sotto, "Facce senza
+  vertici a T"). UV: il fondo delle tasche e i piani esterni prendono la proiezione piana della tela
   (come le UV predefinite del gioco base); le pareti delle tasche prendono i texel della parte piena accanto, piegati
   attorno allo spigolo (con `rotation` 90 quando gli assi della faccia lo chiedono). `cullface` solo sul bordo del
   blocco; le facce della giuntura fra le due meta' sono disegnate senza (una meta' da sola resta chiusa). Sopra e gli
@@ -390,13 +393,12 @@ verso l'altra meta' sono sfumate e piu' chiare che nelle anteprime (il fianco si
 da sotto il piano della stazione, e nessuna anteprima le mostra. La luce liscia scurisce anche la parte bassa delle
 facce vicino a terra, come per ogni blocco del gioco base.
 
-**Crepe di un pixel.** Le facce scoperte, unite in rettangoli, si incontrano anche con vertici a T (l'angolo di un
-rettangolo a meta' del lato di un altro): lungo quei lati il disegno puo' lasciare scoperto un pixel, e li' si vede
-cio' che sta dietro la superficie del blocco, cioe' nulla (le facce dei blocchi vicini sono nascoste dal cubo pieno):
-un pixel del colore del cielo. Nel client vero (parte 4d, 27 novembre 2026, 960x540) sono comparsi due pixel cosi' in
-uno degli otto scatti della stazione di ogni variante, sempre gli stessi, e due in quattordici altre viste su
-1.21.1-neoforge, tutti su spigoli rientranti delle tasche (dove una parete incontra il fondo o la faccia esterna).
-Non manca nessuna faccia: le facce dei due modelli coprono esattamente quelle scoperte dei voxel, una volta sola.
+**Facce senza vertici a T.** Nessun vertice di una faccia sta dentro un lato di un'altra, in tutto il banco e lungo
+la giuntura: lungo un lato cosi' il gioco puo' lasciare scoperto un pixel, e dietro la superficie del blocco non c'e'
+nulla (le facce dei vicini sono nascoste dal cubo pieno), quindi si vedrebbe il cielo, come succedeva con le facce di
+prima sugli spigoli delle tasche. `_conform` taglia i rettangoli lungo la perpendicolare per ogni vertice che sta
+dentro un loro lato, finche' non ne resta nessuno (direzione A: 648 + 432 facce invece di 84 + 66, con gli stessi
+texel), e `station.py` non scrive nulla se `bench.t_junctions` ne trova uno nei modelli finiti.
 
 **Anteprime** (solo locali, non nella CI; Playwright come sopra):
 

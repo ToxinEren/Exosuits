@@ -16,7 +16,8 @@ modello dell'oggetto, scritti a mano, usano gli stessi nomi dei modelli e l'icon
 
 Stesso input, stessi byte: nessuna data, nessun numero casuale fuori da paint.HashRng con semi dai nomi, solo interi,
 JSON con chiavi in ordine fisso (exo.dumps_json), PNG senza metadati (exo.write_png: IHDR, IDAT, IEND, zlib 9).
-Esce con 1, senza scrivere nulla, se la geometria non passa i controlli di bench.Bench.check.
+Esce con 1, senza scrivere nulla, se la geometria non passa i controlli di bench.Bench.check o se le facce dei modelli
+hanno un vertice a T (bench.t_junctions: un vertice di una faccia dentro un lato di un'altra).
 """
 import argparse
 import os
@@ -25,23 +26,29 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from bench import Bench  # noqa: E402
+from bench import Bench, t_junctions  # noqa: E402
 from exo import dumps_json, write_png, write_text  # noqa: E402
 from station_designs import DIRECTIONS, load  # noqa: E402
 
 
 def build(name):
-    """Costruisce la direzione: (bench, modelli, texture, icona); lancia ValueError se la geometria non va."""
+    """Costruisce la direzione: (bench, modelli, texture, icona); lancia ValueError se la geometria non va o se le
+    facce hanno un vertice a T."""
     design = load(name)
     bench = Bench()
     design.build(bench)
     problems = bench.check()
     if problems:
         raise ValueError('\n'.join(problems))
+    models = bench.models()
+    problems = t_junctions(models)
+    if problems:
+        more = f'\n... e altri {len(problems) - 10}' if len(problems) > 10 else ''
+        raise ValueError(f'{len(problems)} vertici a T nelle facce dei modelli:\n' + '\n'.join(problems[:10]) + more)
     icon = design.icon()
     if icon.shape != (16, 16, 4):
         raise ValueError(f'icona {icon.shape[:2]} invece di 16x16')
-    return bench, bench.models(), bench.textures(), icon
+    return bench, models, bench.textures(), icon
 
 
 def write(out, models, textures, icon):

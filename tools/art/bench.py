@@ -17,7 +17,12 @@ anche verso terra, verso il piano o verso un altro lato lascerebbe vedere attrav
 attraversare la giuntura fra le due meta'.
 
 Le facce scoperte dei voxel diventano rettangoli (elementi piatti, una faccia ciascuno, uniti finche' hanno la stessa
-texture e la stessa proiezione), quindi nessuna faccia si sovrappone a un'altra complanare. UV:
+texture e la stessa proiezione), quindi nessuna faccia si sovrappone a un'altra complanare. I rettangoli poi si
+dividono finche' nessun vertice di una faccia sta dentro un lato di un'altra (vertice a T), in tutto il banco, con le
+due meta' dove le posa il gioco e quindi anche lungo la giuntura (`_conform`): lungo un lato con un vertice a T il
+disegno del gioco puo' lasciare scoperto un pixel, e dietro la superficie del blocco non c'e' nulla (le facce dei
+vicini sono nascoste dal cubo pieno), quindi quel pixel mostra il cielo. `t_junctions` lo controlla sui modelli finiti,
+e `station.py` non scrive nulla se ne trova uno. UV:
   - le facce rivolte come la faccia esterna della loro tasca (il fondo delle tasche, i piani esterni) prendono la
     proiezione piana della tela di quella faccia, come le UV predefinite del gioco base;
   - le pareti delle tasche (e i fianchi delle parti rialzate) prendono i texel della parte piena accanto, "piegati"
@@ -260,16 +265,20 @@ class Bench:
 
     # --- esportazione ----------------------------------------------------------------------------------------------
     def models(self):
-        """I due modelli: {'main': json, 'side': json} (dizionari pronti per exo.dumps_json)."""
-        out = {}
+        """I due modelli: {'main': json, 'side': json} (dizionari pronti per exo.dumps_json). Le facce scoperte di ogni
+        piano si uniscono in rettangoli (`_rectangles`), poi si dividono finche' non resta nessun vertice a T fra le
+        facce di tutto il banco, le due meta' insieme (`_conform`); gli elementi seguono l'ordine delle direzioni, poi
+        il piano, poi l'angolo del rettangolo."""
+        rects = []
         for half, grid in self.faces().items():
-            elements = []
-            for name, _, _ in DIRS:
-                planes = sorted(p for (n, p) in grid if n == name)
-                for plane in planes:
-                    cells = grid[(name, plane)]
-                    for (i0, i1, j0, j1), key in _rectangles(cells):
-                        elements.append(self._element(half, name, plane, (i0, i1, j0, j1), key))
+            for (name, plane), cells in grid.items():
+                rects.extend((half, name, plane, rect, key) for rect, key in _rectangles(cells))
+        order = {name: n for n, (name, _, _) in enumerate(DIRS)}
+        rects = sorted(_conform(rects), key=lambda r: (order[r[1]], r[2], r[3][0], r[3][2], r[3][1], r[3][3]))
+        out = {}
+        for half, _ in HALVES:
+            elements = [self._element(half, name, plane, rect, key) for h, name, plane, rect, key in rects
+                        if h == half]
             textures = {'particle': NS + 'station_side', 'top': NS + 'station_top', 'side': NS + 'station_side',
                         'front': NS + 'station_front_' + half, 'back': NS + 'station_back_' + half,
                         'bottom': NS + 'station_bottom'}
@@ -365,3 +374,97 @@ def _rectangles(cells):
                 del left[(i, j)]
         out.append(((i0, i1, j0, j1), key))
     return out
+
+
+def _line(k, p):
+    """La retta parallela all'asse k che passa per il punto p: (k, le altre due coordinate di p)."""
+    return (k,) + tuple(p[m] for m in range(3) if m != k)
+
+
+def _corners(name, plane, rect):
+    """I quattro vertici (x, y, z) del banco di un rettangolo (i0, i1, j0, j1) nel piano `plane` della direzione
+    `name` (i e j sono gli altri due assi, in ordine)."""
+    axis = DIR[name][0]
+    o0, o1 = (k for k in range(3) if k != axis)
+    i0, i1, j0, j1 = rect
+    out = []
+    for i in (i0, i1):
+        for j in (j0, j1):
+            p = [0, 0, 0]
+            p[axis], p[o0], p[o1] = plane, i, j
+            out.append(tuple(p))
+    return out
+
+
+def _conform(rects):
+    """Divide i rettangoli [(meta', direzione, piano, (i0, i1, j0, j1), chiave)] finche' nessun vertice di uno sta
+    dentro un lato di un altro, in tutto il banco: un rettangolo con dei vertici dentro i suoi lati si taglia lungo la
+    perpendicolare per ciascuno di essi, e si ricomincia finche' non c'e' piu' nulla da tagliare. Un taglio attraversa
+    tutto il rettangolo (fermarsi dentro lascerebbe un vertice a T), quindi una linea fa il giro della superficie
+    finche' non incontra vertici che ci sono gia'. I tagli cadono su coordinate di vertici esistenti, quindi finisce; i
+    pezzi tengono la chiave del rettangolo, cioe' la stessa mappa delle UV, e mostrano gli stessi texel."""
+    while True:
+        lines = {}
+        for _, name, plane, rect, _ in rects:
+            for p in _corners(name, plane, rect):
+                for k in range(3):
+                    lines.setdefault(_line(k, p), set()).add(p[k])
+        out, cut = [], False
+        for half, name, plane, (i0, i1, j0, j1), key in rects:
+            axis = DIR[name][0]
+            o0, o1 = (k for k in range(3) if k != axis)
+            cuts = []
+            for k, m, lo, hi, ends in ((o0, o1, i0, i1, (j0, j1)), (o1, o0, j0, j1, (i0, i1))):
+                found = set()
+                for end in ends:
+                    p = [0, 0, 0]
+                    p[axis], p[m] = plane, end
+                    found.update(t for t in lines.get(_line(k, p), ()) if lo < t < hi)
+                cuts.append(sorted(found))
+            cut = cut or bool(cuts[0] or cuts[1])
+            ii, jj = [i0, *cuts[0], i1], [j0, *cuts[1], j1]
+            out.extend((half, name, plane, (a, b, c, d), key) for a, b in zip(ii, ii[1:]) for c, d in zip(jj, jj[1:]))
+        rects = out
+        if not cut:
+            return rects
+
+
+def t_junctions(models):
+    """I vertici a T dei modelli finiti {'main': json, 'side': json}, con le due meta' dove le posa il gioco (la
+    laterale a x 16..32 del banco): un vertice di una faccia che sta dentro un lato di un'altra faccia. Lungo quel lato
+    il disegno del gioco puo' lasciare scoperto un pixel, e dietro la superficie del blocco non c'e' nulla (le facce dei
+    vicini sono nascoste dal cubo pieno): il pixel mostrerebbe il cielo. Controlla gli elementi scritti, non i
+    rettangoli di `_conform`; restituisce i problemi, vuoto se non ce ne sono."""
+    faces, vertices = [], set()
+    for half, _ in HALVES:
+        x0 = X0[half]
+        for e in models[half]['elements']:
+            (fx, fy, fz), (tx, ty, tz) = e['from'], e['to']
+            lo, hi = (x0 - tx, fy, fz), (x0 - fx, ty, tz)
+            for local in e['faces']:
+                faces.append((half, local, e['from'], e['to'], lo, hi))
+            vertices.update((x, y, z) for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2]))
+    on_line = {}
+    for v in vertices:
+        for k in range(3):
+            on_line.setdefault((k, v[:k] + v[k + 1:]), []).append(v[k])
+    problems = []
+    for half, local, frm, to, lo, hi in faces:
+        flat = [k for k in range(3) if lo[k] == hi[k]]
+        if len(flat) != 1:
+            problems.append(f'faccia {local} di station_{half} da {frm} a {to}: non e\' un rettangolo piatto')
+            continue
+        for k in range(3):
+            if k == flat[0]:
+                continue
+            m = 3 - flat[0] - k
+            for end in (lo[m], hi[m]):
+                p = list(lo)
+                p[m] = end
+                for t in sorted(on_line.get((k, tuple(p[:k] + p[k + 1:])), ())):
+                    if lo[k] < t < hi[k]:
+                        v = list(p)
+                        v[k] = t
+                        problems.append(f'vertice a T {tuple(v)} del banco dentro un lato della faccia {local} di '
+                                        f'station_{half} da {frm} a {to}')
+    return problems
