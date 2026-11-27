@@ -1,0 +1,28 @@
+### Task 3: La raccolta e la posa del telaio con i suoi dati (l'8 della 4a)
+
+Design §5.11 (terzo punto, con la risposta del proprietario alla domanda 11) e §5.14 (la riga dell'oggetto telaio raccolto). Il solo punto in cui un telaio piazzato torna oggetto è la raccolta a mano del telaio vuoto (`FrameInteractions.unmount`); `/exoframe remove` lascia a terra solo il contenuto.
+
+**Files:**
+- Create: `gametest/FrameItemGameTests.java`.
+- Modify: `content/ExoframeItem.java`, `frame/FrameInteractions.java`, `gametest/GameTestKit.java`, `gametest/ChargerGameTests.java` (`everyItemAndBlockHasANameInBothLanguages`), `RedstoneExoframes.java`, i due file di lingua, `docs/compat.md`.
+
+**Interfaces:**
+- Consumes: `ItemDataAccess.frame`, `setFrame`, `hasData`, `FrameItemData` e `PieceData`; `FrameInteractions.unmount` (la riga della raccolta), `FramePermissions.canUse`, `FrameState.setOwner`, `setUnlocked`, `setReinforced`; da `GameTestKit` `useExoframeItem`, `placeFrame`, `click`, `ownedBy`, `messages`, `placedIds`, `findInMainInventory`.
+- Produces: in "Tipi nuovi" `ExoframeItem.FULL`, `TEXT_KEYS` e `pickedUp`; in `GameTestKit` `static ExoframeEntity useExoframeItem(GameTestHelper helper, ServerPlayer player, ItemStack stack, BlockPos relative, boolean expectPlaced)`, a cui quella di oggi passa `new ItemStack(ModItems.EXOFRAME.get())`.
+  - **La raccolta**: `Handouts.give(player, ExoframeItem.pickedUp(record.state(), player.getUUID()))`, con lo stato letto prima di `removePlaced`.
+  - **`useOn`**, nell'ordine: sul client riesce e basta; se i dati dell'oggetto hanno pezzi o una cella, `FULL` sulla barra delle azioni (con un giocatore), `FAIL` e nulla cambia; lo stato nuovo prende come proprietario quello dei dati, se c'è, altrimenti chi lo posa, se c'è un giocatore, e `unlocked` e `reinforced` dai dati (falsi senza dati); poi la posa di oggi, con `NO_ROOM` quando non c'è spazio.
+  - **`tooltip`**: prima delle quattro righe grigie, "Sbloccato" e "Rinforzato" in `ChatFormatting.GOLD` quando sono veri; mai il proprietario.
+
+- [ ] **Step 1: test in mondo** — `FrameItemGameTests` (nuova, registrata dopo `StationActionGameTests`); A e B con `mockServerPlayer`, in sopravvivenza; un telaio con `placeFrame` su pietra; "raccogliere" è accovacciarsi a mano vuota e `click(frame, p, 0.0, 1.0, 0.0)` sul telaio vuoto; "posare" è `useExoframeItem` con lo stack:
+  - `ownerPickUpFreesTheFrameAndKeepsTheFlags`: il telaio di A, sbloccato e rinforzato; A lo raccoglie: nel suo inventario un oggetto telaio i cui dati (`frame(stack)`) hanno il proprietario vuoto, `unlocked` e `reinforced` veri, nessun pezzo, nessuna cella; B lo posa: il record nuovo ha B come proprietario, `unlocked` e `reinforced` veri, e la mano di B è vuota.
+  - `borrowedFrameKeepsItsOwnerWhenPlacedAgain`: il telaio di A, sbloccato; B lo raccoglie: i dati hanno il proprietario A, `unlocked` vero, `reinforced` falso; B lo posa: il record ha il proprietario A ed è sbloccato, e `FramePermissions.canUse(B, stato)` è vero; A lo blocca con `updatePlaced`, e la raccolta di B dà allora un messaggio `FrameInteractions.LOCKED` e il telaio resta piazzato.
+  - `plainPickUpGivesAPlainItem`: il telaio di A, bloccato e non rinforzato; A lo raccoglie: `hasData` dell'oggetto è falso; B lo posa: il proprietario è B (la regola di oggi).
+  - `frameItemWithPiecesOrACellIsNotPlaced`: un oggetto telaio con i dati `FrameItemData(vuoto, false, false, Optional.empty(), Map.of(HELMET, PieceData(SCRAP, 180, 180, List.of(), Appearance.DEFAULT)))`, posato da A con `expectPlaced` falso: A ha un messaggio `ExoframeItem.FULL`, l'oggetto resta in mano, `placedIds` non cambia; lo stesso con una cella nei dati (`Optional.of(500)`) e nessun pezzo.
+  - `frameTooltipShowsTheFlagsNeverTheOwner`: con i dati del proprietario A, sbloccato e rinforzato, fra le chiavi delle righe di `ExoframeItem.tooltip(stack, lines, false)` (`TranslatableContents`) ci sono `tooltip.redstone_exoframes.exoframe.unlocked` e `.reinforced`, e nessuna riga (`getString()`) contiene il nome di A o `A.getUUID().toString()`; solo rinforzato: la sola `.reinforced`; senza dati: nessuna delle due; le quattro righe di oggi ci sono sempre.
+  
+  Run: `./gradlew --console=plain :1.21.1-neoforge:compileJava` — Expected: FAIL (`pickedUp`, `FULL`, il nuovo `useExoframeItem` non esistono).
+- [ ] **Step 2: implementare** `ExoframeItem` (`FULL`, `TEXT_KEYS`, `pickedUp`, `useOn`, `tooltip`; il Javadoc di `pickedUp` dice la regola della domanda 11 e quella dell'oggetto semplice, Decisione 15) e la raccolta in `FrameInteractions`; il nuovo `useExoframeItem`; la registrazione di `FrameItemGameTests`; le chiavi del Task 3 nei due file di lingua; `ExoframeItem.TEXT_KEYS` in `everyItemAndBlockHasANameInBothLanguages`. Run: la build delle quattro varianti — Expected: `BUILD SUCCESSFUL`, N₀ + 18 JUnit; `bash tools/run_gametests.sh` → quattro righe `OK` con 256; `exoframeItemPlacesAnEmptyFrame` e `unmountByHeightThenCellThenPickUp` passano senza cambi.
+- [ ] **Step 3: documenti** — `docs/compat.md`, "Schema NBT": le chiavi `owner`, `unlocked` e `reinforced` dell'oggetto telaio le scrive la raccolta (il proprietario solo se raccoglie un altro) e le legge la posa; un oggetto con `pieces` o `cell` nei dati non si posa; un jar della milestone 3 ignora i dati (design §5.14). Run: `grep -c 'frame_item_full\|pickedUp' docs/compat.md` — Expected: almeno 1.
+- [ ] **Step 4: verifiche di fine task** — i comandi di fine task con N₀ + 18 JUnit e 256 test in mondo.
+- [ ] **Step 5: commit** `content, frame: l'oggetto telaio raccolto porta sblocco, rinforzo e, se raccolto da un altro, il proprietario; la posa li rilegge e rifiuta un oggetto con pezzi o cella`.
+
