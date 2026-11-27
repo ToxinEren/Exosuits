@@ -20,7 +20,8 @@ import java.util.function.IntUnaryOperator;
  * sagoma con il colore di ogni slot, la percentuale e il riempimento della barra, il colore dell'energia, l'avviso e le
  * celle di scorta. SuitHud lo calcola una volta per tick del client e lo disegna con i disegni della texture dell'HUD
  * che {@link HudLayout} sceglie da questi colori. I colori, ARGB, sono l'unica legenda dell'HUD e della stazione:
- * {@link StationLayout} prende da qui i suoi (Decisione 3 del piano). Lo prova HudModelTest.
+ * {@link StationLayout} prende da qui i suoi, cosi' un cambio di colore si fa in un posto solo (design §5.3 e §5.12).
+ * Lo prova HudModelTest.
  *
  * @param level       il livello dell'HUD
  * @param silhouette  il colore di ogni slot della sagoma: tutti e sei con {@link HudLevel#FULL}, nessuno altrimenti
@@ -106,7 +107,8 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
      * Il modello di un tick. Con il livello {@link HudLevel#NONE} e' {@link #NONE}, e {@code state} puo' essere nullo;
      * con gli altri {@code state} e' la copia dello stato del client. La sagoma, solo con {@link HudLevel#FULL}: per
      * ogni slot il colore della condizione del pezzo montato, con il contorno a un terzo, o il pezzo non montato.
-     * Percentuale e riempimento per difetto, dalla carica della cella (0 e 0 senza cella; Decisione 8 del piano);
+     * Percentuale e riempimento per difetto, dalla carica della cella (0 e 0 senza cella; con poca carica la barra
+     * puo' restare vuota, come "0 %": lo stato lo dice il colore, che viene dal server);
      * colore dell'energia e avviso dallo stato dell'energia del server ({@code energy}, vuoto prima del primo pacchetto
      * con gli indicatori), che lampeggia secondo {@code ticksInState} (vedi {@link #ticksInState}).
      *
@@ -176,7 +178,10 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
 
     /**
      * La prima riga del riempimento della barra, piu' chiara (design §5.12, riga "barra"): opaca, ogni canale a meta'
-     * strada verso il bianco, per difetto.
+     * strada verso il bianco, per difetto. Il codice che disegna non la usa, perche' la prima riga sta gia' nei disegni
+     * delle texture: e' la regola contro cui HudLayoutTest.spritesCoverTheHudTextureAndCarryTheLegend (i riempimenti
+     * della barra dell'energia) e StationLayoutTest.spritesCoverTheScreenTextureAndCarryTheLegend (quelli della barra
+     * della durata) provano le texture committate.
      */
     static int lighter(int argb) {
         return opaque(argb, channel -> channel + (255 - channel) / 2);
@@ -218,7 +223,10 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
         return new Paint(colour, outline(colour));
     }
 
-    /** Vero con {@code LOW} ed {@code EMPTY}: l'avviso ha il suo posto anche spento (Decisione 5 del piano). */
+    /**
+     * Vero con {@code LOW} ed {@code EMPTY}: l'avviso ha il suo posto anche spento, cosi' la percentuale non salta due
+     * volte al secondo.
+     */
     private static boolean warningSlot(Optional<EnergyState> energy) {
         return energy.map(e -> e == EnergyState.LOW || e == EnergyState.EMPTY).orElse(false);
     }
@@ -231,10 +239,13 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
     }
 
     /**
-     * Il colore di un pezzo della sagoma, ARGB: il pieno e il contorno di 1 pixel attorno.
+     * Il colore di un pezzo della sagoma, ARGB: il pieno e il contorno di 1 pixel attorno. SuitHud sceglie la figura
+     * della texture dal solo pieno ({@link HudLayout#figure}).
      *
      * @param fill    il pieno
-     * @param outline il contorno
+     * @param outline il contorno; il codice che disegna non lo legge: e' la regola contro cui
+     *                HudLayoutTest.spritesCoverTheHudTextureAndCarryTheLegend prova il contorno delle figure della
+     *                texture committata
      */
     record Paint(int fill, int outline) {
     }

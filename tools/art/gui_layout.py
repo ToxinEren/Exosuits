@@ -110,6 +110,24 @@ def size(r):
     return (r[2] - r[0], r[3] - r[1])
 
 
+def union(a, b):
+    """Il rettangolo piu' piccolo che contiene a e b."""
+    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+
+
+# I rettangoli dei widget attorno a cui lo sfondo della schermata (gui_officina.background) cuoce qualcosa, e solo
+# questi: i quattro pannelli incassati, le prese dei sei posti e della cella, l'incavo della barra della durata, la
+# vaschetta attorno alla tavolozza e al predefinito, il fondo dell'anteprima, le cornici degli slot dell'inventario e
+# della barra, le scanalature sotto le prime due righe dei preset, la riga dei costi. gui.py --map-json li scrive in
+# tools/art/gui_map.json, e GuiMapTest li confronta con i rettangoli di client/StationLayout: un widget spostato qui
+# va spostato anche li', e quelli che StationLayout non ha ancora (della parte 4b) il test li elenca per nome.
+BACKGROUND = {name: GUI[name] for name in (
+    'pannello.telaio', 'pannello.pezzo', 'pannello.anteprima', 'pannello.preset',
+    'pezzo.helmet', 'pezzo.torso', 'pezzo.left_arm', 'pezzo.right_arm', 'pezzo.left_leg', 'pezzo.right_leg', 'cella',
+    'durata.barra', 'tavolozza', 'predefinito', 'anteprima.ritaglio', 'inventario', 'barra', 'preset.0', 'preset.1',
+    'riga.costi')}
+
+
 # --- HUD (design par. 5.12; HudLayout) --------------------------------------------------------------------------------
 GROUP_W, GROUP_H = 88, 35     # il gruppo, con FULL la piastra
 SIL_W, ENERGY_W = 21, 67      # i due sottogruppi: la sagoma verso il bordo, l'energia verso l'interno

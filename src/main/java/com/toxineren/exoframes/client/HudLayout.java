@@ -54,8 +54,8 @@ final class HudLayout {
     /** L'ordinata della riga del testo, da 8 a 17 con l'ombra (design §5.12, riga "percentuale": "da (2,8)"). */
     static final int TEXT_Y = 8;
     /**
-     * La percentuale piu' larga, con o senza avviso: l'area del controllo sugli scatti, che SuitHud non usa (tabella
-     * "Disposizione dell'HUD" del piano, dalla riga del testo di design §5.12).
+     * La percentuale piu' larga, con o senza avviso: l'area del controllo sugli scatti, che SuitHud non usa (dalla
+     * riga del testo di design §5.12, con la larghezza di "100 %" nel carattere del gioco).
      */
     static final Rect PERCENT_AREA = new Rect(2, 8, 31, 17);
     /** Il bordo destro, escluso, di "xN" delle celle di scorta (design §5.12, riga "celle di scorta": "a (65,8)"). */
@@ -65,17 +65,20 @@ final class HudLayout {
     /** L'altezza dell'icona della cella (design §5.12, riga "celle di scorta": 5x8). */
     static final int CELL_ICON_H = 8;
     /**
-     * Icona e "xN" fino a due cifre: l'area del controllo sugli scatti, che SuitHud non usa (tabella "Disposizione
-     * dell'HUD" del piano, dalla riga del testo di design §5.12).
+     * Icona e "xN" fino a due cifre: l'area del controllo sugli scatti, che SuitHud non usa (dalla riga del testo di
+     * design §5.12, con la larghezza di due cifre nel carattere del gioco).
      */
     static final Rect SPARE_AREA = new Rect(40, 8, 65, 17);
     /** La cornice della barra, 63x8 a (2,20) del sottogruppo dell'energia (design §5.12, "Elementi", riga "barra"). */
     static final Rect BAR_FRAME = new Rect(2, 20, 65, 28);
     /** Il riempimento della barra, 61x6 dentro la cornice (design §5.12, "Elementi", riga "barra"). */
     static final Rect BAR_FILL = new Rect(3, 21, 64, 27);
-    /** L'ascissa del testo senza cella, al posto della barra vuota (Decisione 1 del piano, su design §5.12). */
+    /**
+     * L'ascissa del testo senza cella, al posto della barra vuota: nella riga del testo non entra (design §5.12, riga
+     * "percentuale").
+     */
     static final int NO_CELL_X = 2;
-    /** L'ordinata del testo senza cella: la riga della barra (Decisione 1 del piano, su design §5.12). */
+    /** L'ordinata del testo senza cella: la riga della barra (design §5.12, riga "percentuale": "da (2,20)"). */
     static final int NO_CELL_Y = 20;
 
     /** La larghezza della texture dei disegni dell'HUD (tools/art/gui.py, {@code textures/gui/hud.png}). */

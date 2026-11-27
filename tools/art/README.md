@@ -98,9 +98,15 @@ inietta un difetto alla volta in una copia del modello costruita in memoria e pr
     della schermata, un colore della legenda ritoccato in `station.png` (bordo di un posto, barra della durata) e in
     `hud.png` (sagoma, barra, avviso), un texel magenta in ciascuna delle quattro immagini, la vignetta fuori dalla
     regola del design (un texel oltre 0,42, il pixel d'angolo sotto, un texel sul lato opposto, un riflesso in basso),
-    e `gui.py` che esce con 1 senza scrivere nulla su texture che non passano i controlli.
+    e `gui.py` che esce con 1 senza scrivere nulla (ne' le texture ne' la mappa) su texture che non passano i
+    controlli.
+24-29. ancora la schermata, l'HUD, la vignetta e il kit: l'anello bianco della scelta ritoccato su ciascuno dei
+    quattro lati, la prima riga piu' chiara di una barra ritoccata (durata in `station.png`, energia in `hud.png`), la
+    figura dei pezzi non montati ritoccata (il fondo al centro di un pezzo, il contorno), la vignetta senza i due
+    riflessi in alto, l'icona del kit di 16x17, e un disegno della grandezza sbagliata (un posto 19x20, l'icona spenta
+    della cella 5x7), che ferma `screen_sheet` e `hud_sheet` con un `ValueError`.
 
-Le prove 1a, 1b, 1c, 11, 12, 14 e 15-23 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
+Le prove 1a, 1b, 1c, 11, 12, 14 e 15-29 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
 iniettata; per la stazione e per le texture dell'interfaccia, che senza il difetto passino il controllo) e falliscono
 dicendolo se il disegno cambia; 1a e 1b contano solo la segnalazione sulla faccia di cui hanno verificato la premessa
 (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova registrata. Un
@@ -470,8 +476,11 @@ non c'e' ancora): fino ad allora la scrive solo `--kit`.
                                                <dir>/textures/item/repair_kit.png
     python3 tools/art/gui.py --map             stampa dove sta ogni disegno nelle due texture (u, v, larghezza,
                                                altezza), anche ogni pezzo della sagoma per stato
+    python3 tools/art/gui.py --map-json tools/art/gui_map.json
+                                               scrive la stessa mappa in JSON, con i rettangoli che i disegni
+                                               cuociono (puo' stare con --out)
 
-`--out` e' obbligatorio.
+`--out` o `--map-json` e' obbligatorio; la mappa si scrive, come le texture, solo se i controlli passano.
 
 - `textures/gui/station.png`, 512x256: lo sfondo di 316x232 in (0, 0) con cio' che non cambia mai (cornice di bronzo e
   piastra d'acciaio rivettata, i quattro pannelli incassati, i 36 slot del giocatore, le prese dei sei posti e della
@@ -491,7 +500,15 @@ I posti dei disegni (`gui_layout.py`, `STATION_ATLAS` e `HUD_ATLAS`; `--map` li 
 (`tutti.normale` e' `TUTTI_NORMALE`, `sagoma.integro` e' `SAGOMA_INTEGRO`), anche quelle dei widget delle parti 4a-2 e
 4b; `StationLayoutTest` e `HudLayoutTest` le confrontano con le PNG del mod (ogni texel non trasparente in un disegno
 con la sua costante, nessun magenta, i colori della legenda), quindi un posto cambiato qui va cambiato anche li'. Ogni
-disegno ha la grandezza del rettangolo del design che riempie. I colori che il
+disegno ha la grandezza del rettangolo del design che riempie. `tools/art/gui_map.json` (scritto da `--map-json`,
+fuori dalle risorse, quindi mai in un jar) ha per ogni texture i nomi e i posti dei disegni, i rettangoli dei widget
+attorno a cui lo sfondo della schermata cuoce qualcosa (`gui_layout.BACKGROUND`: pannelli, prese dei posti, incavo
+della barra, vaschetta della tavolozza, fondo dell'anteprima, slot, scanalature dei preset, riga dei costi) e quelli
+dei pezzi nelle figure della sagoma (`SIL_PIECES`); `check_art.sh` lo rigenera e lo confronta byte per byte, e
+`GuiMapTest` lo confronta con le costanti `Sprite` (nomi e posti, nelle due direzioni) e con i rettangoli di
+`client/StationLayout` e `client/HudLayout`. Un rettangolo che lo sfondo cuoce e `StationLayout` non ha ancora (la
+tavolozza, i preset e la riga dei costi della parte 4b) il test lo elenca per nome fra quelli del solo sfondo: chi
+aggiunge il widget lo sposta fra quelli confrontati. I colori che il
 codice mette da se' restano al codice: le sedici tinte e i colori del livello si riempiono prima, sotto le cornici
 `tinta` e `predefinito` (con le finestre trasparenti), i dodici colori di un preset sopra il suo fondo; i testi li
 scrive il codice con il carattere del gioco.
@@ -499,12 +516,14 @@ scrive il codice con il carattere del gioco.
 Stesse regole degli altri generatori: stesso input, stessi byte (semi dai nomi delle tele, `paint.HashRng`, solo
 interi), PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 9), numpy di `requirements.txt`. Esce con 1, senza
 scrivere nulla, se un controllo non passa: ogni disegno dentro la sua texture e nessuno sovrapposto a un altro, fuori
-dai disegni tutto trasparente, lo sfondo opaco; i colori della legenda esatti (bordi dei posti e riempimenti della
-barra della durata; pezzi della sagoma pieni del colore con il contorno a un terzo e solo quei due colori; riempimenti
-della barra dell'energia con la prima riga piu' chiara; avvisi); nessun texel "magenta" per
-`tools/client/arm_measure.sh`; la vignetta con l'opacita' 107 (0,42) nei pixel d'angolo e mai di piu', zero sui due lati
-opposti di ogni angolo, i riflessi solo nei due angoli in alto. Le prove negative di questi controlli sono le 15-23 di
-`selftest.py` (sopra).
+dai disegni tutto trasparente, lo sfondo opaco; i colori della legenda esatti (il bordo dei posti e l'anello bianco
+della scelta, sui quattro lati; i riempimenti della barra della durata e di quella dell'energia, con la prima riga piu'
+chiara; i pezzi della sagoma pieni del colore con il contorno a un terzo e solo quei due colori, quelli non montati
+con il fondo e il contorno del design; gli avvisi); nessun texel "magenta" per `tools/client/arm_measure.sh`; la
+vignetta con l'opacita' 107 (0,42) nei pixel d'angolo e mai di piu', zero sui due lati opposti di ogni angolo, i
+riflessi nei due angoli in alto e solo li'; l'icona del kit di 16x16. Un disegno della grandezza sbagliata per il suo
+posto ferma gia' la costruzione delle texture (`ValueError`), con la stessa uscita 1. Le prove negative di questi
+controlli sono le 15-29 di `selftest.py` (sopra).
 
 Struttura: `gui_layout.py` (la geometria del design, i posti nelle texture, la legenda, le tinte), `gui_officina.py`
 (i disegni, con le scale di `pixel.py`), `gui.py` (il punto d'ingresso con i controlli).

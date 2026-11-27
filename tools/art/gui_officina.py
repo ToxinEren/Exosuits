@@ -104,9 +104,10 @@ def background():
     """La schermata vuota: piastra d'acciaio scuro spazzolata con la cornice di bronzo e i rivetti agli angoli, i
     quattro pannelli incassati, le prese dei posti, la vaschetta della tavolozza e l'incavo della barra, il fondo
     dell'anteprima con la piattaforma girevole, gli slot dell'inventario, le scanalature dei preset e la riga dei costi.
-    Lo spazio dei moduli (moduli.riservato) resta pannello vuoto: niente disegni per M5 (D1)."""
+    Lo spazio dei moduli (moduli.riservato) resta pannello vuoto: niente disegni per M5 (D1). I widget attorno a cui
+    cuoce qualcosa sono quelli di L.BACKGROUND, e solo quelli (tools/art/gui_map.json li scrive per i test)."""
     W, H = L.SCREEN_W, L.SCREEN_H
-    G = L.GUI
+    G = L.BACKGROUND
     cv = Canvas(H, W, 'gui/fondo', 'gun', 3)
     cv.streaks((3, 3, W - 3, H - 3), 'spazzolatura', every=2, length=(4, 14))
     cv.noise((3, 3, W - 3, H - 3), 'grana', chance=10)
@@ -128,7 +129,7 @@ def background():
     cv.hline(93, 10, 70, 'black', 1).hline(94, 10, 70, 'gun', 4)
     # pannello del pezzo: l'incavo della barra della durata e la vaschetta della tavolozza (con il predefinito)
     cv.border(L.grow(G['durata.barra'], 1), 'black', 0)
-    tray(cv, (80, 87, 208, 111))
+    tray(cv, L.grow(L.union(G['tavolozza'], G['predefinito']), 1))
     # anteprima: fondo a tre fasce, piattaforma girevole di bronzo sotto i piedi, angoli di bronzo
     x0, y0, x1, y1 = G['anteprima.ritaglio']
     for y in range(y0, y1):
@@ -143,9 +144,10 @@ def background():
     # inventario
     for r in L.inventory_slots():
         slot(cv, r)
-    # preset: scanalature fra le righe, la riga dei costi come un piccolo quadrante
-    for y in (166, 184):
-        cv.hline(y, 177, 301, 'black', 1).hline(y + 1, 177, 301, 'gun', 4)
+    # preset: scanalature fra le righe (sotto le prime due), la riga dei costi come un piccolo quadrante
+    for row in ('preset.0', 'preset.1'):
+        x0, _, x1, y = G[row]
+        cv.hline(y, x0, x1, 'black', 1).hline(y + 1, x0, x1, 'gun', 4)
     tray(cv, G['riga.costi'])
     # rivetti agli angoli della piastra
     for c, r in ((5, 5), (W - 6, 5), (5, H - 6), (W - 6, H - 6)):

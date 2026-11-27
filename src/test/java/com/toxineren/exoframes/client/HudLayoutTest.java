@@ -6,10 +6,22 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.toxineren.exoframes.client.HudLayout.Rect;
+import com.toxineren.exoframes.core.armor.Piece;
+import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
+import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.config.ExoframesConfig;
+import com.toxineren.exoframes.core.energy.EnergyCell;
+import com.toxineren.exoframes.core.energy.EnergyState;
+import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.frame.HudLevel;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -19,7 +31,8 @@ import org.junit.jupiter.api.Test;
  * grandezze del design; gli elementi dentro i loro sottogruppi e senza sovrapposizioni; l'interno mai specchiato; gli
  * angoli della vignetta; i riquadri a 960x540 con la scala 2 che usano tools/client/arm_measure.sh e m4c_shots.sh; i
  * disegni della texture dell'HUD (parte 4d), letti dalla PNG del mod: ogni texel in un disegno con il suo nome, nessun
- * magenta, la grandezza dei rettangoli che riempiono e i colori esatti della legenda.
+ * magenta, la grandezza dei rettangoli che riempiono e i colori esatti della legenda, scelti per ogni colore che
+ * {@link HudModel} puo' dare a un pezzo e all'energia.
  */
 class HudLayoutTest {
     /** La scala dell'interfaccia delle sequenze del client: finestra 960x540, interfaccia 480x270. */
@@ -32,7 +45,7 @@ class HudLayoutTest {
     private static final boolean[] HANDS = {true, false};
     /** L'altezza di una riga di testo: il carattere del gioco e' alto 8 pixel, piu' uno di ombra. */
     private static final int LINE_HEIGHT = 9;
-    /** "100 %", la percentuale piu' larga senza avviso (le larghezze sono quelle dei "Fatti del gioco" del piano). */
+    /** "100 %", la percentuale piu' larga senza avviso (le larghezze sono del carattere del gioco, come Font.width). */
     private static final int WIDEST_PERCENT = 27;
     /** "9 %", la percentuale piu' larga con l'avviso: con LOW la carica e' sotto il 10 %, con EMPTY e' zero. */
     private static final int WIDEST_PERCENT_WITH_WARNING = 15;
@@ -46,6 +59,8 @@ class HudLayoutTest {
     private static final int TWO_DIGIT_SPARE = 18;
     /** "Senza cella", il testo senza cella piu' largo ("No cell" e' 33). */
     private static final int NO_CELL_TEXT = 57;
+    /** La durata massima del Rottame nella config predefinita. */
+    private static final int SCRAP_MAX = 180;
 
     @Test
     void groupSitsInTheCornerOppositeTheMainHand() {
@@ -156,7 +171,8 @@ class HudLayoutTest {
         }
         assertFalse(HudLayout.PERCENT_AREA.intersects(HudLayout.SPARE_AREA));
 
-        // senza cella il testo prende la riga della barra, vuota (Decisione 1 del piano)
+        // senza cella il testo prende la riga della barra, vuota: nella riga del testo non entra (design §5.12, riga
+        // "percentuale")
         Rect noCell = text(HudLayout.NO_CELL_X, HudLayout.NO_CELL_Y, NO_CELL_TEXT);
         assertEquals(frame.x0(), noCell.x0());
         assertEquals(frame.y0(), noCell.y0());
@@ -212,13 +228,9 @@ class HudLayoutTest {
             assertEquals(HudLayout.CELL_ICON_H, icon.height());
         }
 
-        // la sagoma: per ogni colore che il modello da' a un pezzo, la figura scelta ha quel pieno e quel contorno
-        List<HudModel.Paint> paints = new ArrayList<>();
-        for (int colour : List.of(HudModel.GREEN, HudModel.YELLOW, HudModel.RED, HudModel.GREY)) {
-            paints.add(new HudModel.Paint(colour, HudModel.outline(colour)));
-        }
-        paints.add(new HudModel.Paint(HudModel.UNMOUNTED_FILL, HudModel.UNMOUNTED_OUTLINE));
-        for (HudModel.Paint paint : paints) {
+        // la sagoma: ogni colore che il modello da' a un pezzo, cioe' quello di ogni condizione con la regola di
+        // HudModel.of e quello del pezzo non montato, sceglie la figura con quel pieno e quel contorno, come in SuitHud
+        for (HudModel.Paint paint : modelPaints()) {
             for (PieceSlot slot : PieceSlot.values()) {
                 Sprite piece = HudLayout.silhouettePiece(HudLayout.figure(paint), slot);
                 Rect r = HudLayout.piece(slot);
@@ -240,8 +252,25 @@ class HudLayoutTest {
         assertThrows(IllegalArgumentException.class,
                 () -> HudLayout.figure(new HudModel.Paint(HudModel.WHITE, HudModel.WHITE)));
 
-        // la barra: il riempimento nel colore dell'energia, la prima riga piu' chiara; l'avviso, rosso o grigio
-        for (int colour : List.of(HudModel.GREEN, HudModel.RED, HudModel.GREY, HudModel.WHITE)) {
+        // la barra e l'avviso: per ogni stato dell'energia del server, e prima del primo pacchetto con gli indicatori,
+        // lungo un lampeggio intero, il colore che il modello da' all'energia sceglie un riempimento con la prima riga
+        // piu' chiara e, quando il modello accende l'avviso, un avviso di quel colore, come in SuitHud
+        Set<Integer> fills = new LinkedHashSet<>();
+        Set<Integer> warnings = new LinkedHashSet<>();
+        Set<Optional<EnergyState>> warned = new HashSet<>();
+        for (Optional<EnergyState> energy : energyStates()) {
+            for (long ticks = 0; ticks < 2 * HudModel.BLINK_TICKS; ticks++) {
+                HudModel model = HudModel.of(HudLevel.FULL, withCell(), energy, 0, ticks);
+                fills.add(model.energyColor());
+                if (model.warningOn()) {
+                    warnings.add(model.energyColor());
+                    warned.add(energy);
+                }
+            }
+        }
+        assertEquals(Set.of(Optional.of(EnergyState.LOW), Optional.of(EnergyState.EMPTY)), warned,
+                "the states that light the warning");
+        for (int colour : fills) {
             Sprite fill = HudLayout.barFill(colour);
             assertEquals(HudLayout.BAR_FILL.width(), fill.width());
             assertEquals(HudLayout.BAR_FILL.height(), fill.height());
@@ -250,7 +279,7 @@ class HudLayoutTest {
             hud.assertAll(what, fill, 0, 1, fill.width(), fill.height() - 1, colour);
         }
         assertThrows(IllegalArgumentException.class, () -> HudLayout.barFill(HudModel.YELLOW));
-        for (int colour : List.of(HudModel.RED, HudModel.GREY)) {
+        for (int colour : warnings) {
             Sprite warning = HudLayout.warning(colour);
             assertEquals(HudLayout.WARNING.width(), warning.width());
             assertEquals(HudLayout.WARNING.height(), warning.height());
@@ -369,6 +398,41 @@ class HudLayoutTest {
         return HudLayout.spareTextX(textWidth) - 1 - HudLayout.CELL_ICON_W;
     }
 
+    /**
+     * Tutti i colori che {@link HudModel#of} da' a un pezzo della sagoma: per ogni condizione un elmo con una durata
+     * che la da' (cercata da 0 alla durata massima del Rottame), con gli altri cinque slot non montati.
+     */
+    private static Set<HudModel.Paint> modelPaints() {
+        Set<HudModel.Paint> paints = new LinkedHashSet<>();
+        Set<PieceCondition> reached = EnumSet.noneOf(PieceCondition.class);
+        for (int durability = 0; durability <= SCRAP_MAX; durability++) {
+            if (reached.add(PieceCondition.of(durability, SCRAP_MAX))) {
+                FrameState state = new FrameState(ExoframesConfig.defaults());
+                state.mount(new Piece(PieceSlot.HELMET, Tier.SCRAP, SCRAP_MAX, durability));
+                paints.addAll(HudModel.of(HudLevel.FULL, state, Optional.empty(), 0, 0).silhouette().values());
+            }
+        }
+        assertEquals(EnumSet.allOf(PieceCondition.class), reached, "every piece condition");
+        return paints;
+    }
+
+    /** Ogni stato dell'energia del server, e nessuno: prima del primo pacchetto con gli indicatori. */
+    private static List<Optional<EnergyState>> energyStates() {
+        List<Optional<EnergyState>> states = new ArrayList<>();
+        for (EnergyState state : EnergyState.values()) {
+            states.add(Optional.of(state));
+        }
+        states.add(Optional.empty());
+        return states;
+    }
+
+    /** Uno stato con la config predefinita e una cella a meta', senza pezzi: la barra ha un riempimento. */
+    private static FrameState withCell() {
+        FrameState state = new FrameState(ExoframesConfig.defaults());
+        state.insertCell(new EnergyCell(10_000, 5_000));
+        return state;
+    }
+
     private static List<int[]> allSizes() {
         List<int[]> sizes = new ArrayList<>(List.of(WIDE_SIZES));
         sizes.addAll(List.of(NARROW_SIZES));
@@ -377,9 +441,9 @@ class HudLayoutTest {
 
     /**
      * Gli elementi del gioco base che il gruppo non tocca, per la mano principale data, in pixel dell'interfaccia con
-     * numeri decimali (le grandezze del controllo del design, anteprime.py; la tabella "Disposizione dell'HUD" del
-     * piano): il braccio della tuta di quella mano, la fascia della barra degli oggetti con le barre di stato, lo slot
-     * della seconda mano di quella mano, le righe della chat e il mirino.
+     * numeri decimali (le grandezze del controllo del design, §12 e anteprime.py): il braccio della tuta di quella
+     * mano, la fascia della barra degli oggetti con le barre di stato, lo slot della seconda mano di quella mano, le
+     * righe della chat e il mirino.
      */
     private static List<Area> vanilla(int w, int h, boolean mainRight) {
         return List.of(arm(w, h, mainRight), hotbarBand(w, h), offhand(w, h, mainRight), chat(h), crosshair(w, h));

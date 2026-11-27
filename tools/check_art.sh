@@ -9,8 +9,10 @@
 # byte per byte e PNG con compare_png.py; ogni modello o texture della stazione committato deve essere uno di quelli
 # generati. Poi rigenera allo stesso modo le tre texture dell'interfaccia nello stile A (tools/art/gui.py: la
 # schermata della stazione, i disegni dell'HUD e la vignetta del casco, parte 4d) e le confronta con quelle committate
-# con compare_png.py; ogni texture di textures/gui committata deve essere una di quelle generate. Infine rigenera le
-# texture placeholder (tools/gen_placeholders.py --out) e confronta ognuna con quella committata sotto src/main.
+# con compare_png.py; ogni texture di textures/gui committata deve essere una di quelle generate; e rigenera la mappa
+# dei loro disegni con i rettangoli che lo sfondo cuoce (tools/art/gui_map.json, per GuiMapTest, fuori dalle risorse
+# e quindi dai jar) e la confronta byte per byte con quella committata. Infine rigenera le texture placeholder
+# (tools/gen_placeholders.py --out) e confronta ognuna con quella committata sotto src/main.
 # Servono python3 e numpy (tools/art/requirements.txt).
 set -eu
 
@@ -97,8 +99,9 @@ done
 # schermata della stazione, disegni dell'HUD e vignetta del casco (parte 4d), nello stile A approvato dal proprietario
 # il 27 novembre 2026: tools/art/gui.py scrive gli stessi percorsi relativi agli asset del mod, in una sottocartella
 # sua (l'icona del kit, con --kit, entra nel mod con il kit della parte 4b)
-gui_regen="python3 tools/art/gui.py --out $assets"
-if ! python3 tools/art/gui.py --out "$tmp/gui" >"$tmp/gui.log" 2>&1; then
+gui_map=tools/art/gui_map.json
+gui_regen="python3 tools/art/gui.py --out $assets --map-json $gui_map"
+if ! python3 tools/art/gui.py --out "$tmp/gui" --map-json "$tmp/gui_map.json" >"$tmp/gui.log" 2>&1; then
     cat "$tmp/gui.log" >&2
     echo "FAIL: tools/art/gui.py non e' riuscito" >&2
     exit 1
@@ -128,6 +131,14 @@ for g in "$assets"/textures/gui/*; do
         fail=1
     fi
 done
+# la mappa per i test, byte per byte come gli altri JSON generati
+if [ ! -f "$gui_map" ]; then
+    echo "FAIL: manca $gui_map (rigenerare con $gui_regen)" >&2
+    fail=1
+elif ! cmp -s "$tmp/gui_map.json" "$gui_map"; then
+    echo "FAIL: $gui_map diverso da quello generato (rigenerare con $gui_regen)" >&2
+    fail=1
+fi
 
 # texture placeholder (oggetti, facce del blocco caricatore, icona del mod, layer armatura trasparenti di 1.20.1):
 # stessi percorsi relativi a src/main

@@ -81,7 +81,7 @@ class HudModelTest {
         }
 
         FrameState state = withCell(10_000, 500);
-        // nel mezzo secondo spento il posto dell'avviso resta (Decisione 5 del piano)
+        // nel mezzo secondo spento il posto dell'avviso resta: la percentuale non salta due volte al secondo
         HudModel low = HudModel.of(HudLevel.FULL, state, LOW, 0, 15);
         assertTrue(low.warningSlot());
         assertFalse(low.warningOn());
@@ -128,7 +128,7 @@ class HudModelTest {
         assertEquals(0xFFFFFF55, HudModel.conditionColor(PieceCondition.DAMAGED));
         assertEquals(0xFFFF5555, HudModel.conditionColor(PieceCondition.CRITICAL));
         assertEquals(0xFF8A8A8A, HudModel.conditionColor(PieceCondition.BROKEN));
-        // una legenda sola: la stazione prende la sua da qui (Decisione 3 del piano)
+        // una legenda sola: la stazione prende la sua da qui (design §5.3 e §5.12)
         for (PieceCondition condition : PieceCondition.values()) {
             assertEquals(HudModel.conditionColor(condition), StationLayout.conditionColor(condition),
                     "the station's colour of " + condition);

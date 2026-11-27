@@ -49,7 +49,7 @@ import net.minecraft.world.item.ItemStack;
 final class SuitHud {
     /** La percentuale dell'energia, con il numero come argomento. */
     static final String PERCENT = "hud." + RedstoneExoframes.MOD_ID + ".percent";
-    /** Il testo al posto della barra di un telaio senza cella (Decisione 1 del piano). */
+    /** Il testo al posto della barra di un telaio senza cella, che nella riga del testo non entra (design §5.12). */
     static final String NO_CELL = "hud." + RedstoneExoframes.MOD_ID + ".no_cell";
     /** Il segno davanti al numero delle celle di scorta: il segno di moltiplicazione (U+00D7). */
     private static final String TIMES = "\u00d7";
@@ -57,7 +57,7 @@ final class SuitHud {
      * La texture della vignetta del casco, generata da tools/art/gui.py: i quattro angoli di
      * {@link HudLayout#VIGNETTE_W} x {@link HudLayout#VIGNETTE_H} gia' al loro posto, nell'ordine di
      * {@link HudLayout#vignetteCorners} due per riga (alto a sinistra, alto a destra; basso a sinistra, basso a
-     * destra), cosi' il disegno non specchia nulla (Decisione 4 del piano).
+     * destra), cosi' il disegno non specchia nulla e ogni angolo ha il suo disegno (i riflessi solo in alto).
      */
     static final ResourceLocation VIGNETTE_TEXTURE = Ids.of("textures/gui/hud_vignette.png");
     private static final GuiTexture VIGNETTE = new GuiTexture(VIGNETTE_TEXTURE, 2 * HudLayout.VIGNETTE_W,
@@ -131,9 +131,9 @@ final class SuitHud {
     }
 
     /**
-     * Le celle di scorta (design §5.12, Decisione 9 del piano): la somma delle pile di celle di redstone con carica
-     * maggiore di zero nell'inventario (barra compresa) e nella seconda mano. La cella montata nel telaio non e'
-     * nell'inventario e non conta.
+     * Le celle di scorta (design §5.12, riga "celle di scorta"): la somma delle pile di celle di redstone con carica
+     * maggiore di zero nell'inventario (barra compresa) e nella seconda mano, che resta giusta anche se un giorno le
+     * celle si impilassero. La cella montata nel telaio non e' nell'inventario e non conta.
      */
     private static int spareCells(Player player) {
         Inventory inventory = player.getInventory();

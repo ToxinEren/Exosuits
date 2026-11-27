@@ -15,13 +15,12 @@ import org.lwjgl.glfw.GLFW;
  * I due tasti dell'HUD (design §5.12 "Tasti"): H nasconde e mostra tutto l'HUD della mod, il tasto della vignetta,
  * senza tasto predefinito (come il "contorno degli spettatori" del gioco base: il posto della domanda 10 del design),
  * accende e spegne la vignetta del casco. Registrati come V e R, nella categoria della mod, e letti a ogni tick del
- * client con {@code consumeClick}: ogni clic, senza schermate aperte e con il giocatore nel mondo, cambia la
- * preferenza in {@link ClientPrefs}, che riscrive il file, e dice il valore nuovo sulla barra delle azioni; con o
- * senza la tuta addosso, perche' la preferenza e' del giocatore (Decisione 6 del piano). Un clic con una
- * schermata aperta si scarta: il gioco base non registra i clic con una schermata (una H scritta nella chat non e' un
- * clic) e consuma F3+H, e qui si scartano quelli rimasti quando una schermata si apre nello stesso tick. Una
- * {@code RuntimeException} non chiude il gioco: il clic si perde, con un ERROR una volta per sessione (si azzera
- * all'uscita dal mondo). Solo client.
+ * client con {@code consumeClick}: ogni clic, senza schermate aperte e con il giocatore nel mondo, cambia la preferenza
+ * in {@link ClientPrefs}, che riscrive il file, e dice il valore nuovo sulla barra delle azioni; con o senza la tuta
+ * addosso, perche' la preferenza e' del giocatore, non della tuta. Un clic con una schermata aperta si scarta: il gioco
+ * base non registra i clic con una schermata (una H scritta nella chat non e' un clic) e consuma F3+H, e qui si
+ * scartano quelli rimasti quando una schermata si apre nello stesso tick. Una {@code RuntimeException} non chiude il
+ * gioco: il clic si perde, con un ERROR una volta per sessione (si azzera all'uscita dal mondo). Solo client.
  */
 final class HudKeys {
     /** Il nome del tasto che nasconde l'HUD, predefinito H. */

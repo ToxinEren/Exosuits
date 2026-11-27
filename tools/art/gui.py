@@ -15,9 +15,14 @@ Uso, dalla radice del repository:
     python3 tools/art/gui.py --map
         stampa dove sta ogni disegno nelle due texture (u, v, larghezza, altezza): i nomi sono quelli delle costanti
         di client/StationLayout e client/HudLayout
+    python3 tools/art/gui.py --map-json tools/art/gui_map.json
+        scrive la stessa mappa in JSON, con i rettangoli dei widget attorno a cui lo sfondo della schermata cuoce
+        qualcosa e quelli dei pezzi nelle figure della sagoma: GuiMapTest la confronta con le costanti e i
+        rettangoli di client/StationLayout e client/HudLayout (puo' stare con --out)
 
-`--out` e' obbligatorio. tools/check_art.sh rigenera le tre texture in una cartella temporanea e le confronta con
-quelle committate. La geometria e i posti nelle texture sono in gui_layout.py, i disegni in gui_officina.py.
+`--out` o `--map-json` e' obbligatorio. tools/check_art.sh rigenera le tre texture e la mappa in una cartella
+temporanea e le confronta con quelle committate. La geometria e i posti nelle texture sono in gui_layout.py, i
+disegni in gui_officina.py.
 
 Stesso input, stessi byte: semi dai nomi delle tele (paint.HashRng), solo interi, PNG senza metadati (exo.write_png:
 IHDR, IDAT, IEND, zlib 9). Esce con 1, senza scrivere nulla, se un controllo non passa: i disegni stanno nella texture
@@ -37,7 +42,7 @@ import numpy as np  # noqa: E402
 
 import gui_layout as L  # noqa: E402
 import gui_officina as A  # noqa: E402
-from exo import write_png  # noqa: E402
+from exo import dumps_json, write_png, write_text  # noqa: E402
 
 # i file del mod, e l'icona del kit, che entra nel mod con il kit della parte 4b (--kit)
 OUTPUTS = (('textures/gui/station.png', 'schermata'), ('textures/gui/hud.png', 'hud'),
@@ -78,6 +83,11 @@ def crop(img, rect):
     return img[v:v + h, u:u + w]
 
 
+def ring_texels(px):
+    """I texel del bordo di 1 pixel di un disegno: le righe in alto e in basso, le colonne a sinistra e a destra."""
+    return np.concatenate([px[0], px[-1], px[:, 0], px[:, -1]])
+
+
 def exact(problems, what, pixels, colour):
     px = np.asarray(pixels)
     if not (px[..., :3] == np.array(colour, np.uint8)).all() or not (px[..., 3] == 255).all():
@@ -93,13 +103,12 @@ def check(out):
         problems.append('station.png: lo sfondo non e\' tutto opaco')
     # legenda della stazione: il bordo di 1 pixel dei posti e il riempimento della barra della durata
     for state, colour in L.CONDITIONS + (('vuoto', L.UNMOUNTED_OUTLINE), ('cella', L.CELL_RED)):
-        p = crop(st, L.STATION_ATLAS['posto.' + state])
-        exact(problems, f'bordo di posto.{state}', np.concatenate([p[0], p[-1], p[:, 0], p[:, -1]]), colour)
+        exact(problems, f'bordo di posto.{state}', ring_texels(crop(st, L.STATION_ATLAS['posto.' + state])), colour)
     for state, colour in L.CONDITIONS + (('cella', L.CELL_RED),):
         bar = crop(st, L.STATION_ATLAS['durata.' + state])
         exact(problems, f'durata.{state}', bar[1:], colour)
         exact(problems, f'durata.{state}, prima riga', bar[:1], L.lighter(colour))
-    exact(problems, 'scelta', np.concatenate([crop(st, L.STATION_ATLAS['scelta'])[0]]), L.WHITE)
+    exact(problems, 'scelta', ring_texels(crop(st, L.STATION_ATLAS['scelta'])), L.WHITE)
     # legenda dell'HUD: sagome, riempimenti della barra, avvisi
     for state, colour in L.CONDITIONS:
         fig = crop(hud, L.HUD_ATLAS['sagoma.' + state])
@@ -155,6 +164,15 @@ def check(out):
     return problems
 
 
+def gui_map():
+    """La mappa per tools/art/gui_map.json: per ogni texture la grandezza e i disegni (u, v, larghezza, altezza); i
+    rettangoli dei widget attorno a cui lo sfondo cuoce qualcosa (L.BACKGROUND) e quelli dei pezzi nel sottogruppo
+    della sagoma (L.SIL_PIECES), (x0, y0, x1, y1) con x1 e y1 esclusi."""
+    textures = {rel: {'grandezza': list(size), 'disegni': atlas} for rel, atlas, size in (
+        ('textures/gui/station.png', L.STATION_ATLAS, L.STATION_TEX), ('textures/gui/hud.png', L.HUD_ATLAS, L.HUD_TEX))}
+    return dict(textures, sfondo=L.BACKGROUND, sagoma=L.SIL_PIECES)
+
+
 def print_map():
     for title, atlas, size in (('textures/gui/station.png', L.STATION_ATLAS, L.STATION_TEX),
                                ('textures/gui/hud.png', L.HUD_ATLAS, L.HUD_TEX)):
@@ -173,12 +191,13 @@ def main():
     ap.add_argument('--out', help='cartella delle risorse (la struttura di assets/redstone_exoframes)')
     ap.add_argument('--kit', action='store_true', help="scrive anche l'icona del kit di riparazione")
     ap.add_argument('--map', action='store_true', help='stampa dove sta ogni disegno nelle texture')
+    ap.add_argument('--map-json', help='scrive la mappa in JSON in questo file (tools/art/gui_map.json)')
     args = ap.parse_args()
     if args.map:
         print_map()
         return
-    if not args.out:
-        ap.error('serve --out (oppure --map)')
+    if not args.out and not args.map_json:
+        ap.error('serve --out o --map-json (oppure --map)')
     try:
         out = build()
     except ValueError as e:
@@ -188,10 +207,16 @@ def main():
     if problems:
         print('FAIL:\n' + '\n'.join(problems), file=sys.stderr)
         sys.exit(1)
-    outputs = OUTPUTS + ((KIT_OUTPUT,) if args.kit else ())
-    for rel, key in outputs:
-        write_png(os.path.join(os.path.normpath(args.out), rel), out[key])
-    print(f'{len(outputs)} file: ' + ', '.join(rel for rel, _ in outputs))
+    written = []
+    if args.out:
+        outputs = OUTPUTS + ((KIT_OUTPUT,) if args.kit else ())
+        for rel, key in outputs:
+            write_png(os.path.join(os.path.normpath(args.out), rel), out[key])
+        written += [rel for rel, _ in outputs]
+    if args.map_json:
+        write_text(args.map_json, dumps_json(gui_map()))
+        written.append(args.map_json)
+    print(f'{len(written)} file: ' + ', '.join(written))
 
 
 if __name__ == '__main__':

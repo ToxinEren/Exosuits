@@ -19,12 +19,14 @@
 # scatti di ogni coppia; con il telaio nudo (senza elmo) e in terza persona non c'e' (misurato su 1.21.1-neoforge contro
 # gli scatti di prima della vignetta: cambiano solo i quattro angoli degli scatti con l'elmo in prima persona). Nei due
 # angoli in basso scurisce anche il braccio della tuta, ma per arm_measure.sh il magenta scurito resta magenta: il
-# magenta del braccio non cambia, quello della mappa a sinistra perde 8 pixel. Il controllo solo-tuta e' un po' meno
-# sensibile nell'angolo in basso a destra (144x80+816+460): li' la vignetta scurisce braccio-rottame e non base-prima,
-# quindi un braccio del gioco base disegnato in quell'angolo non conterebbe fra gli "uguali"; il resto della sua sagoma
-# sta fuori dall'angolo: accettato. Misurato, la perdita e' nulla: il braccio del gioco base entra nell'angolo con 762
-# dei suoi 18075 pixel (22x68+816+472), sul lato interno, dove la texture ha un'opacita' di al piu' 2/255 e la vignetta
-# non cambia nessun pixel (lo scuro che arm_measure.sh vede sta in 92x56+868+484).
+# magenta del braccio non cambia, quello della mappa a sinistra perde 4 pixel con la vignetta della parte 4d (8 con
+# quella di prima; rimisurati su 1.21.1-neoforge spegnendo la vignetta con il suo tasto). Il controllo solo-tuta e' un
+# po' meno sensibile nell'angolo in basso a destra (144x80+816+460): li' la vignetta scurisce braccio-rottame e non
+# base-prima, quindi un braccio del gioco base disegnato in quell'angolo non conterebbe fra gli "uguali"; il resto della
+# sua sagoma sta fuori dall'angolo: accettato. Misurato, anche con la vignetta della parte 4d, la perdita e' nulla: il
+# braccio del gioco base entra nell'angolo con 762 dei suoi 18075 pixel (22x68+816+472), sul lato interno, dove la
+# texture ha un'opacita' di al piu' 2/255 e la vignetta non cambia nessun pixel (lo scuro che arm_measure.sh vede sta in
+# 93x52+867+488, 92x56+868+484 con la vignetta di prima).
 #
 # Esecuzione A, mano principale a destra, scatti in <cartella>:
 #   1. senza tuta     base-prima (il braccio del gioco) e base-senza (invisibile)
@@ -79,13 +81,14 @@
 #
 # Dura circa tre minuti e mezzo a cache calde (misurati 196-225 s sulle quattro varianti: 106-119 s l'esecuzione A,
 # 71-86 s la B; 232 s una volta, la prima sequenza dopo una build). Le misure sono uguali al pixel sulle quattro
-# varianti (i valori accanto alle soglie, piu' sotto; rimisurate con l'HUD e la vignetta a fine parte 4c), salvo due,
-# che cambiano di poco anche fra due esecuzioni della stessa variante: il magenta della terza persona (fra 23147 e
-# 23745, sempre nel riquadro 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo
-# riquadro (98x140+356+120, magenta fra 10782 e 10880) e 1.20.1 no (su Forge largo 166-176 pixel da x 318-323, magenta
-# 18633-18831; su Fabric 166-174 da x 319-323, magenta 18712-18810; alto 202 da y 66). Le variabili d'ambiente sono
-# quelle di client_shot.sh (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script per tutte e due
-# le esecuzioni, qualunque valore abbia nell'ambiente di chi lo chiama. Istruzioni in tools/client/README.md.
+# varianti (i valori accanto alle soglie, piu' sotto; rimisurate con l'HUD e la vignetta a fine parte 4c, e con la loro
+# grafica della parte 4d, che cambia solo la meta' sinistra della mappa), salvo due, che cambiano di poco anche fra due
+# esecuzioni della stessa variante: il magenta della terza persona (fra 23147 e 23745, sempre nel riquadro
+# 318x312+321+221) e quello dell'anteprima dell'inventario, che 1.21.1 ritaglia nel suo riquadro (98x140+356+120,
+# magenta fra 10782 e 10880) e 1.20.1 no (su Forge largo 166-176 pixel da x 318-323, magenta 18633-18831; su Fabric
+# 166-174 da x 319-323, magenta 18712-18810; alto 202 da y 66). Le variabili d'ambiente sono quelle di client_shot.sh
+# (EXO_ACCEPT_EULA obbligatoria); EXO_SHOT_MAIN_HAND la imposta questo script per tutte e due le esecuzioni, qualunque
+# valore abbia nell'ambiente di chi lo chiama. Istruzioni in tools/client/README.md.
 set -u
 # Soglie valide solo con la config predefinita: una EXO_SHOT_SERVER_CONFIG ereditata dall'ambiente le falserebbe.
 unset EXO_SHOT_SERVER_CONFIG
@@ -123,10 +126,12 @@ COVER_MAX=1400
 # pixel della sua sagoma che la tuta non copre: se ne ammette al piu' uno su venti (misurati 0 su 18075, con i pezzi
 # e con il telaio nudo).
 SAME_FACTOR=20
-# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati, uguali sulle quattro varianti, 23629 a
+# Mappa a due mani: il magenta di ciascuna meta' dello schermo (misurati, uguali sulle quattro varianti, 23086 a
 # sinistra, dove il gruppo dell'HUD della tuta sta sopra il braccio e ne copre una parte, come vuole il design M4 par.
-# 5.12, e la vignetta ne scurisce l'angolo in basso, e 28977 a destra; a sinistra 23637 prima della vignetta e 28407
-# prima dell'HUD); un braccio solo ne lascerebbe una a zero.
+# 5.12, e la vignetta ne scurisce l'angolo in basso, e 28977 a destra). A sinistra, su 1.21.1-neoforge, 23090 con la
+# vignetta spenta e 28407 con l'HUD nascosto: la grafica della parte 4d toglie al braccio 5317 pixel con l'HUD, il cui
+# bordo di rame copre il magenta sotto le sue righe, e 4 con la vignetta; con quella della parte 4c erano 23629, 23637
+# prima della vignetta e 28407 prima dell'HUD. Un braccio solo ne lascerebbe una a zero.
 MAP_MIN_HALF=300
 # Una tuta intera e' larga piu' del doppio di un braccio solo, quindi la larghezza del riquadro distingue "intera" da
 # "un braccio solo". In terza persona, da dietro, il magenta della tuta e' largo 318 pixel.

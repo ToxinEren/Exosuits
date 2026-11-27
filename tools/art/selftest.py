@@ -38,9 +38,18 @@ memoria:
  21. un texel "magenta" per arm_measure.sh, in ciascuna delle quattro immagini;
  22. la vignetta fuori dalla regola del design: un texel oltre 107 (0,42), il pixel d'angolo sotto 107, un texel non
      trasparente sul lato opposto di un angolo, un riflesso in un angolo in basso;
- 23. gui.py si ferma su texture che non passano i controlli: esce con 1 e non scrive nessun file.
+ 23. gui.py si ferma su texture che non passano i controlli: esce con 1 e non scrive nessun file, ne' le texture ne'
+     la mappa in JSON;
+ 24. l'anello bianco della scelta ritoccato su ciascuno dei quattro lati (non solo in alto);
+ 25. la prima riga piu' chiara di una barra ritoccata: un riempimento della barra della durata in station.png e uno
+     della barra dell'energia in hud.png;
+ 26. la figura dei pezzi non montati ritoccata: l'opacita' del fondo al centro di un pezzo, il colore del contorno;
+ 27. la vignetta senza i due riflessi in alto;
+ 28. l'icona del kit di 16x17 invece di 16x16;
+ 29. un disegno della grandezza sbagliata (un posto 19x20, l'icona spenta della cella 5x7): screen_sheet e hud_sheet
+     si fermano con ValueError, che gui.py trasforma in un'uscita 1.
 
-Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12, 14, 15-23) verificano prima la loro premessa (che
+Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12, 14, 15-29) verificano prima la loro premessa (che
 cosa copre la parte iniettata; per la stazione e per le texture dell'interfaccia, che senza il difetto passino il
 controllo): se il disegno cambia e la premessa non vale piu', la prova fallisce dicendolo, invece di passare senza
 provare nulla. 1a e 1b verificano la premessa sulla faccia nord e contano solo una segnalazione su quella faccia: la
@@ -619,7 +628,7 @@ def gui_stops():
     saved_argv = sys.argv
     with tempfile.TemporaryDirectory() as out:
         gui.build = broken_build
-        sys.argv = ['gui.py', '--out', out, '--kit']
+        sys.argv = ['gui.py', '--out', out, '--kit', '--map-json', os.path.join(out, 'gui_map.json')]
         try:
             with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
                 gui.main()
@@ -635,6 +644,118 @@ def gui_stops():
     if written:
         return False, f'gui.py ha scritto {written} nonostante il difetto'
     return True, 'uscita 1, nessun file scritto'
+
+
+@case('24. l\'anello bianco della scelta ritoccato su ciascuno dei quattro lati')
+def gui_selection_ring():
+    import gui_layout
+    u, v, w, h = gui_layout.STATION_ATLAS['scelta']
+    found = []
+    # un texel a meta' di ogni lato: quelli a sinistra, a destra e in basso stanno fuori dalla riga in alto
+    for side, (dy, dx) in (('in alto', (0, w // 2)), ('in basso', (h - 1, w // 2)), ('a sinistra', (h // 2, 0)),
+                           ('a destra', (h // 2, w - 1))):
+        out = gui_textures()
+        out['schermata'][v + dy, u + dx, 1] ^= 1
+        hits = gui_hits(out, ('scelta', 'colore esatto'))
+        if not hits:
+            return False, f'nessuna segnalazione per un texel dell\'anello {side}'
+        found.append(f'{side}: {hits[0]}')
+    return True, '; '.join(found)
+
+
+@case('25. la prima riga piu\' chiara di una barra ritoccata (durata in station.png, barra in hud.png)')
+def gui_first_rows():
+    import gui_layout
+    found = []
+    for img, atlas, key in (('schermata', gui_layout.STATION_ATLAS, 'durata.integro'),
+                            ('hud', gui_layout.HUD_ATLAS, 'barra.verde')):
+        u, v, w, _ = atlas[key]
+        out = gui_textures()
+        out[img][v, u + w // 2, 0] ^= 1
+        hits = gui_hits(out, (key, 'prima riga'))
+        if not hits:
+            return False, f'nessuna segnalazione per la prima riga di {key}'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('26. la sagoma dei pezzi non montati ritoccata: il fondo al centro di un pezzo e il contorno')
+def gui_absent_silhouette():
+    import gui_layout
+    u, v, _, _ = gui_layout.HUD_ATLAS['sagoma.assente']
+    x0, y0, x1, y1 = gui_layout.SIL_PIECES['torso']
+    cx = u + x0 + (x1 - x0) // 2
+    found = []
+    # il fondo: l'opacita' del texel al centro (gui.check lo vuole nero con l'alfa di UNMOUNTED_FILL); il contorno:
+    # il rosso del texel in basso al centro
+    for what, (y, channel), words in (('il fondo', (v + y0 + (y1 - y0) // 2, 3), ('sagoma.assente.torso', 'fondo')),
+                                      ('il contorno', (v + y1 - 1, 0), ('sagoma.assente.torso, contorno',))):
+        out = gui_textures()
+        out['hud'][y, cx, channel] ^= 1
+        hits = gui_hits(out, words)
+        if not hits:
+            return False, f'nessuna segnalazione per {what} del torso non montato'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('27. la vignetta senza riflessi negli angoli in alto')
+def gui_vignette_no_glint():
+    import gui_layout
+    import gui_officina
+    out = gui_textures()
+    top = out['vignetta'][:gui_layout.VIGNETTE_H]
+    glints = top[..., :3].max(axis=2) > max(gui_officina.GLASS)
+    if not glints.any():
+        raise Premise('la vignetta del mod non ha riflessi in alto')
+    # tolti per colore soltanto: al loro posto il verde del vetro, con la stessa opacita' (le altre regole tengono)
+    top[glints, :3] = gui_officina.GLASS
+    hits = gui_hits(out, ('hud_vignette.png', 'nessun riflesso negli angoli in alto'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('28. l\'icona del kit della grandezza sbagliata')
+def gui_kit_size():
+    import numpy as np
+    out = gui_textures()
+    out['kit'] = np.concatenate([out['kit'], out['kit'][-1:]])      # 16x17: una riga in piu' in fondo
+    hits = gui_hits(out, ('repair_kit.png', '16x17 invece di 16x16'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('29. un disegno della grandezza sbagliata: screen_sheet e hud_sheet si fermano con ValueError')
+def gui_wrong_size():
+    import gui_layout
+    import gui_officina as A
+    found = []
+
+    def narrow_critical_place(real):
+        # il posto di un pezzo critico largo 19 invece di 20, gli altri giusti
+        return lambda edge, empty=False: real(edge, empty)[:, :19] if edge == gui_layout.RED else real(edge, empty)
+
+    def short_dim_cell(real):
+        # l'icona spenta della cella alta 7 invece di 8, quella accesa giusta
+        return lambda dim: real(dim)[:7] if dim else real(dim)
+
+    for sheet, name, broken, words in (
+            ('screen_sheet', 'place', narrow_critical_place, ('posto.critico', '19x20 invece di 20x20')),
+            ('hud_sheet', 'cell_icon', short_dim_cell, ('cella.spenta', '5x7 invece di 5x8'))):
+        real = getattr(A, name)
+        setattr(A, name, broken(real))
+        try:
+            getattr(A, sheet)()
+        except ValueError as e:
+            message = str(e)
+        else:
+            message = None
+        finally:
+            setattr(A, name, real)
+        if message is None:
+            return False, f'{sheet} non si e\' fermato'
+        if not all(w in message for w in words):
+            return False, f'{sheet} si e\' fermato per un altro motivo: {message}'
+        found.append(f'{sheet}: {message}')
+    return True, '; '.join(found)
 
 
 def main():
