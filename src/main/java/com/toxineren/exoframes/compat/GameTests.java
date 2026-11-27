@@ -45,6 +45,17 @@ public interface GameTests {
     ServerPlayer mockServerPlayer(GameTestHelper helper);
 
     /**
+     * Un giocatore finto operatore: come quello di {@link #mockServerPlayer} (connesso nel livello del test, con le
+     * capacita' della modalita' di gioco, spettatore secondo la modalita', con i messaggi di sistema ricordati da
+     * {@link #messagesTo}), ma con il livello di permesso 2, quindi {@code hasPermissions(2)} vero, senza toccare la
+     * lista degli operatori del server. A differenza di quello di {@link #mockServerPlayer}, {@code isCreative()} segue
+     * la sua modalita' di gioco come per un giocatore vero: vero solo in {@code GameType.CREATIVE}, cosi' un operatore
+     * in sopravvivenza non passa le regole degli operatori in creativa (come {@code FramePermissions.canUse}). Il test
+     * imposta la modalita' di gioco e lo sposta nella sua struttura. Esiste solo per i test.
+     */
+    ServerPlayer operatorPlayer(GameTestHelper helper);
+
+    /**
      * Il giocatore finto di {@link #mockServerPlayer} in sopravvivenza e con la protezione d'ingresso finita: lo crea,
      * lo mette in {@code GameType.SURVIVAL} (capacita' {@code instabuild}, {@code invulnerable} e {@code mayfly} false;
      * {@code isCreative()} resta vero come per ogni giocatore finto) e chiama 60 volte {@code player.tick()}, perche'

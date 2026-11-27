@@ -3,6 +3,7 @@ package com.toxineren.exoframes.gametest;
 import static com.toxineren.exoframes.gametest.GameTestKit.*;
 
 import com.toxineren.exoframes.RedstoneExoframes;
+import com.toxineren.exoframes.command.ExoframeCommand;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.GameTests;
 import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
@@ -19,6 +20,7 @@ import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.FrameFitting;
 import com.toxineren.exoframes.frame.FrameInteractions;
 import com.toxineren.exoframes.frame.FramePlacement;
+import com.toxineren.exoframes.frame.FrameSight;
 import com.toxineren.exoframes.frame.FrameSounds;
 import com.toxineren.exoframes.frame.FrameSounds.Sound;
 import com.toxineren.exoframes.station.StationActions;
@@ -49,20 +51,24 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Test in gioco dei pulsanti della stazione di manutenzione (design M4 §5.6, §5.7 e i casi di §5.18): la scelta, libera
- * e portata al client dalla vista; montare pezzi e cella dal cursore e smontarli nell'inventario, anche pieno, e in
- * creativa; i rifiuti, senza cambi e senza suoni; una scrittura per tick per menu; il record e il permesso riletti a
- * ogni azione; il registro che rifiuta la scrittura; un pezzo di un livello senza oggetto. Montare e smontare passano
- * da {@link FrameFitting}, la regola delle mani.
+ * Test in gioco dei pulsanti della stazione di manutenzione (design M4 §5.6, §5.7, §5.11 e i casi di §5.18): la scelta,
+ * libera e portata al client dalla vista; montare pezzi e cella dal cursore e smontarli nell'inventario, anche pieno, e
+ * in creativa; i rifiuti, senza cambi e senza suoni; una scrittura per tick per menu; il record e il permesso riletti a
+ * ogni azione; il registro che rifiuta la scrittura; un pezzo di un livello senza oggetto; il lucchetto, del
+ * proprietario e di un operatore, che chiude la schermata di chi non puo' piu' usare il telaio; il ramo
+ * {@code /exoframe debug reinforced} sul telaio guardato e su quello indossato. Montare e smontare passano da
+ * {@link FrameFitting}, la regola delle mani; il lucchetto dalla regola di {@code /exoframe lock|unlock}
+ * ({@code FramePermissions.canToggleLock}).
  * <p>
  * Come in {@link StationMenuGameTests}: la stazione, posata da {@code placeStation} con il fronte a nord, ha la meta'
  * principale in {@link #MAIN}; il giocatore A, in sopravvivenza, sta due blocchi a sud ({@link #STAND}) rivolto a nord,
- * il giocatore B, dove serve, accanto ({@link #OTHER_STAND}); il telaio sta sopra la principale
- * ({@code frameOnStation}) e il menu si apre con {@code openStation}, senza la rete. "Premere n" e' il pacchetto dei
- * pulsanti del gioco base ({@code pressButton}, con i suoi controlli e il {@code broadcastChanges} finale);
- * {@link StationActions#press} chiamato direttamente da' l'esito. Due azioni che scrivono sullo stesso menu stanno in
- * tick diversi: ogni menu ne fa una per tick. I suoni si registrano nel riquadro della struttura; ogni test toglie
- * menu, cursori, telai, record, oggetti a terra e le due meta' della stazione, anche se fallisce ({@link Bench}).
+ * il giocatore B o l'operatore O ({@code GameTests.operatorPlayer}), dove serve, accanto ({@link #OTHER_STAND}), anche
+ * loro in sopravvivenza; il telaio sta sopra la principale ({@code frameOnStation}) e il menu si apre con
+ * {@code openStation}, senza la rete. "Premere n" e' il pacchetto dei pulsanti del gioco base ({@code pressButton}, con
+ * i suoi controlli e il {@code broadcastChanges} finale); {@link StationActions#press} chiamato direttamente da'
+ * l'esito. Due azioni che scrivono sullo stesso menu stanno in tick diversi: ogni menu ne fa una per tick. I suoni si
+ * registrano nel riquadro della struttura; ogni test toglie menu, cursori, telai, record, oggetti a terra e le due
+ * meta' della stazione, anche se fallisce ({@link Bench}).
  */
 public final class StationActionGameTests {
     /** Dove sta la meta' principale della stazione dei test, relativa alla struttura. */
@@ -100,6 +106,13 @@ public final class StationActionGameTests {
                 StationActionGameTests::actionsRecheckTheRecordAndThePermission);
         add(tests, "refusedWriteTakesNothingAndSaysSo", StationActionGameTests::refusedWriteTakesNothingAndSaysSo);
         add(tests, "unmountWithoutAnItemKeepsThePiece", StationActionGameTests::unmountWithoutAnItemKeepsThePiece);
+        add(tests, "ownerTogglesTheLockFromTheStation", StationActionGameTests::ownerTogglesTheLockFromTheStation);
+        add(tests, "othersCannotToggleTheLock", StationActionGameTests::othersCannotToggleTheLock);
+        add(tests, "operatorTogglesAnyLock", StationActionGameTests::operatorTogglesAnyLock);
+        add(tests, "lockingFromTheStationClosesAnotherScreen",
+                StationActionGameTests::lockingFromTheStationClosesAnotherScreen);
+        add(tests, "debugReinforcedMarksWornAndPlacedFrames",
+                StationActionGameTests::debugReinforcedMarksWornAndPlacedFrames);
         return tests;
     }
 
@@ -508,6 +521,162 @@ public final class StationActionGameTests {
         });
     }
 
+    /**
+     * Il proprietario sblocca e blocca dalla stazione (design §5.11 e §5.17): sul telaio di A, bloccato, il pulsante 26
+     * lo sblocca, A ha sulla barra delle azioni il messaggio di {@code /exoframe unlock} e suona lo sblocco; al tick
+     * dopo lo stesso pulsante lo blocca, con il messaggio di {@code /exoframe lock} e il suono del blocco. Due tick
+     * dopo l'ultima vista mandata ha il telaio bloccato.
+     */
+    private static void ownerTogglesTheLockFromTheStation(GameTestHelper helper) {
+        Bench bench = new Bench(helper);
+        bench.run(() -> {
+            ExoframeEntity frame = bench.frame(ownedBy(bench.a));
+            StationMenu menu = bench.open(bench.a);
+            assertPress(helper, menu, bench.a, 26, Outcome.DONE);
+            helper.assertTrue(recordState(helper, frame).unlocked(), "button 26 did not unlock the frame");
+            helper.assertTrue(messages(bench.a, ExoframeCommand.UNLOCK_DONE) == 1,
+                    "unlock messages: " + messages(bench.a, ExoframeCommand.UNLOCK_DONE));
+            bench.assertSounds(List.of(Sound.UNLOCK), "after unlocking");
+            bench.then(1, h -> {
+                assertPress(h, menu, bench.a, 26, Outcome.DONE);
+                h.assertTrue(!recordState(h, frame).unlocked(), "button 26 did not lock the frame again");
+                h.assertTrue(messages(bench.a, ExoframeCommand.LOCK_DONE) == 1,
+                        "lock messages: " + messages(bench.a, ExoframeCommand.LOCK_DONE));
+                bench.assertSounds(List.of(Sound.UNLOCK, Sound.LOCK), "after locking again");
+            });
+            bench.last(3, h -> {
+                StationView sent = menu.lastSentView();
+                h.assertTrue(!sent.unlocked(), "two ticks after locking the last view sent is " + sent);
+            });
+        });
+    }
+
+    /**
+     * Chi non e' il proprietario non cambia il lucchetto (design §5.11): sul telaio di A, sbloccato, B in sopravvivenza
+     * apre la stazione; la sua vista non ha {@code canToggleLock}, e il suo pulsante 26 da' {@code REFUSED}: il telaio
+     * resta sbloccato, B non ha messaggi e nulla suona.
+     */
+    private static void othersCannotToggleTheLock(GameTestHelper helper) {
+        Bench bench = new Bench(helper);
+        bench.run(() -> {
+            ServerPlayer b = bench.player(OTHER_STAND);
+            FrameState state = ownedBy(bench.a);
+            state.setUnlocked(true);
+            ExoframeEntity frame = bench.frame(state);
+            StationMenu menuOfB = bench.open(b);
+            helper.assertTrue(!menuOfB.view().canToggleLock(), "B's view: " + menuOfB.view());
+            assertPress(helper, menuOfB, b, 26, Outcome.REFUSED);
+            helper.assertTrue(recordState(helper, frame).unlocked(), "B locked A's frame");
+            helper.assertTrue(messages(b, ExoframeCommand.UNLOCK_DONE) + messages(b, ExoframeCommand.LOCK_DONE)
+                    + modMessages(b) == 0, "messages to B: " + Compat.gameTests().messagesTo(b));
+            bench.assertSounds(List.of(), "after B's button 26");
+        });
+    }
+
+    /**
+     * Un operatore cambia il lucchetto di ogni telaio, ma solo se lo puo' usare (design §5.6 e §5.11). Su un telaio
+     * senza proprietario A, che lo puo' usare, non ha {@code canToggleLock} e il suo pulsante 26 da' {@code REFUSED};
+     * O, un operatore in sopravvivenza, ha {@code canToggleLock} e il suo 26 lo sblocca. Al tick dopo il telaio diventa
+     * di A, sempre sbloccato, e il 26 di O lo blocca: un operatore ha bloccato il telaio di un altro. Al tick dopo il
+     * 26 di O da' {@code REFUSED} e il telaio resta bloccato: in sopravvivenza O non puo' usare il telaio bloccato di
+     * A, e {@code canUse} viene prima della regola del lucchetto. In tutto si sentono lo sblocco e il blocco.
+     */
+    private static void operatorTogglesAnyLock(GameTestHelper helper) {
+        Bench bench = new Bench(helper);
+        bench.run(() -> {
+            ServerPlayer o = bench.operator(OTHER_STAND);
+            ExoframeEntity frame = bench.frame(new FrameState(RedstoneExoframes.config()));
+            StationMenu menuOfA = bench.open(bench.a);
+            StationMenu menuOfO = bench.open(o);
+            helper.assertTrue(!menuOfA.view().canToggleLock(), "A's view: " + menuOfA.view());
+            assertPress(helper, menuOfA, bench.a, 26, Outcome.REFUSED);
+            helper.assertTrue(menuOfO.view().canToggleLock(), "O's view: " + menuOfO.view());
+            assertPress(helper, menuOfO, o, 26, Outcome.DONE);
+            helper.assertTrue(recordState(helper, frame).unlocked(), "O did not unlock the frame without an owner");
+            bench.then(1, h -> {
+                h.assertTrue(Compat.frameState().updatePlaced(h.getLevel().getServer(), frame.frameId(),
+                        s -> s.setOwner(bench.a.getUUID())), "giving the frame to A failed");
+                assertPress(h, menuOfO, o, 26, Outcome.DONE);
+                FrameState state = recordState(h, frame);
+                h.assertTrue(bench.a.getUUID().equals(state.owner()) && !state.unlocked(), "after O's button 26 on A's"
+                        + " frame the owner is " + state.owner() + " and the frame is unlocked: " + state.unlocked());
+            });
+            bench.last(2, h -> {
+                assertPress(h, menuOfO, o, 26, Outcome.REFUSED);
+                h.assertTrue(!recordState(h, frame).unlocked(), "O in survival unlocked A's locked frame");
+                bench.assertSounds(List.of(Sound.UNLOCK, Sound.LOCK), "after O's three buttons 26");
+            });
+        });
+    }
+
+    /**
+     * Bloccare dalla stazione chiude la schermata di un altro (design §5.2 e §5.11): sul telaio di A, sbloccato, aprono
+     * la stazione A e B, e A preme 26 con il pacchetto dei pulsanti del gioco base. Due tick dopo il menu di B e'
+     * chiuso, con il messaggio del telaio non piu' disponibile, e quello di A, il proprietario, e' ancora aperto, senza
+     * quel messaggio.
+     */
+    private static void lockingFromTheStationClosesAnotherScreen(GameTestHelper helper) {
+        Bench bench = new Bench(helper);
+        bench.run(() -> {
+            ServerPlayer b = bench.player(OTHER_STAND);
+            FrameState state = ownedBy(bench.a);
+            state.setUnlocked(true);
+            ExoframeEntity frame = bench.frame(state);
+            StationMenu menuOfA = bench.open(bench.a);
+            bench.open(b);
+            pressButton(bench.a, menuOfA.containerId, 26);
+            helper.assertTrue(!recordState(helper, frame).unlocked(), "A's button 26 did not lock the frame");
+            bench.last(2, h -> {
+                h.assertTrue(b.containerMenu == b.inventoryMenu, "B's station menu is still open after A locked");
+                h.assertTrue(messages(b, StationMenu.FRAME_GONE) == 1,
+                        "frame gone messages to B: " + Compat.gameTests().messagesTo(b));
+                h.assertTrue(bench.a.containerMenu == menuOfA, "A's station menu closed");
+                h.assertTrue(messages(bench.a, StationMenu.FRAME_GONE) == 0,
+                        "frame gone messages to A: " + Compat.gameTests().messagesTo(bench.a));
+            });
+        });
+    }
+
+    /**
+     * {@code /exoframe debug reinforced} segna il telaio guardato e quello indossato (design §5.11). A, davanti alla
+     * stazione, guarda il suo telaio e apre la stazione; "debug reinforced true" lo rende rinforzato, e due tick dopo
+     * l'ultima vista mandata lo dice; "debug reinforced false" lo riporta com'era. Tolti menu, telaio e stazione, A
+     * indossa un telaio: "debug reinforced true" rende rinforzato quello indossato. Uscito A dal telaio di prova, il
+     * record indossato se ne va, e senza un telaio indossato o guardato il comando da' 0.
+     */
+    private static void debugReinforcedMarksWornAndPlacedFrames(GameTestHelper helper) {
+        Bench bench = new Bench(helper);
+        bench.run(() -> {
+            ExoframeEntity frame = bench.frame(ownedBy(bench.a));
+            helper.assertTrue(FrameSight.inSight(bench.a).map(ExoframeEntity::frameId)
+                    .equals(Optional.of(frame.frameId())), "premise: A does not look at the frame on the station");
+            StationMenu menu = bench.open(bench.a);
+            helper.assertTrue(exoframeCommand(helper, bench.a, 2, "debug reinforced true") == 1,
+                    "debug reinforced true failed on the frame in sight");
+            helper.assertTrue(recordState(helper, frame).reinforced(), "the frame in sight is not reinforced");
+            bench.last(2, h -> {
+                h.assertTrue(menu.lastSentView().reinforced(),
+                        "two ticks later the last view sent is " + menu.lastSentView());
+                h.assertTrue(exoframeCommand(h, bench.a, 2, "debug reinforced false") == 1,
+                        "debug reinforced false failed on the frame in sight");
+                h.assertTrue(!recordState(h, frame).reinforced(), "the frame in sight is still reinforced");
+                bench.removeStationAndFrames();
+                try {
+                    wearScrap(h, bench.a, STAND, 3_000);
+                    h.assertTrue(exoframeCommand(h, bench.a, 2, "debug reinforced true") == 1,
+                            "debug reinforced true failed on the worn frame");
+                    h.assertTrue(Compat.frameState().get(bench.a).map(FrameState::reinforced).orElse(false),
+                            "the worn frame is not reinforced");
+                } finally {
+                    leaveTestFrame(bench.a);
+                }
+                h.assertTrue(Compat.frameState().wornFrameId(bench.a).isEmpty(), "the worn record is still there");
+                h.assertTrue(exoframeCommand(h, bench.a, 2, "debug reinforced true") == 0,
+                        "debug reinforced without a worn frame or one in sight did not give 0");
+            });
+        });
+    }
+
     /** {@link StationActions#press} del giocatore sul menu deve dare {@code expected}. */
     private static void assertPress(GameTestHelper helper, StationMenu menu, ServerPlayer player, int button,
             Outcome expected) {
@@ -600,7 +769,18 @@ public final class StationActionGameTests {
 
         /** Un giocatore finto in sopravvivenza con i piedi nel punto relativo alla struttura, rivolto a nord. */
         ServerPlayer player(Vec3 feet) {
-            ServerPlayer player = Compat.gameTests().mockServerPlayer(helper);
+            return join(Compat.gameTests().mockServerPlayer(helper), feet);
+        }
+
+        /**
+         * Un operatore finto ({@code GameTests.operatorPlayer}: livello di permesso 2, e {@code isCreative()} che segue
+         * la modalita' di gioco) in sopravvivenza, con i piedi nel punto relativo alla struttura, rivolto a nord.
+         */
+        ServerPlayer operator(Vec3 feet) {
+            return join(Compat.gameTests().operatorPlayer(helper), feet);
+        }
+
+        private ServerPlayer join(ServerPlayer player, Vec3 feet) {
             players.add(player);
             player.setGameMode(GameType.SURVIVAL);
             standFacingNorth(helper, player, feet);
@@ -676,6 +856,25 @@ public final class StationActionGameTests {
             }));
         }
 
+        /**
+         * Chiude i menu dei giocatori con il cursore vuoto, toglie i telai, i loro record e le due meta' della
+         * stazione: nella pulizia, o a meta' di un test che continua senza; ripeterlo non fa danni.
+         */
+        void removeStationAndFrames() {
+            for (ServerPlayer player : players) {
+                if (player.containerMenu != player.inventoryMenu) {
+                    player.containerMenu.setCarried(ItemStack.EMPTY);
+                    player.closeContainer();
+                }
+            }
+            MinecraftServer server = helper.getLevel().getServer();
+            for (ExoframeEntity frame : frames) {
+                removeFrame(server, frame);
+            }
+            helper.setBlock(MAIN, Blocks.AIR);
+            helper.setBlock(side, Blocks.AIR);
+        }
+
         /** Toglie tutto cio' che il test ha messo, una volta sola. */
         void cleanUp() {
             if (cleaned) {
@@ -683,22 +882,13 @@ public final class StationActionGameTests {
             }
             cleaned = true;
             sounds.close();
+            removeStationAndFrames();
             for (ServerPlayer player : players) {
-                if (player.containerMenu != player.inventoryMenu) {
-                    player.containerMenu.setCarried(ItemStack.EMPTY);
-                    player.closeContainer();
-                }
                 player.getInventory().clearContent();
-            }
-            MinecraftServer server = helper.getLevel().getServer();
-            for (ExoframeEntity frame : frames) {
-                removeFrame(server, frame);
             }
             for (ItemEntity drop : itemsIn(helper)) {
                 drop.discard();
             }
-            helper.setBlock(MAIN, Blocks.AIR);
-            helper.setBlock(side, Blocks.AIR);
         }
     }
 }

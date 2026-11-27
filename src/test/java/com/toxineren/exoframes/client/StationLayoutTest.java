@@ -15,6 +15,7 @@ import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.station.StationView;
 import com.toxineren.exoframes.station.StationMenu;
+import com.toxineren.exoframes.station.StationTexts;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -30,9 +31,9 @@ import org.junit.jupiter.api.Test;
  * punti che tools/client/m4a_shots.sh clicca a 960x540 con la scala 2, i colori delle condizioni, il giro
  * dell'anteprima, la vista della tuta dalla vista del telaio e nessun colore magenta per i controlli degli scatti; i
  * posti sotto il puntatore e i numeri dei clic (design §5.3 e §5.6), l'intestazione che perde il massimo quando non ci
- * sta, il disegno di ogni widget nel suo stato; i disegni della texture della schermata (parte 4d), letti dalla PNG del
- * mod: ogni texel in un disegno con il suo nome, lo sfondo opaco, nessun magenta, la grandezza dei rettangoli che
- * riempiono e i colori esatti della legenda.
+ * sta, il disegno di ogni widget nel suo stato, le righe del suggerimento del lucchetto dalla vista; i disegni della
+ * texture della schermata (parte 4d), letti dalla PNG del mod: ogni texel in un disegno con il suo nome, lo sfondo
+ * opaco, nessun magenta, la grandezza dei rettangoli che riempiono e i colori esatti della legenda.
  */
 class StationLayoutTest {
     /** La scala dell'interfaccia della sequenza del client: finestra 960x540, interfaccia 480x270. */
@@ -112,6 +113,8 @@ class StationLayoutTest {
         blocks.put("HOTBAR", StationLayout.HOTBAR);
         blocks.put("TITLE", StationLayout.TITLE);
         blocks.put("STOWED", StationLayout.STOWED);
+        blocks.put("SHIELD", StationLayout.SHIELD);
+        blocks.put("LOCK", StationLayout.LOCK);
         assertNoOverlap(blocks);
         assertNoOverlap(framePanel);
         assertNoOverlap(header);
@@ -166,12 +169,16 @@ class StationLayoutTest {
         int slotTop = StationMenu.HOTBAR_Y - 1;
         Rect hotbarSlot1 = new Rect(slotLeft, slotTop, slotLeft + SLOT, slotTop + SLOT);
         assertEquals("36x36+214+452", onScreen(hotbarSlot1));
+        assertEquals("32x24+748+44", onScreen(StationLayout.LOCK));
+        assertEquals("28x24+716+44", onScreen(StationLayout.SHIELD));
 
         assertEquals("276,260", centreOnScreen(StationLayout.ALL_BUTTON));
         assertEquals("566,90", centreOnScreen(StationLayout.UNMOUNT));
         assertEquals("244,100", centreOnScreen(helmet));
         assertEquals("244,144", centreOnScreen(StationLayout.PIECE_SLOTS.get(PieceSlot.TORSO)));
         assertEquals("232,470", centreOnScreen(hotbarSlot1));
+        assertEquals("764,56", centreOnScreen(StationLayout.LOCK));
+        assertTrue(hits(StationLayout.LOCK, 764, 56), "the lock point");
         assertTrue(hits(helmet, 244, 100), "the helmet point");
         assertTrue(hits(StationLayout.PIECE_SLOTS.get(PieceSlot.TORSO), 244, 144), "the torso point");
         assertTrue(hits(hotbarSlot1, 232, 470), "the point of hotbar slot 1");
@@ -393,6 +400,43 @@ class StationLayoutTest {
         }
     }
 
+    @Test
+    void lockAndShieldTakeTheirSprites() {
+        List<ButtonState> states = List.of(ButtonState.NORMAL, ButtonState.HOVER, ButtonState.PRESSED,
+                ButtonState.OFF);
+        List<Sprite> closed = List.of(StationLayout.BLOCCO_CHIUSO_NORMALE, StationLayout.BLOCCO_CHIUSO_SOPRA,
+                StationLayout.BLOCCO_CHIUSO_PREMUTO, StationLayout.BLOCCO_CHIUSO_SPENTO);
+        List<Sprite> open = List.of(StationLayout.BLOCCO_APERTO_NORMALE, StationLayout.BLOCCO_APERTO_SOPRA,
+                StationLayout.BLOCCO_APERTO_PREMUTO, StationLayout.BLOCCO_APERTO_SPENTO);
+        for (int i = 0; i < states.size(); i++) {
+            ButtonState state = states.get(i);
+            assertEquals(closed.get(i), StationLayout.lockSprite(true, state), "lockSprite(true, " + state + ")");
+            assertEquals(open.get(i), StationLayout.lockSprite(false, state), "lockSprite(false, " + state + ")");
+        }
+        // il lucchetto e lo scudo hanno la misura dei loro disegni
+        assertEquals(16, StationLayout.LOCK.width());
+        assertEquals(12, StationLayout.LOCK.height());
+        assertEquals(14, StationLayout.SHIELD.width());
+        assertEquals(12, StationLayout.SHIELD.height());
+        for (ButtonState state : ButtonState.values()) {
+            assertSize("lockSprite(true, " + state + ")", StationLayout.lockSprite(true, state), StationLayout.LOCK);
+            assertSize("lockSprite(false, " + state + ")", StationLayout.lockSprite(false, state), StationLayout.LOCK);
+        }
+        assertSize("RINFORZATO", StationLayout.RINFORZATO, StationLayout.SHIELD);
+    }
+
+    @Test
+    void lockTooltipFollowsTheView() {
+        // bloccato, il giocatore lo puo' cambiare, la regola del proprietario accesa sul server: la sola prima riga
+        assertEquals(List.of(StationTexts.LOCKED), StationLayout.lockTooltipKeys(lockView(false, true, true)));
+        // sbloccato, e il giocatore non lo puo' cambiare
+        assertEquals(List.of(StationTexts.UNLOCKED, StationTexts.OWNER_ONLY),
+                StationLayout.lockTooltipKeys(lockView(true, false, true)));
+        // bloccato, con la regola del proprietario spenta sul server
+        assertEquals(List.of(StationTexts.LOCKED, StationTexts.EVERYONE),
+                StationLayout.lockTooltipKeys(lockView(false, true, false)));
+    }
+
     /** Tutti i riquadri della tabella "Disposizione della schermata", per nome. */
     private static Map<String, Rect> table() {
         Map<String, Rect> table = new LinkedHashMap<>();
@@ -409,6 +453,8 @@ class StationLayoutTest {
         table.put("STOWED", StationLayout.STOWED);
         table.put("ALL_BUTTON", StationLayout.ALL_BUTTON);
         table.put("UNMOUNT", StationLayout.UNMOUNT);
+        table.put("SHIELD", StationLayout.SHIELD);
+        table.put("LOCK", StationLayout.LOCK);
         return table;
     }
 
@@ -490,6 +536,11 @@ class StationLayoutTest {
     private static StationView view(Map<PieceSlot, StationView.PieceInfo> pieces, Optional<StationView.CellInfo> cell,
             int selection) {
         return new StationView(pieces, cell, false, false, false, false, selection, false, false);
+    }
+
+    /** Una vista senza pezzi e senza cella, con le tre bandierine del lucchetto date. */
+    private static StationView lockView(boolean unlocked, boolean canToggleLock, boolean ownerOnly) {
+        return new StationView(Map.of(), Optional.empty(), unlocked, false, canToggleLock, ownerOnly, 0, false, false);
     }
 
     /** Vero se il punto (x, y) degli scatti di 960x540 cade nel riquadro, relativo all'angolo della schermata. */

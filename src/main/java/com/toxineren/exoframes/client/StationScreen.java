@@ -15,6 +15,7 @@ import com.toxineren.exoframes.station.StationTexts;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalInt;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.model.HumanoidModel;
@@ -35,20 +36,24 @@ import net.minecraft.world.item.ItemStack;
  * <li>l'intestazione della scelta e la freccia che la smonta ({@link StationHeader});</li>
  * <li>nella riga del titolo, se il telaio custodisce un'armatura, la riga che lo dice (come si ritira lo dice il suo
  * suggerimento: dalla stazione non si ritira);</li>
+ * <li>nella riga del titolo, a destra, lo scudo, se il telaio e' rinforzato, e il lucchetto, chiuso o aperto come il
+ * telaio e spento se il giocatore non puo' cambiarlo (design §5.11);</li>
  * <li>l'anteprima 3D della tuta del telaio ({@link SuitPreview}, con la vista di {@link StationLayout#suitView}), che
  * trascinando con il tasto sinistro nel ritaglio gira di {@link StationLayout#DEGREES_PER_PIXEL} gradi per pixel, con
  * le due frecce in basso; l'angolo vive nella schermata e parte da 0, di fronte, a ogni apertura, e al server non va
  * nulla;</li>
  * <li>l'inventario del giocatore, gli slot del menu, che funzionano come nel gioco base.</li>
  * </ul>
- * I clic sui widget (design §5.3 e §5.6): sui posti, su "Tutti" e sulla freccia il tasto sinistro manda al server il
- * numero che dicono {@link StationLayout#placeButton} (dal posto, dall'oggetto sul cursore e dalle maiuscole) e
- * {@link StationLayout#unmountButton}, come i menu del gioco base: prima il menu del client (che predice la scelta),
- * poi il pacchetto dei pulsanti. Il server ricontrolla tutto, e ogni cambio che si vede, salvo la scelta, arriva con la
- * vista. Un tasto premuto su un widget non va al gioco base, e nemmeno il suo trascinamento e il suo rilascio: il gioco
- * base, al rilascio, getterebbe la pila del cursore (fuori dalla schermata) o la poserebbe in uno slot, e in creativa
- * il pezzo appena montato e' ancora sul cursore. Passando il mouse su un posto, sulla freccia, sulla riga dell'armatura
- * o sull'anteprima compare il suggerimento; come per gli slot del gioco base, non con un oggetto sul cursore.
+ * I clic sui widget (design §5.3 e §5.6): sui posti, su "Tutti", sulla freccia e sul lucchetto il tasto sinistro manda
+ * al server il numero che dicono {@link StationLayout#placeButton} (dal posto, dall'oggetto sul cursore e dalle
+ * maiuscole), {@link StationLayout#unmountButton} e, per il lucchetto, la vista (26 solo con {@code canToggleLock}),
+ * come i menu del gioco base: prima il menu del client (che predice la scelta), poi il pacchetto dei pulsanti. Il
+ * server ricontrolla tutto, e ogni cambio che si vede, salvo la scelta, arriva con la vista: anche il lucchetto, che il
+ * client non predice. Un tasto premuto su un widget non va al gioco base, e nemmeno il suo trascinamento e il suo
+ * rilascio: il gioco base, al rilascio, getterebbe la pila del cursore (fuori dalla schermata) o la poserebbe in uno
+ * slot, e in creativa il pezzo appena montato e' ancora sul cursore. Passando il mouse su un posto, sulla freccia,
+ * sulla riga dell'armatura, sul lucchetto, sullo scudo o sull'anteprima compare il suggerimento; come per gli slot del
+ * gioco base, non con un oggetto sul cursore.
  */
 public final class StationScreen extends CompatContainerScreen<StationMenu> {
     /** La texture della schermata, scritta da tools/art/gui.py: i posti dei disegni sono in {@link StationLayout}. */
@@ -63,7 +68,9 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         /** Il pulsante "Tutti". */
         ALL,
         /** La freccia che smonta la scelta. */
-        UNMOUNT
+        UNMOUNT,
+        /** Il lucchetto, che blocca o sblocca il telaio. */
+        LOCK
     }
 
     /** Il modello umanoide a riposo che da' la posa alle ossa della tuta; non si disegna mai. */
@@ -113,8 +120,9 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
 
     /**
      * Lo sfondo della texture (la schermata con i pannelli, le cornici degli slot dell'inventario e il fondo
-     * dell'anteprima), poi il pannello del telaio, l'intestazione della scelta con la freccia e l'anteprima con le
-     * frecce. La fusione accesa per i disegni si spegne in un {@code finally}.
+     * dell'anteprima), poi il pannello del telaio, l'intestazione della scelta con la freccia, nella riga del titolo lo
+     * scudo e il lucchetto, e l'anteprima con le frecce. La fusione accesa per i disegni si spegne in un
+     * {@code finally}.
      */
     @Override
     protected void renderBg(GuiGraphics graphics, float delta, int mouseX, int mouseY) {
@@ -126,10 +134,27 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
             framePanel.draw(graphics, leftPos, topPos, view, pressed(Widget.ALL),
                     StationLayout.ALL_BUTTON.contains(x, y));
             header.draw(graphics, leftPos, topPos, view, pressed(Widget.UNMOUNT), StationLayout.UNMOUNT.contains(x, y));
+            drawShieldAndLock(graphics, view, StationLayout.LOCK.contains(x, y));
             drawPreview(graphics);
         } finally {
             GuiTexture.endBlend();
         }
+    }
+
+    /**
+     * Lo scudo, solo con il telaio rinforzato, e il lucchetto, chiuso per il telaio bloccato e aperto per quello
+     * sbloccato, spento se il giocatore non puo' cambiarlo; {@code lockHover} vero con il mouse sul lucchetto. Tutto
+     * dalla vista: il lucchetto cambia solo quando arriva quella del server.
+     */
+    private void drawShieldAndLock(GuiGraphics graphics, StationView view, boolean lockHover) {
+        if (view.reinforced()) {
+            TEXTURE.blit(graphics, StationLayout.RINFORZATO, leftPos + StationLayout.SHIELD.x0(),
+                    topPos + StationLayout.SHIELD.y0());
+        }
+        StationLayout.ButtonState state = StationLayout.buttonState(view.canToggleLock(), pressed(Widget.LOCK),
+                lockHover);
+        TEXTURE.blit(graphics, StationLayout.lockSprite(!view.unlocked(), state), leftPos + StationLayout.LOCK.x0(),
+                topPos + StationLayout.LOCK.y0());
     }
 
     /**
@@ -159,13 +184,13 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     }
 
     /**
-     * Un tasto premuto su un widget (un posto, "Tutti", la freccia) resta della schermata fino al suo rilascio, e non
-     * va al gioco base; se e' il sinistro, manda il numero del widget ({@link #act}). Il tasto sinistro nel ritaglio
-     * dell'anteprima comincia a girare la tuta. Il resto va al gioco base. Ogni tasto si ricorda per conto suo: una
-     * pressione fuori dai widget dimentica solo una pressione dello stesso tasto (se il suo rilascio si e' perso, non
-     * ruba quello di una pressione andata al gioco base), mentre il rilascio di un tasto tenuto su un widget resta
-     * della schermata anche se nel frattempo un altro tasto e' andato al gioco base. Una pressione sinistra smette di
-     * girare la tuta.
+     * Un tasto premuto su un widget (un posto, "Tutti", la freccia, il lucchetto) resta della schermata fino al suo
+     * rilascio, e non va al gioco base; se e' il sinistro, manda il numero del widget ({@link #act}). Il tasto sinistro
+     * nel ritaglio dell'anteprima comincia a girare la tuta. Il resto va al gioco base. Ogni tasto si ricorda per conto
+     * suo: una pressione fuori dai widget dimentica solo una pressione dello stesso tasto (se il suo rilascio si e'
+     * perso, non ruba quello di una pressione andata al gioco base), mentre il rilascio di un tasto tenuto su un widget
+     * resta della schermata anche se nel frattempo un altro tasto e' andato al gioco base. Una pressione sinistra
+     * smette di girare la tuta.
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
@@ -244,7 +269,10 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         if (StationLayout.ALL_BUTTON.contains(x, y)) {
             return Widget.ALL;
         }
-        return StationLayout.UNMOUNT.contains(x, y) ? Widget.UNMOUNT : null;
+        if (StationLayout.UNMOUNT.contains(x, y)) {
+            return Widget.UNMOUNT;
+        }
+        return StationLayout.LOCK.contains(x, y) ? Widget.LOCK : null;
     }
 
     /** Vero mentre il tasto sinistro, premuto sul widget, e' tenuto. */
@@ -260,7 +288,8 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     /**
      * Il clic sinistro sul widget nel punto (x, y): il numero che dice la tabella dei clic, dalla vista del menu, o
      * nulla. Su un posto contano l'oggetto sul cursore ({@link #cursor}) e le maiuscole; "Tutti" sceglie tutti i pezzi;
-     * la freccia smonta la scelta, se ha qualcosa da smontare.
+     * la freccia smonta la scelta, se ha qualcosa da smontare; il lucchetto blocca o sblocca il telaio se la vista dice
+     * che il giocatore puo' ({@code canToggleLock}), e il client non lo cambia: lo cambia la vista che manda il server.
      */
     private void act(Widget widget, double x, double y) {
         StationView view = menu.view();
@@ -272,6 +301,8 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
             }
             case ALL -> OptionalInt.of(StationAction.button(StationAction.Kind.SELECT_ALL, 0));
             case UNMOUNT -> StationLayout.unmountButton(view);
+            case LOCK -> view.canToggleLock() ? OptionalInt.of(StationAction.button(StationAction.Kind.TOGGLE_LOCK, 0))
+                    : OptionalInt.empty();
         };
         number.ifPresent(this::send);
     }
@@ -327,12 +358,26 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
                 topPos + StationLayout.ARROW_RIGHT.y0());
     }
 
-    /** Le righe del suggerimento nel punto (x, y), relativo all'angolo della schermata; vuote fuori dai widget. */
+    /**
+     * Le righe del suggerimento nel punto (x, y), relativo all'angolo della schermata; vuote fuori dai widget. Il
+     * lucchetto ha le righe di {@link StationLayout#lockTooltipKeys}, la prima nel colore del testo e le altre in
+     * grigio; lo scudo, se c'e', dice che il telaio e' rinforzato.
+     */
     private List<Component> tooltip(StationView view, double x, double y) {
         List<Component> lines = new ArrayList<>(framePanel.tooltip(view, x, y));
         lines.addAll(header.tooltip(x, y));
         if (view.hasStowed() && StationLayout.STOWED.contains(x, y)) {
             lines.add(Component.translatable(StationTexts.HOLDS_ARMOR_HOW));
+        }
+        if (StationLayout.LOCK.contains(x, y)) {
+            List<String> keys = StationLayout.lockTooltipKeys(view);
+            lines.add(Component.translatable(keys.get(0)));
+            for (String key : keys.subList(1, keys.size())) {
+                lines.add(Component.translatable(key).withStyle(ChatFormatting.GRAY));
+            }
+        }
+        if (view.reinforced() && StationLayout.SHIELD.contains(x, y)) {
+            lines.add(Component.translatable(StationTexts.REINFORCED));
         }
         if (!rotating && StationLayout.PREVIEW_CLIP.contains(x, y)) {
             lines.add(Component.translatable(StationTexts.ROTATE));

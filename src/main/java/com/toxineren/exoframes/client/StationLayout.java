@@ -8,6 +8,8 @@ import com.toxineren.exoframes.core.armor.Tier;
 import com.toxineren.exoframes.core.station.StationAction;
 import com.toxineren.exoframes.core.station.StationAction.Kind;
 import com.toxineren.exoframes.core.station.StationView;
+import com.toxineren.exoframes.station.StationTexts;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -17,19 +19,19 @@ import java.util.OptionalInt;
 import java.util.function.ToIntFunction;
 
 /**
- * La disposizione della schermata della stazione (design §5.3), in Java puro, senza classi di Minecraft: i
- * rettangoli dei widget, i colori dei testi, il colore di una condizione, il giro dell'anteprima e la vista della tuta
- * dalla vista del telaio; le regole dei clic sui posti del pannello del telaio e sulla freccia per smontare, che dicono
- * quale numero mandare al server (design §5.3 e §5.6), lo stato di un pulsante, che sceglie il suo disegno, e se i
- * numeri della durata stanno accanto alla condizione; poi i disegni della schermata nella loro texture (parte 4d,
- * stile A:
- * {@code textures/gui/station.png}, scritta da tools/art/gui.py), con i nomi della mappa del generatore, anche quelli
- * dei widget delle parti 4a-2 e 4b, e quale disegno va con una condizione. I rettangoli sono in pixel dell'interfaccia,
- * relativi all'angolo in alto a sinistra della schermata, con il bordo destro e quello in basso esclusi; ogni disegno
- * ha la grandezza del rettangolo che riempie. Lo sfondo e' opaco (il mondo dietro la schermata non deve trasparire), i
- * bordi dei posti e i riempimenti della barra hanno i colori esatti della legenda, e nessun texel e' magenta per
- * tools/client/arm_measure.sh (il magenta, nella schermata, e' solo quello della tuta nell'anteprima): lo controlla
- * StationLayoutTest sulla PNG del mod, insieme ai colori dei testi.
+ * La disposizione della schermata della stazione (design §5.3), in Java puro, senza classi di Minecraft: i rettangoli
+ * dei widget, i colori dei testi, il colore di una condizione, il giro dell'anteprima e la vista della tuta dalla vista
+ * del telaio; le regole dei clic sui posti del pannello del telaio e sulla freccia per smontare, che dicono quale
+ * numero mandare al server (design §5.3 e §5.6), lo stato di un pulsante, che sceglie il suo disegno, le righe del
+ * suggerimento del lucchetto e se i numeri della durata stanno accanto alla condizione; poi i disegni della schermata
+ * nella loro texture (parte 4d, stile A: {@code textures/gui/station.png}, scritta da tools/art/gui.py), con i nomi
+ * della mappa del generatore, anche quelli dei widget delle parti 4a-2 e 4b, e quale disegno va con una condizione o
+ * con lo stato di un pulsante. I rettangoli sono in pixel dell'interfaccia, relativi all'angolo in alto a sinistra
+ * della schermata, con il bordo destro e quello in basso esclusi; ogni disegno ha la grandezza del rettangolo che
+ * riempie. Lo sfondo e' opaco (il mondo dietro la schermata non deve trasparire), i bordi dei posti e i riempimenti
+ * della barra hanno i colori esatti della legenda, e nessun texel e' magenta per tools/client/arm_measure.sh (il
+ * magenta, nella schermata, e' solo quello della tuta nell'anteprima): lo controlla StationLayoutTest sulla PNG del
+ * mod, insieme ai colori dei testi.
  */
 final class StationLayout {
     /** Larghezza della schermata. */
@@ -78,6 +80,16 @@ final class StationLayout {
     static final Rect ALL_BUTTON = new Rect(41, 103, 71, 119);
     /** La freccia accanto al nome della scelta: smonta il pezzo scelto, o la cella, nell'inventario (design §5.3). */
     static final Rect UNMOUNT = new Rect(195, 20, 207, 32);
+    /**
+     * Lo scudo di bronzo nella riga del titolo, accanto al lucchetto: c'e' solo se il telaio e' rinforzato (design
+     * §5.3 e §5.11), con il suggerimento che lo dice. Non prende il clic.
+     */
+    static final Rect SHIELD = new Rect(276, 3, 290, 15);
+    /**
+     * Il lucchetto nella riga del titolo, chiuso o aperto come il telaio: blocca o sblocca il telaio per gli altri
+     * (design §5.3 e §5.11), ed e' spento se il giocatore non puo'.
+     */
+    static final Rect LOCK = new Rect(292, 3, 308, 15);
     /**
      * La freccia a sinistra in fondo all'anteprima, a 3 pixel dai bordi del ritaglio (prima della parte 4d era il
      * carattere "<" negli stessi pixel): dice che la tuta si gira trascinando.
@@ -409,6 +421,46 @@ final class StationLayout {
             case PRESSED -> SMONTA_PREMUTO;
             case OFF -> SMONTA_SPENTO;
         };
+    }
+
+    /**
+     * Il disegno del lucchetto ({@link #LOCK}) nello stato dato: chiuso per un telaio bloccato, aperto per uno
+     * sbloccato.
+     */
+    static Sprite lockSprite(boolean locked, ButtonState state) {
+        Objects.requireNonNull(state, "state must not be null");
+        if (locked) {
+            return switch (state) {
+                case NORMAL -> BLOCCO_CHIUSO_NORMALE;
+                case HOVER -> BLOCCO_CHIUSO_SOPRA;
+                case PRESSED -> BLOCCO_CHIUSO_PREMUTO;
+                case OFF -> BLOCCO_CHIUSO_SPENTO;
+            };
+        }
+        return switch (state) {
+            case NORMAL -> BLOCCO_APERTO_NORMALE;
+            case HOVER -> BLOCCO_APERTO_SOPRA;
+            case PRESSED -> BLOCCO_APERTO_PREMUTO;
+            case OFF -> BLOCCO_APERTO_SPENTO;
+        };
+    }
+
+    /**
+     * Le chiavi delle righe del suggerimento del lucchetto, nell'ordine (design §5.3 e §5.11): il telaio bloccato o
+     * sbloccato; poi, se il giocatore non puo' cambiarlo, che solo il proprietario puo'; poi, se la regola
+     * {@code server.ownerOnlyFrames} del server e' spenta, che li' tutti possono usare ogni telaio. Tutto viene dalla
+     * vista: il client non valuta regole con la propria config.
+     */
+    static List<String> lockTooltipKeys(StationView view) {
+        List<String> keys = new ArrayList<>();
+        keys.add(view.unlocked() ? StationTexts.UNLOCKED : StationTexts.LOCKED);
+        if (!view.canToggleLock()) {
+            keys.add(StationTexts.OWNER_ONLY);
+        }
+        if (!view.ownerOnly()) {
+            keys.add(StationTexts.EVERYONE);
+        }
+        return List.copyOf(keys);
     }
 
     /**

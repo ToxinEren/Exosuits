@@ -1,6 +1,7 @@
 package com.toxineren.exoframes.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -28,6 +29,7 @@ import com.toxineren.exoframes.entity.ExoframeEntity;
 import com.toxineren.exoframes.frame.DebugEnergy;
 import com.toxineren.exoframes.frame.DebugWear;
 import com.toxineren.exoframes.frame.FrameLog;
+import com.toxineren.exoframes.frame.FramePermissions;
 import com.toxineren.exoframes.frame.FramePlacement;
 import com.toxineren.exoframes.frame.FrameRemoval;
 import com.toxineren.exoframes.frame.FrameSight;
@@ -40,6 +42,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -55,8 +58,9 @@ import net.minecraft.world.item.ItemStack;
  * giocatore, non la console. Per tutti:
  * <ul>
  * <li>{@code /exoframe unlock} e {@code /exoframe lock}: sblocca o blocca il telaio per gli altri giocatori; solo il
- * proprietario o un operatore (livello di permesso 2), e un telaio senza proprietario solo un operatore. Il cambio
- * passa dal registro; gia' in quello stato riesce lo stesso.</li>
+ * proprietario o un operatore (livello di permesso 2), e un telaio senza proprietario solo un operatore, la regola del
+ * lucchetto della stazione ({@link FramePermissions#canToggleLock(UUID, boolean, FrameState)}). Il cambio passa dal
+ * registro; gia' in quello stato riesce lo stesso.</li>
  * </ul>
  * Solo per gli operatori (livello 2; senza, i rami non esistono per quella sorgente):
  * <ul>
@@ -95,9 +99,20 @@ import net.minecraft.world.item.ItemStack;
  * </ul>
  * Senza telaio indossato o senza cella i due rami lo dicono e non cambiano nulla. Con il registro in sola lettura
  * nessun telaio e' indossato in questa sessione, quindi i due rami rispondono "non indossi un telaio".
+ * <p>
+ * Il ramo {@code reinforced} segna il telaio come rinforzato, o no (design §5.11): nessuna regola lo legge, e la
+ * schermata della stazione lo mostra con lo scudo. Senza, nessuna prova potrebbe vedere un telaio rinforzato:
+ * <ul>
+ * <li>{@code /exoframe debug reinforced <true|false>}: sul telaio indossato o su quello piazzato che chi lo esegue
+ * guarda, come {@code unlock} e {@code lock} ma senza il controllo del proprietario; scrive il valore com'e'.</li>
+ * </ul>
  */
 public final class ExoframeCommand {
     private static final String COMMANDS = "commands.redstone_exoframes.";
+    /** La risposta di {@code /exoframe unlock}: anche la stazione la scrive, dopo il suo lucchetto. */
+    public static final String UNLOCK_DONE = COMMANDS + "unlock.done";
+    /** La risposta di {@code /exoframe lock}: anche la stazione la scrive, dopo il suo lucchetto. */
+    public static final String LOCK_DONE = COMMANDS + "lock.done";
     private static final String LANG = COMMANDS + "debug.";
     private static final String NO_FRAME = COMMANDS + "no_frame";
     private static final String NO_FRAME_IN_SIGHT = COMMANDS + "no_frame_in_sight";
@@ -108,6 +123,7 @@ public final class ExoframeCommand {
     private static final String PRIMARY = "primario";
     private static final String SECONDARY = "secondario";
     private static final String ENERGY = "re";
+    private static final String VALUE = "valore";
     private static final Pattern HEX_COLOR = Pattern.compile("[0-9A-Fa-f]{6}");
     private static final DynamicCommandExceptionType INVALID_COLOR = new DynamicCommandExceptionType(
             value -> Component.translatable(LANG + "invalid_color", value));
@@ -145,7 +161,11 @@ public final class ExoframeCommand {
                         .then(Commands.literal("energy")
                                 .executes(ExoframeCommand::showEnergy)
                                 .then(Commands.argument(ENERGY, IntegerArgumentType.integer(0))
-                                        .executes(ExoframeCommand::setEnergy)))));
+                                        .executes(ExoframeCommand::setEnergy)))
+                        .then(Commands.literal("reinforced")
+                                .then(Commands.argument(VALUE, BoolArgumentType.bool())
+                                        .executes(context -> setReinforced(context,
+                                                BoolArgumentType.getBool(context, VALUE)))))));
     }
 
     /** {@code rottame [stato] [primario] [secondario]}: ogni argomento opzionale e' ammesso solo dopo i precedenti. */
@@ -265,43 +285,91 @@ public final class ExoframeCommand {
     }
 
     /**
-     * Sblocca o blocca il telaio indossato o guardato: con {@link FrameStateAccess#mutate} (e poi la sincronizzazione
-     * del giocatore) se indossato, con {@link FrameStateAccess#updatePlaced} se piazzato. 0 senza telaio, se chi esegue
-     * non ne e' il proprietario e non e' un operatore, o se il registro rifiuta il cambio (allora non si dice nulla).
+     * Sblocca o blocca il telaio indossato o guardato ({@link Target}). Chi lo puo' fare lo dice
+     * {@link FramePermissions#canToggleLock(UUID, boolean, FrameState)}, la stessa regola del lucchetto della stazione,
+     * con il permesso della sorgente del comando ({@code source.hasPermission(2)}: con {@code execute as} da RCON vale
+     * quello della sorgente, non quello del giocatore). 0 senza telaio, se chi esegue non ne e' il proprietario e non
+     * e' un operatore, o se il registro rifiuta il cambio (allora non si dice nulla).
      */
     private static int setUnlocked(CommandContext<CommandSourceStack> context, boolean unlocked)
             throws CommandSyntaxException {
         CommandSourceStack source = context.getSource();
         ServerPlayer player = source.getPlayerOrException();
-        MinecraftServer server = player.getServer();
-        FrameStateAccess frames = Compat.frameState();
-        Optional<FrameState> worn = frames.get(player);
-        Optional<PlacedFrame> placed = worn.isPresent() ? Optional.empty()
-                : FrameSight.inSight(player).flatMap(frame -> frames.placed(server, frame.frameId()));
-        Optional<FrameState> state = worn.isPresent() ? worn : placed.map(PlacedFrame::state);
-        if (state.isEmpty()) {
+        Optional<Target> target = Target.of(player);
+        if (target.isEmpty()) {
             source.sendFailure(Component.translatable(NO_FRAME));
             return 0;
         }
-        if (!player.getUUID().equals(state.get().owner()) && !source.hasPermission(OPERATOR_LEVEL)) {
+        if (!FramePermissions.canToggleLock(player.getUUID(), source.hasPermission(OPERATOR_LEVEL),
+                target.get().state())) {
             source.sendFailure(Component.translatable(NOT_OWNER));
             return 0;
         }
-        boolean changed;
-        if (worn.isPresent()) {
-            changed = frames.mutate(player, s -> s.setUnlocked(unlocked));
+        if (!target.get().change(player, s -> s.setUnlocked(unlocked))) {
+            return 0;
+        }
+        String feedback = unlocked ? UNLOCK_DONE : LOCK_DONE;
+        source.sendSuccess(() -> Component.translatable(feedback), false);
+        return 1;
+    }
+
+    /**
+     * {@code debug reinforced <valore>}: segna come rinforzato, o no, il telaio indossato o guardato ({@link Target}),
+     * come {@link #setUnlocked} ma senza il controllo del proprietario: il ramo {@code debug} e' degli operatori.
+     * Scrive il valore com'e', anche se il telaio lo ha gia'. 1 e il valore scritto; 0 e un errore senza telaio; 0
+     * senza messaggio se il registro rifiuta il cambio.
+     */
+    private static int setReinforced(CommandContext<CommandSourceStack> context, boolean reinforced)
+            throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+        ServerPlayer player = source.getPlayerOrException();
+        Optional<Target> target = Target.of(player);
+        if (target.isEmpty()) {
+            source.sendFailure(Component.translatable(NO_FRAME));
+            return 0;
+        }
+        if (!target.get().change(player, s -> s.setReinforced(reinforced))) {
+            return 0;
+        }
+        source.sendSuccess(() -> Component.translatable(LANG + "reinforced.done", String.valueOf(reinforced)),
+                false);
+        return 1;
+    }
+
+    /**
+     * Il telaio a cui si riferiscono {@code unlock}, {@code lock} e {@code debug reinforced}: quello che chi esegue il
+     * comando indossa, altrimenti quello piazzato che guarda ({@link FrameSight#inSight}).
+     *
+     * @param state    lo stato vivo del telaio, da leggere: lo cambia solo {@link #change}
+     * @param placedId l'identita' del telaio piazzato; vuota per quello indossato
+     */
+    private record Target(FrameState state, Optional<UUID> placedId) {
+        /** Il telaio indossato dal giocatore, altrimenti quello piazzato che guarda; vuoto se non ce n'e'. */
+        static Optional<Target> of(ServerPlayer player) {
+            FrameStateAccess frames = Compat.frameState();
+            Optional<FrameState> worn = frames.get(player);
+            if (worn.isPresent()) {
+                return Optional.of(new Target(worn.get(), Optional.empty()));
+            }
+            return FrameSight.inSight(player).flatMap(frame -> frames.placed(player.getServer(), frame.frameId()))
+                    .map(placed -> new Target(placed.state(), Optional.of(placed.frameId())));
+        }
+
+        /**
+         * Applica la modifica: con {@link FrameStateAccess#mutate} (e poi la sincronizzazione del giocatore) al telaio
+         * indossato, con {@link FrameStateAccess#updatePlaced} a quello piazzato. Vero se il registro l'ha applicata.
+         */
+        boolean change(ServerPlayer player, Consumer<FrameState> change) {
+            FrameStateAccess frames = Compat.frameState();
+            if (placedId.isPresent()) {
+                return frames.updatePlaced(player.getServer(), placedId.get(), change);
+            }
+            boolean changed = frames.mutate(player, change);
             if (changed) {
                 frames.syncTo(player);
             }
-        } else {
-            changed = frames.updatePlaced(server, placed.get().frameId(), s -> s.setUnlocked(unlocked));
+            return changed;
         }
-        if (!changed) {
-            return 0;
-        }
-        String feedback = COMMANDS + (unlocked ? "unlock.done" : "lock.done");
-        source.sendSuccess(() -> Component.translatable(feedback), false);
-        return 1;
     }
 
     /**

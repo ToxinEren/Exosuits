@@ -83,7 +83,10 @@ import net.neoforged.neoforge.gametest.GameTestHooks;
  * {@code NetworkFilters.injectIfNecessary} e Fabric lascia i pacchetti in coda senza scriverli), che come quello
  * vanilla dice sempre {@code isCreative()} (solo quello: le capacita' seguono la modalita' di gioco del mondo dei test,
  * che su 1.20.1-forge non e' la creativa, e i test la impostano da se'), ma con {@code isSpectator()} quello della
- * modalita' di gioco: quello vanilla dice sempre falso, e i test dello spettatore non si potrebbero fare.
+ * modalita' di gioco: quello vanilla dice sempre falso, e i test dello spettatore non si potrebbero fare. Il giocatore
+ * finto operatore ({@link #operatorPlayer}) e' lo stesso, con il livello di permesso 2 (ridefinendo
+ * {@code getPermissionLevel()}, senza la lista degli operatori) e con {@code isCreative()} che segue la modalita' di
+ * gioco.
  */
 public final class GameTestsImpl implements GameTests {
     /**
@@ -92,6 +95,8 @@ public final class GameTestsImpl implements GameTests {
      * contano.
      */
     private static final int SPAWN_PROTECTION_TICKS = 60;
+    /** Il livello di permesso del giocatore finto di {@link #operatorPlayer}: quello degli operatori. */
+    private static final int OPERATOR_LEVEL = 2;
 
     @Override
     public void register(Class<?> testClass) {
@@ -117,13 +122,27 @@ public final class GameTestsImpl implements GameTests {
 
     @Override
     public ServerPlayer mockServerPlayer(GameTestHelper helper) {
+        return mockPlayer(helper, 0, true);
+    }
+
+    @Override
+    public ServerPlayer operatorPlayer(GameTestHelper helper) {
+        return mockPlayer(helper, OPERATOR_LEVEL, false);
+    }
+
+    /**
+     * Il giocatore finto, connesso nel livello del test, con almeno il livello di permesso dato; con
+     * {@code alwaysCreative} dice sempre {@code isCreative()}, altrimenti segue la modalita' di gioco.
+     */
+    private static ServerPlayer mockPlayer(GameTestHelper helper, int permissionLevel, boolean alwaysCreative) {
         GameProfile profile = new GameProfile(UUID.randomUUID(), "test-mock-player");
         //? if >=1.21 {
         CommonListenerCookie cookie = CommonListenerCookie.createInitial(profile, false);
         MockPlayer player = new MockPlayer(helper.getLevel().getServer(), helper.getLevel(), profile,
-                cookie.clientInformation());
+                cookie.clientInformation(), permissionLevel, alwaysCreative);
         //?} else {
-        /*MockPlayer player = new MockPlayer(helper.getLevel().getServer(), helper.getLevel(), profile);*/
+        /*MockPlayer player = new MockPlayer(helper.getLevel().getServer(), helper.getLevel(), profile,
+                permissionLevel, alwaysCreative);*/
         //?}
         Connection connection = new Connection(PacketFlow.SERVERBOUND);
         new EmbeddedChannel(connection); // channelActive imposta il canale della connessione
@@ -151,26 +170,41 @@ public final class GameTestsImpl implements GameTests {
     }
 
     /**
-     * Il giocatore finto di {@link #mockServerPlayer}: dice sempre {@code isCreative()} come quello vanilla (le
-     * capacita' seguono la modalita' di gioco, che i test impostano da se'), e' spettatore secondo la sua modalita' di
-     * gioco, e ricorda i messaggi di sistema che riceve ({@link #messagesTo}).
+     * Il giocatore finto di {@link #mockServerPlayer} e di {@link #operatorPlayer}: e' spettatore secondo la sua
+     * modalita' di gioco, ricorda i messaggi di sistema che riceve ({@link #messagesTo}) e ha almeno il livello di
+     * permesso dato (il massimo fra quello e quello che il server gli da'). Quello di {@link #mockServerPlayer} dice
+     * sempre {@code isCreative()} come quello vanilla (le capacita' seguono la modalita' di gioco, che i test impostano
+     * da se'); quello di {@link #operatorPlayer} segue la modalita' di gioco, come un giocatore vero.
      */
     private static final class MockPlayer extends ServerPlayer {
         private final List<Component> messages = new ArrayList<>();
+        private final int permissionLevel;
+        private final boolean alwaysCreative;
 
         //? if >=1.21 {
-        MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, ClientInformation information) {
+        MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, ClientInformation information,
+                int permissionLevel, boolean alwaysCreative) {
             super(server, level, profile, information);
+            this.permissionLevel = permissionLevel;
+            this.alwaysCreative = alwaysCreative;
         }
         //?} else {
-        /*MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile) {
+        /*MockPlayer(MinecraftServer server, ServerLevel level, GameProfile profile, int permissionLevel,
+                boolean alwaysCreative) {
             super(server, level, profile);
+            this.permissionLevel = permissionLevel;
+            this.alwaysCreative = alwaysCreative;
         }*/
         //?}
 
         @Override
         public boolean isCreative() {
-            return true;
+            return alwaysCreative || super.isCreative();
+        }
+
+        @Override
+        protected int getPermissionLevel() {
+            return Math.max(permissionLevel, super.getPermissionLevel());
         }
 
         @Override

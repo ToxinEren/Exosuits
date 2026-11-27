@@ -8,7 +8,7 @@
 # interfaccia 480x270 e schermata della stazione (316x232) con l'angolo nel punto 82,19 dell'interfaccia, cioe' il
 # riquadro 632x464+164+38 negli scatti. Un punto (x, y) della schermata e' il punto (2 (82 + x), 2 (19 + y)) degli
 # scatti. La stazione sta in 0 -60 1 (la meta' principale) e -1 -60 1 (la laterale, alla destra di chi la posa
-# guardando a sud), con il fronte a nord, verso il giocatore; dal passo 5 al passo 14 il telaio sta sopra la
+# guardando a sud), con il fronte a nord, verso il giocatore; dal passo 5 al passo 16 il telaio sta sopra la
 # principale, con i piedi in 0,5 -59 1,5.
 #
 #   1. attesa       "@attendi 12": la riga in chat del "gamemode creative" di client_shot.sh e l'avviso "Chat
@@ -67,27 +67,34 @@
 #                   un clic sinistro sullo slot 1 della barra ce lo rimette ("execute if data" lo vuole li'); il
 #                   puntatore nel punto neutro; scatto montato, da guardare: come scelta-torso, piu' l'elmo nel
 #                   secondo posto della barra
-#  12. vista        prova di fumo del pacchetto station_view: con lo sguardo sul telaio (inclinazione -40; la schermata
-#                   resta aperta) /exoframe unlock lo sblocca, la vista del telaio cambia e al tick dopo il server la
-#                   manda al client, che la mette nel menu aperto; dopo 2 s il giocatore e' ancora nel server (un
-#                   pacchetto che il client non legge lo farebbe uscire, e il passo dopo fallirebbe) e nessuna riga del
-#                   mod finisce in log-check.txt. Lo sblocco non cambia nulla che si veda (la schermata non mostra
-#                   ancora il lucchetto): il contenuto lo provano i JUnit del codec e i test in mondo di
-#                   StationMenuGameTests
-#  13. inventario   tre lingotti di ferro nel primo slot dell'inventario principale (inventory.0, lo slot 9
+#  12. lucchetto    clic sinistro sul lucchetto (punto 764,56): il giocatore e' il proprietario del telaio, la vista ha
+#                   canToggleLock e il numero 26 va al server, che sblocca il telaio; il client non predice il
+#                   lucchetto, che si apre solo con la vista del server; il puntatore nel punto neutro; scatto
+#                   sbloccato, da guardare: il lucchetto aperto (l'arco alzato e la gamba destra fuori dal corpo), il
+#                   resto come in montato
+#  13. vista        con lo sguardo sul telaio (inclinazione -40; la schermata resta aperta) /exoframe lock lo blocca: la
+#                   vista del telaio cambia, al tick dopo il server la manda al client con il pacchetto station_view, e
+#                   la schermata la disegna; scatto bloccato, da guardare: il lucchetto chiuso, come in montato. E' la
+#                   prova misurata del pacchetto che arriva a schermata aperta dopo un cambio fatto da un comando, che
+#                   la parte 4a-1 aveva solo come prova di fumo (/exoframe unlock, senza nulla da vedere; design M4
+#                   §13); dopo 2 s il giocatore e' ancora nel server (un pacchetto che il client non legge lo farebbe
+#                   uscire) e nessuna riga del mod finisce in log-check.txt
+#  14. rinforzato   /exoframe debug reinforced true segna come rinforzato il telaio guardato; scatto rinforzato, da
+#                   guardare: lo scudo di bronzo a sinistra del lucchetto, il resto come in bloccato
+#  15. inventario   tre lingotti di ferro nel primo slot dell'inventario principale (inventory.0, lo slot 9
 #                   dell'inventario) e un clic sinistro con le maiuscole al suo centro (punto 196,354): lo spostamento
 #                   rapido del menu li porta nel primo slot della barra; "execute if data" li vuole nello slot 0 e
 #                   "execute unless data" vuole vuoto lo slot 9. Il lingotto sblocca ricette, ma dopo l'ultimo scatto
 #                   misurato; da qui il giocatore li tiene in mano, e la rottura in creativa resta la stessa
-#  14. chiusura     con lo sguardo sul telaio (inclinazione -40; la schermata resta aperta) /exoframe remove lo toglie,
+#  16. chiusura     con lo sguardo sul telaio (inclinazione -40; la schermata resta aperta) /exoframe remove lo toglie,
 #                   e il server chiude la schermata al tick dopo; scatto telaio-tolto mezzo secondo dopo, da guardare:
 #                   nessuna schermata e, sulla barra delle azioni, "The exoframe is no longer available at the station";
 #                   "execute unless entity" vuole nessun telaio rimasto, e kill toglie i pezzi e la cella che il
 #                   comando lascia a terra (prima dei 2 s del ritardo di raccolta)
-#  15. rottura      con il mirino sul fianco nord della laterale (rotazione 63,4, inclinazione 45) un clic sinistro,
+#  17. rottura      con il mirino sul fianco nord della laterale (rotazione 63,4, inclinazione 45) un clic sinistro,
 #                   in creativa, rompe la laterale: la principale sparisce con lei, senza bottino ("execute if block"
 #                   vuole l'aria nelle due meta', "execute unless entity" nessun oggetto a terra)
-#  16. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
+#  18. fine         tp in 0,5 -60 -5,5 per i tre scatti di client_shot.sh
 #
 # Controlli sugli scatti (arm_measure.sh), solo dentro il riquadro della schermata o di una sua parte: attorno si vede
 # il mondo. "Dentro R" vuol dire un riquadro con X >= Rx, Y >= Ry, X + L <= Rx + RL e Y + A <= Ry + RA.
@@ -113,10 +120,19 @@
 #                   posto tornati uguali al pixel: il server ha montato l'elmo con il suo colore e la sua durata), e
 #                   nella schermata nessun pixel fuori dallo slot 1 della barra (36x36+214+452), dove in creativa sta
 #                   di nuovo l'elmo
+#   lucchetto       differenza fra sbloccato e montato: almeno LOCK_MIN pixel nella schermata, tutti dentro il
+#                   lucchetto (32x24+748+44): il clic e' andato al server e la vista e' tornata (il client non predice
+#                   il lucchetto)
+#   vista           differenza fra bloccato e sbloccato: almeno LOCK_MIN pixel nella schermata, tutti dentro il
+#                   lucchetto; e zero pixel nel lucchetto fra bloccato e montato (chiuso tutte e due le volte): un
+#                   cambio fatto da un comando arriva nella schermata con station_view, la prova misurata del pacchetto
+#                   che la parte 4a-1 aspettava
+#   rinforzato      differenza fra rinforzato e bloccato: almeno SHIELD_MIN pixel nella schermata, tutti dentro lo
+#                   scudo (28x24+716+44)
 # Le regole degli scatti misurati: il primo almeno 12 s dopo il primo passo; nessun oggetto che sblocca ricette nei 12 s
 # prima di uno scatto misurato (la sequenza ne da' due: il lingotto di rame della fase 2, seguito da "@attendi 12" dopo
 # "recipe take" e lontano dal primo scatto misurato, stazione-aperta, che viene dopo la posa e il telaio; i lingotti di
-# ferro della fase 13, dopo l'ultimo); nessun "gamemode"; il puntatore nel punto neutro in tutti e due gli scatti di una
+# ferro della fase 15, dopo l'ultimo); nessun "gamemode"; il puntatore nel punto neutro in tutti e due gli scatti di una
 # coppia (sopra un pulsante lo schiarisce e ne mostra il suggerimento, sopra l'anteprima e il pannello del telaio mostra
 # il loro).
 #
@@ -124,26 +140,29 @@
 # piccone, i pistoni e i comandi che tolgono una meta' (li provano i test in mondo di StationBlockGameTests); la scelta
 # fra piu' telai, i telai bloccati, la portata misurata al bordo e le altre ragioni che chiudono la schermata (le
 # provano i test in mondo di StationMenuGameTests); il consumo del cursore in sopravvivenza (la sequenza resta in
-# creativa), la cella, i rifiuti e i loro messaggi, il registro che rifiuta la scrittura e due giocatori sullo stesso
-# telaio (li provano i test in mondo di StationActionGameTests); un cambio della vista fatto da un comando che si veda
-# (lo sblocco non si vede ancora); i colori e i testi del pannello del telaio e dei suggerimenti, che si guardano negli
-# scatti e non si misurano; pezzi danneggiati, critici o rotti (il comando di debug monta sei pezzi intatti); lo
-# spostamento rapido nell'altro verso e con la barra piena (li prova il test in mondo quickMoveSwapsInventoryAndHotbar);
-# la schermata con altre scale dell'interfaccia e altre misure della finestra; una ricarica delle risorse (F3+T) fra
-# due aperture della schermata (con una schermata aperta il gioco non prende F3+T); un'esplosione vera; i suoni (il
-# client non ha audio); un secondo giocatore; il rilascio di una pressione sopra uno slot, con una pila sul cursore; la
-# morte e l'uscita dal server con la schermata aperta e una pila sul cursore. Sono nella checklist per il PC.
+# creativa), la cella, i rifiuti e i loro messaggi, il registro che rifiuta la scrittura, due giocatori sullo stesso
+# telaio, il lucchetto di chi non puo' cambiarlo, l'operatore, la schermata di un altro che si chiude quando il telaio
+# si blocca e il rinforzo del telaio indossato (li provano i test in mondo di StationActionGameTests); la raccolta del
+# telaio e la sua posa di nuovo (test in mondo); i colori e i testi del pannello del telaio e dei suggerimenti, che si
+# guardano negli scatti e non si misurano, e i suggerimenti del lucchetto e dello scudo; pezzi danneggiati, critici o
+# rotti (il comando di debug monta sei pezzi intatti); lo spostamento rapido nell'altro verso e con la barra piena (li
+# prova il test in mondo quickMoveSwapsInventoryAndHotbar); la schermata con altre scale dell'interfaccia e altre misure
+# della finestra; una ricarica delle risorse (F3+T) fra due aperture della schermata (con una schermata aperta il gioco
+# non prende F3+T); un'esplosione vera; i suoni (il client non ha audio); un secondo giocatore; il rilascio di una
+# pressione sopra uno slot, con una pila sul cursore; la morte e l'uscita dal server con la schermata aperta e una pila
+# sul cursore. Sono nella checklist per il PC.
 #
-# Dura poco piu' di due minuti a cache calde: misurati 142 s su 1.21.1-neoforge e 141 s su 1.20.1-forge, di cui 134 e
-# 132 s l'esecuzione di client_shot.sh. Dentro la schermata gli scatti delle quattro varianti sono uguali al pixel,
+# Dura poco piu' di due minuti a cache calde: misurati 140 s su 1.21.1-neoforge e 144 s su 1.20.1-forge, di cui 131 e
+# 135 s l'esecuzione di client_shot.sh. Dentro la schermata gli scatti delle quattro varianti sono uguali al pixel,
 # anteprima di fronte compresa: la scala della tuta nell'interfaccia passa da GuiEntityScale, che la applica come il
 # gioco base di ogni versione (senza, su 1.20.1 la tuta usciva piu' scura). Di fianco, in girata e suggerimento-torso,
 # le due varianti di una versione restano uguali al pixel, mentre fra le due versioni la luce della tuta differisce di
 # 1/255 al piu' (in 11906 pixel), e la sagoma della rotazione, che conta i pixel vicini alla soglia del 4 %, cambia di
-# poco (i valori accanto alle soglie, piu' sotto); le misure della scelta, dello smontaggio e del montaggio sono le
-# stesse su 1.21.1-neoforge e su 1.20.1-forge. Il kill degli oggetti a terra della fase 14 deve arrivare prima che
-# finiscano i 2 s del ritardo di raccolta (poi il giocatore, a un blocco, li raccoglierebbe e kill fallirebbe senza
-# bersagli): arriva nel secondo dopo "/exoframe remove" (orari del log di client_shot.sh) e toglie i sette oggetti.
+# poco (i valori accanto alle soglie, piu' sotto); le misure della scelta, dello smontaggio, del montaggio, del
+# lucchetto, della vista e del rinforzato sono le stesse su 1.21.1-neoforge e su 1.20.1-forge. Il kill degli oggetti a
+# terra della fase 16 deve arrivare prima che finiscano i 2 s del ritardo di raccolta (poi il giocatore, a un blocco, li
+# raccoglierebbe e kill fallirebbe senza bersagli): arriva nel secondo dopo "/exoframe remove" (orari del log di
+# client_shot.sh) e toglie i sette oggetti.
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se client_shot.sh e' uscito con 0 e
@@ -192,13 +211,22 @@ PLACE_MIN=470
 # fra scelta-torso e smontato (misurato 497, da 9225 a 8728: la tuta e' di fianco, e il riquadro del magenta perde le
 # sei righe in alto, da 111x198+629+96 a 111x192+629+102).
 HELMET_MIN=240
+# I pixel del lucchetto che cambiano quando si apre o si chiude: la meta', arrotondata per difetto alla decina, della
+# differenza fra sbloccato e montato nella schermata (misurati 144, nel riquadro 28x20+750+46: l'arco e il corpo del
+# lucchetto; gli stessi fra bloccato e sbloccato).
+LOCK_MIN=70
+# I pixel dello scudo che compare con il telaio rinforzato: la meta', arrotondata per difetto alla decina, della
+# differenza fra rinforzato e bloccato nella schermata (misurati 552, nel riquadro 28x24+716+44: lo scudo intero).
+SHIELD_MIN=270
 # Riquadri negli scatti: la schermata, il ritaglio dell'anteprima, il pannello del telaio e il pannello centrale
-# insieme, il posto dell'elmo, lo slot 1 della barra (cornice compresa).
+# insieme, il posto dell'elmo, lo slot 1 della barra (cornice compresa), il lucchetto e lo scudo.
 SCREEN_RECT=632x464+164+38
 CLIP_RECT=184x232+596+74
 PANELS_RECT=408x236+178+72
 HELMET_RECT=40x40+224+80
 HOTBAR_SLOT1_RECT=36x36+214+452
+LOCK_RECT=32x24+748+44
+SHIELD_RECT=28x24+716+44
 # Il primo passo: vedi il commento di testa.
 FIRST_WAIT=12
 
@@ -242,25 +270,30 @@ steps=(
     "@attendi 1" "execute unless entity @e[type=minecraft:item]" "@clic 232 470" "@attendi 0.5"
     "execute if data entity $u Inventory[{Slot:1b,id:\"redstone_exoframes:scrap_helmet\"}]" "$NEUTRAL" "@attendi 1"
     "@scatto montato"
-    # 12. vista: a schermata aperta /exoframe unlock cambia il telaio, e il server manda station_view (prova di fumo)
-    "tp $u 0.5 -60 0.5 0 -40" "@attendi 1" "execute as $u run exoframe unlock" "@attendi 2"
-    # 13. inventario: un clic con le maiuscole sposta i lingotti dal primo slot dell'inventario alla barra
+    # 12. lucchetto: il clic sul lucchetto lo sblocca; il lucchetto aperto arriva solo con la vista del server
+    "@clic 764 56" "@attendi 1" "$NEUTRAL" "@attendi 1" "@scatto sbloccato"
+    # 13. vista: a schermata aperta, con lo sguardo sul telaio, /exoframe lock lo blocca; il lucchetto chiuso arriva con
+    # il pacchetto station_view
+    "tp $u 0.5 -60 0.5 0 -40" "@attendi 1" "execute as $u run exoframe lock" "@attendi 2" "@scatto bloccato"
+    # 14. rinforzato: /exoframe debug reinforced true sul telaio guardato; lo scudo arriva con la vista
+    "execute as $u run exoframe debug reinforced true" "@attendi 2" "@scatto rinforzato"
+    # 15. inventario: un clic con le maiuscole sposta i lingotti dal primo slot dell'inventario alla barra
     "item replace entity $u inventory.0 with minecraft:iron_ingot 3" "@attendi 1" "@clic 196 354 sinistro maiuscole"
     "@attendi 1" "execute if data entity $u Inventory[{Slot:0b,id:\"minecraft:iron_ingot\"}]"
     "execute unless data entity $u Inventory[{Slot:9b}]"
-    # 14. chiusura: tolto il telaio con lo sguardo su di lui, il server chiude la schermata e lo dice
+    # 16. chiusura: tolto il telaio con lo sguardo su di lui, il server chiude la schermata e lo dice
     "tp $u 0.5 -60 0.5 0 -40" "@attendi 1" "execute as $u run exoframe remove" "@attendi 0.5"
     "@scatto telaio-tolto" "execute unless entity @e[type=redstone_exoframes:exoframe]"
     "kill @e[type=minecraft:item]"
-    # 15. rottura: il mirino sul fianco nord della laterale; in creativa le due meta' spariscono senza bottino
+    # 17. rottura: il mirino sul fianco nord della laterale; in creativa le due meta' spariscono senza bottino
     "tp $u 0.5 -60 0.5 63.4 45" "@attendi 1" "@click sinistro" "@attendi 1"
     "execute if block 0 -60 1 minecraft:air" "execute if block -1 -60 1 minecraft:air"
     "execute unless entity @e[type=minecraft:item]"
-    # 16. fine, all'aperto per i tre scatti di client_shot.sh
+    # 18. fine, all'aperto per i tre scatti di client_shot.sh
     "tp $u 0.5 -60 -5.5 0 15"
 )
 shots=(stazione-posata nessun-telaio stazione-aperta girata suggerimento-torso scelta-torso smontato montato
-    telaio-tolto)
+    sbloccato bloccato rinforzato telaio-tolto)
 
 # --- l'esecuzione ---------------------------------------------------------------------------------------------------
 problems=() # le ragioni di un FAIL, nell'ordine in cui si incontrano
@@ -291,7 +324,8 @@ source "$here/measure_lib.sh" || exit 2
 checks() {
     local m1 m2 m3 m4 good front_width side_width drop
     local open="$out/stazione-aperta.png" turned="$out/girata.png" chosen="$out/scelta-torso.png"
-    local unmounted="$out/smontato.png" mounted="$out/montato.png"
+    local unmounted="$out/smontato.png" mounted="$out/montato.png" unlocked="$out/sbloccato.png"
+    local locked="$out/bloccato.png" reinforced="$out/rinforzato.png"
 
     m1=$(take_measure magenta "$open" "$CLIP_RECT")
     m2=$(take_measure magenta "$open" "$SCREEN_RECT")
@@ -342,6 +376,27 @@ checks() {
         && { [ "$(val "$m3" pixel)" -eq 0 ] || inside "$HOTBAR_SLOT1_RECT"; } && good=0
     verdict montaggio "$good" "ritaglio $m1; posto dell'elmo $m2; schermata $m3" \
         "0 nel ritaglio e 0 nel posto dell'elmo; nella schermata nulla fuori da $HOTBAR_SLOT1_RECT"
+
+    m1=$(take_measure differenza "$unlocked" "$mounted" "$SCREEN_RECT")
+    box "$m1"
+    good=1
+    [ "$(val "$m1" pixel)" -ge "$LOCK_MIN" ] && inside "$LOCK_RECT" && good=0
+    verdict lucchetto "$good" "schermata $m1" \
+        "pixel >= $LOCK_MIN dentro $LOCK_RECT: il clic e' andato al server e la vista e' tornata"
+
+    m1=$(take_measure differenza "$locked" "$unlocked" "$SCREEN_RECT")
+    m2=$(take_measure differenza "$locked" "$mounted" "$LOCK_RECT")
+    box "$m1"
+    good=1
+    [ "$(val "$m1" pixel)" -ge "$LOCK_MIN" ] && inside "$LOCK_RECT" && [ "$(val "$m2" pixel)" -eq 0 ] && good=0
+    verdict vista "$good" "schermata $m1; lucchetto contro montato $m2" \
+        "pixel >= $LOCK_MIN dentro $LOCK_RECT, e 0 contro montato nel lucchetto: il comando arriva con la vista"
+
+    m1=$(take_measure differenza "$reinforced" "$locked" "$SCREEN_RECT")
+    box "$m1"
+    good=1
+    [ "$(val "$m1" pixel)" -ge "$SHIELD_MIN" ] && inside "$SHIELD_RECT" && good=0
+    verdict rinforzato "$good" "schermata $m1" "pixel >= $SHIELD_MIN dentro $SHIELD_RECT: lo scudo, e nient'altro"
 }
 
 if [ "${#missing[@]}" -eq 0 ]; then

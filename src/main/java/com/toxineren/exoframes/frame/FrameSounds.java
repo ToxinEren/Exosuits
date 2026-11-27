@@ -24,9 +24,10 @@ import net.minecraft.world.phys.Vec3;
  * {@code RESPAWN_ANCHOR_CHARGE}; pezzo rotto {@code ITEM_BREAK}; energia bassa {@code BEACON_DEACTIVATE}; energia
  * esaurita {@code REDSTONE_TORCH_BURNOUT} (tutti {@code PLAYERS} tranne il primo); cella inserita nel caricatore, o
  * scambiata con quella dentro, {@code ITEM_FRAME_ADD_ITEM}; cella ritirata dal caricatore
- * {@code ITEM_FRAME_REMOVE_ITEM} (tutti e due {@code BLOCKS}, al centro del blocco). Polvere aggiunta al caricatore e
- * tramogge: nessun suono. Gli slot armatura continuano a cambiare in silenzio: i suoni di ingresso e uscita sono
- * questi, non quelli dell'armatura indossata.
+ * {@code ITEM_FRAME_REMOVE_ITEM} (tutti e due {@code BLOCKS}, al centro del blocco); bloccare e sbloccare il telaio
+ * dalla stazione {@code IRON_DOOR_CLOSE} e {@code IRON_DOOR_OPEN} (tutti e due {@code BLOCKS}, nel punto del telaio;
+ * design M4 §5.17). Polvere aggiunta al caricatore e tramogge: nessun suono. Gli slot armatura continuano a cambiare in
+ * silenzio: i suoni di ingresso e uscita sono questi, non quelli dell'armatura indossata.
  * <p>
  * Il registratore ({@link #record}) serve solo ai test in mondo, per controllare quale suono fa ogni azione: senza
  * registrazioni aperte {@link #play} suona e basta.
@@ -47,7 +48,9 @@ public final class FrameSounds {
         ENERGY_LOW(SoundEvents.BEACON_DEACTIVATE, SoundSource.PLAYERS),
         ENERGY_EMPTY(SoundEvents.REDSTONE_TORCH_BURNOUT, SoundSource.PLAYERS),
         CHARGER_INSERT(SoundEvents.ITEM_FRAME_ADD_ITEM, SoundSource.BLOCKS),
-        CHARGER_TAKE(SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS);
+        CHARGER_TAKE(SoundEvents.ITEM_FRAME_REMOVE_ITEM, SoundSource.BLOCKS),
+        LOCK(SoundEvents.IRON_DOOR_CLOSE, SoundSource.BLOCKS),
+        UNLOCK(SoundEvents.IRON_DOOR_OPEN, SoundSource.BLOCKS);
 
         private final SoundEvent event;
         private final SoundSource source;
