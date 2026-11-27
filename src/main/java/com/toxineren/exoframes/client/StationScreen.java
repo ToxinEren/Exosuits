@@ -3,6 +3,7 @@ package com.toxineren.exoframes.client;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.client.StationLayout.Rect;
+import com.toxineren.exoframes.compat.Ids;
 import com.toxineren.exoframes.compat.client.CompatContainerScreen;
 import com.toxineren.exoframes.compat.client.SuitView;
 import com.toxineren.exoframes.content.CellItem;
@@ -29,32 +30,36 @@ import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelLayers;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
  * La schermata della stazione di manutenzione nella parte 4a-1 (design §5.3 e §5.4), con la disposizione di
- * {@link StationLayout}. Mostra in sola lettura la vista del telaio che il menu ha dal server
+ * {@link StationLayout} e, dalla parte 4d, la grafica nello stile A della texture {@code textures/gui/station.png}
+ * (tools/art/gui.py): lo sfondo con i pannelli, le cornici degli slot del giocatore e il fondo dell'anteprima, poi i
+ * disegni dei widget nei loro stati. Mostra in sola lettura la vista del telaio che il menu ha dal server
  * ({@link StationMenu#view}):
  * <ul>
- * <li>il pannello del telaio, i sei posti dei pezzi in forma di corpo e la cella: un pezzo con il bordo del colore
- * della sua condizione e la sua icona con la barra della durata, un posto vuoto scuro con il bordo grigio, la cella
+ * <li>il pannello del telaio, i sei posti dei pezzi in forma di corpo e la cella: un pezzo nel posto con il bordo del
+ * colore della sua condizione e la sua icona con la barra della durata, un posto vuoto con il bordo grigio, la cella
  * con il bordo rosso, il posto scelto con un secondo bordo bianco, fuori dal primo;</li>
  * <li>l'intestazione della scelta nel pannello centrale: nome, condizione nel suo colore, durata e barra di un pezzo;
  * "vuoto" per uno slot senza pezzo; la carica per la cella; "Tutti i pezzi";</li>
  * <li>l'anteprima 3D della tuta del telaio ({@link SuitPreview}, con la vista di {@link StationLayout#suitView}), che
- * trascinando con il tasto sinistro nel ritaglio gira di {@link StationLayout#DEGREES_PER_PIXEL} gradi per pixel;
- * l'angolo vive nella schermata e parte da 0, di fronte, a ogni apertura, e al server non va nulla;</li>
+ * trascinando con il tasto sinistro nel ritaglio gira di {@link StationLayout#DEGREES_PER_PIXEL} gradi per pixel, con
+ * le due frecce in basso; l'angolo vive nella schermata e parte da 0, di fronte, a ogni apertura, e al server non va
+ * nulla;</li>
  * <li>l'inventario del giocatore, gli slot del menu, che funzionano come nel gioco base;</li>
- * <li>il pulsante di prova, un riquadro grigio finche' il server non ha confermato nessuna pressione, verde dopo la
- * prima, con dentro il numero delle pressioni confermate ({@link StationMenu#testPresses}) e piu' chiaro sotto il
- * mouse: il clic manda soltanto il numero al server, e il cambio che si vede viene dal server.</li>
+ * <li>il pulsante di prova, normale finche' il server non ha confermato nessuna pressione, premuto dopo la prima, con
+ * dentro il numero delle pressioni confermate ({@link StationMenu#testPresses}), e piu' chiaro sotto il mouse prima
+ * della prima pressione: il clic manda soltanto il numero al server, e il cambio che si vede viene dal server.</li>
  * </ul>
  * Passando il mouse su un posto, sull'anteprima o sul pulsante compare il suggerimento; come per gli slot del gioco
  * base, non con un oggetto sul cursore. Nessun clic sul pannello del telaio fa nulla: la scelta e il montaggio sono
- * della parte 4a-2.
+ * della parte 4a-2, che disegna i suoi widget dalla stessa texture (i disegni hanno gia' i loro nomi in
+ * {@link StationLayout}).
  */
 public final class StationScreen extends CompatContainerScreen<StationMenu> {
     private static final String GUI_KEY = "gui." + RedstoneExoframes.MOD_ID + ".";
@@ -75,12 +80,10 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
 
     /** Fra il bordo di un posto del pannello del telaio e la sua icona: il bordo e la cornice dello slot. */
     private static final int ICON_INSET = 2;
-    /** La distanza delle frecce dell'anteprima dai bordi del ritaglio. */
-    private static final int ARROW_MARGIN = 3;
-    /** Il lato di uno slot del gioco base con la sua cornice. */
-    private static final int SLOT_SIZE = 18;
-    /** Il lato di un'icona, dentro la cornice di uno slot. */
-    private static final int ICON_SIZE = 16;
+    /** La texture della schermata, scritta da tools/art/gui.py: i posti dei disegni sono in {@link StationLayout}. */
+    static final ResourceLocation TEXTURE_ID = Ids.of("textures/gui/station.png");
+    private static final GuiTexture TEXTURE = new GuiTexture(TEXTURE_ID, StationLayout.TEXTURE_W,
+            StationLayout.TEXTURE_H);
 
     /** Il modello umanoide a riposo che da' la posa alle ossa della tuta; non si disegna mai. */
     private HumanoidModel<LivingEntity> model;
@@ -120,28 +123,22 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     }
 
     /**
-     * Lo sfondo: la schermata con il suo bordo, i tre pannelli, le cornici degli slot dell'inventario, il pannello del
-     * telaio, l'intestazione della scelta, l'anteprima con le frecce e il pulsante di prova.
+     * Lo sfondo della texture (la schermata con i pannelli, le cornici degli slot dell'inventario e il fondo
+     * dell'anteprima), poi il pannello del telaio, l'intestazione della scelta, l'anteprima con le frecce e il pulsante
+     * di prova. La fusione accesa per i disegni si spegne in un {@code finally}.
      */
     @Override
     protected void renderBg(GuiGraphics graphics, float delta, int mouseX, int mouseY) {
         StationView view = refresh();
-        Rect screen = new Rect(0, 0, StationLayout.WIDTH, StationLayout.HEIGHT);
-        fill(graphics, screen, StationLayout.EDGE);
-        fill(graphics, screen.grow(-1), StationLayout.BACKGROUND);
-        fill(graphics, StationLayout.FRAME_PANEL, StationLayout.PANEL);
-        fill(graphics, StationLayout.PIECE_PANEL, StationLayout.PANEL);
-        fill(graphics, StationLayout.PREVIEW_PANEL, StationLayout.PANEL);
-        for (Slot slot : menu.slots) {
-            int x = leftPos + slot.x;
-            int y = topPos + slot.y;
-            graphics.renderOutline(x - 1, y - 1, SLOT_SIZE, SLOT_SIZE, StationLayout.SLOT_EDGE);
-            graphics.fill(x, y, x + ICON_SIZE, y + ICON_SIZE, StationLayout.SLOT_BG);
+        try {
+            TEXTURE.blit(graphics, StationLayout.FONDO, leftPos, topPos);
+            drawFramePanel(graphics, view);
+            drawHeader(graphics, view);
+            drawPreview(graphics);
+            drawTestButton(graphics, mouseX, mouseY);
+        } finally {
+            GuiTexture.endBlend();
         }
-        drawFramePanel(graphics, view);
-        drawHeader(graphics, view);
-        drawPreview(graphics);
-        drawTestButton(graphics, mouseX, mouseY);
     }
 
     /** Il titolo e l'etichetta dell'inventario, nel colore del testo: il grigio del gioco base non si legge qui. */
@@ -242,7 +239,7 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
             if (info == null) {
                 drawEmptyPlace(graphics, place);
             } else {
-                drawPlace(graphics, place, StationLayout.conditionColor(condition(info)), pieceIcons.get(slot));
+                drawPlace(graphics, place, StationLayout.place(condition(info)), pieceIcons.get(slot));
             }
             if (view.selection() == StationView.selectionOf(slot)
                     || (view.selection() == StationView.SELECT_ALL && info != null)) {
@@ -250,7 +247,7 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
             }
         });
         if (view.cell().isPresent()) {
-            drawPlace(graphics, StationLayout.CELL, StationLayout.CELL_RED, cellIcon);
+            drawPlace(graphics, StationLayout.CELL, StationLayout.POSTO_CELLA, cellIcon);
         } else {
             drawEmptyPlace(graphics, StationLayout.CELL);
         }
@@ -259,25 +256,23 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         }
     }
 
-    /** Un posto occupato: il bordo del colore dato, il fondo dello slot e l'icona con la sua barra. */
-    private void drawPlace(GuiGraphics graphics, Rect place, int edge, ItemStack icon) {
-        outline(graphics, place, edge);
-        fill(graphics, place.grow(-1), StationLayout.SLOT_BG);
+    /** Un posto occupato: il disegno del posto con il bordo del suo stato, poi l'icona con la sua barra. */
+    private void drawPlace(GuiGraphics graphics, Rect place, Sprite sprite, ItemStack icon) {
+        draw(graphics, sprite, place);
         int x = leftPos + place.x0() + ICON_INSET;
         int y = topPos + place.y0() + ICON_INSET;
         graphics.renderItem(icon, x, y);
         graphics.renderItemDecorations(font, icon, x, y);
     }
 
-    /** Un posto vuoto: fondo scuro e bordo grigio. */
+    /** Un posto vuoto: il fondo scuro con il bordo grigio. */
     private void drawEmptyPlace(GuiGraphics graphics, Rect place) {
-        outline(graphics, place, StationLayout.EMPTY_EDGE);
-        fill(graphics, place.grow(-1), StationLayout.EMPTY_BG);
+        draw(graphics, StationLayout.POSTO_VUOTO, place);
     }
 
     /** Il secondo bordo, bianco, fuori dal primo. */
     private void drawSelection(GuiGraphics graphics, Rect place) {
-        outline(graphics, place.grow(1), StationLayout.SELECTION);
+        draw(graphics, StationLayout.SCELTA, place.grow(1));
     }
 
     /**
@@ -303,7 +298,7 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
             // c'e' la condizione, che la cella non ha
             drawTextRight(graphics, Component.translatable(CellItem.TOOLTIP_CHARGE, charge, cell.get().capacity()),
                     StationLayout.DURABILITY_NUMBERS, StationLayout.TEXT);
-            drawBar(graphics, charge, cell.get().capacity(), StationLayout.CELL_RED);
+            drawBar(graphics, charge, cell.get().capacity(), StationLayout.DURATA_CELLA);
             return;
         }
         PieceSlot slot = PieceSlot.values()[selection];
@@ -318,37 +313,46 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         drawText(graphics, conditionName(condition), StationLayout.CONDITION, colour);
         drawTextRight(graphics, Component.translatable(DURABILITY_KEY, info.durability(), info.maxDurability()),
                 StationLayout.DURABILITY_NUMBERS, StationLayout.TEXT);
-        drawBar(graphics, info.durability(), info.maxDurability(), colour);
-    }
-
-    /** La barra dell'intestazione: il fondo e, da sinistra, la parte piena in proporzione a {@code value / max}. */
-    private void drawBar(GuiGraphics graphics, int value, int max, int colour) {
-        Rect bar = StationLayout.DURABILITY_BAR;
-        fill(graphics, bar, StationLayout.BAR_BG);
-        int filled = (int) ((long) bar.width() * Math.max(0, Math.min(value, max)) / max);
-        graphics.fill(leftPos + bar.x0(), topPos + bar.y0(), leftPos + bar.x0() + filled, topPos + bar.y1(), colour);
+        drawBar(graphics, info.durability(), info.maxDurability(), StationLayout.durability(condition));
     }
 
     /**
-     * L'anteprima: lo sfondo del ritaglio, la tuta all'angolo trascinato e, in basso nel ritaglio, le frecce che dicono
+     * La barra dell'intestazione: il fondo e, da sinistra, la parte piena in proporzione a {@code value / max}, dal
+     * riempimento dato (il colore della condizione, o il rosso della cella).
+     */
+    private void drawBar(GuiGraphics graphics, int value, int max, Sprite fill) {
+        Rect bar = StationLayout.DURABILITY_BAR;
+        draw(graphics, StationLayout.DURATA_FONDO, bar);
+        int filled = (int) ((long) bar.width() * Math.max(0, Math.min(value, max)) / max);
+        if (filled > 0) {
+            TEXTURE.blit(graphics, fill.left(filled), leftPos + bar.x0(), topPos + bar.y0());
+        }
+    }
+
+    /**
+     * L'anteprima: la tuta all'angolo trascinato sul fondo dello sfondo, poi in basso nel ritaglio le frecce che dicono
      * che si gira. {@link SuitPreview#drawInGui} rimette pila delle pose, ritaglio e luce anche se qualcosa lancia.
      */
     private void drawPreview(GuiGraphics graphics) {
         Rect clip = StationLayout.PREVIEW_CLIP;
-        fill(graphics, clip, StationLayout.PREVIEW_BG);
         SuitPreview.drawInGui(graphics, leftPos + clip.x0(), topPos + clip.y0(), leftPos + clip.x1(),
                 topPos + clip.y1(), angle, suit, minecraft.player, model);
-        int y = topPos + clip.y1() - ARROW_MARGIN - font.lineHeight;
-        graphics.drawString(font, "<", leftPos + clip.x0() + ARROW_MARGIN, y, StationLayout.TEXT_DIM, false);
-        graphics.drawString(font, ">", leftPos + clip.x1() - ARROW_MARGIN - font.width(">"), y,
-                StationLayout.TEXT_DIM, false);
+        draw(graphics, StationLayout.FRECCIA_SINISTRA, StationLayout.ARROW_LEFT);
+        draw(graphics, StationLayout.FRECCIA_DESTRA, StationLayout.ARROW_RIGHT);
     }
 
+    /**
+     * Il pulsante di prova: le due meta' esterne della faccia di {@link StationLayout#testButton}, larghe
+     * {@link StationLayout#TEST_BUTTON_HALF}, e al centro il numero delle pressioni confermate.
+     */
     private void drawTestButton(GuiGraphics graphics, int mouseX, int mouseY) {
         int presses = menu.testPresses();
-        int colour = presses > 0 ? StationLayout.TEST_DONE : StationLayout.TEST_IDLE;
         Rect r = StationLayout.TEST_BUTTON;
-        fill(graphics, r, r.contains(mouseX - leftPos, mouseY - topPos) ? StationLayout.lighter(colour) : colour);
+        Sprite face = StationLayout.testButton(presses, r.contains(mouseX - leftPos, mouseY - topPos));
+        int half = StationLayout.TEST_BUTTON_HALF;
+        TEXTURE.blit(graphics, face.part(0, 0, half, r.height()), leftPos + r.x0(), topPos + r.y0());
+        TEXTURE.blit(graphics, face.part(face.width() - half, 0, half, r.height()), leftPos + r.x0() + half,
+                topPos + r.y0());
         graphics.drawCenteredString(font, String.valueOf(presses), leftPos + (r.x0() + r.x1()) / 2,
                 topPos + r.y0() + (r.height() - font.lineHeight) / 2 + 1, StationLayout.TEXT);
     }
@@ -411,14 +415,9 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
         graphics.drawString(font, text, leftPos + r.x1() - font.width(text), topPos + r.y0(), colour, false);
     }
 
-    /** Riempie un rettangolo della disposizione, relativo all'angolo della schermata. */
-    private void fill(GuiGraphics graphics, Rect r, int colour) {
-        graphics.fill(leftPos + r.x0(), topPos + r.y0(), leftPos + r.x1(), topPos + r.y1(), colour);
-    }
-
-    /** Il bordo di 1 pixel di un rettangolo della disposizione, dentro il rettangolo. */
-    private void outline(GuiGraphics graphics, Rect r, int colour) {
-        graphics.renderOutline(leftPos + r.x0(), topPos + r.y0(), r.width(), r.height(), colour);
+    /** Un disegno della texture nel rettangolo della disposizione, relativo all'angolo della schermata. */
+    private void draw(GuiGraphics graphics, Sprite sprite, Rect r) {
+        TEXTURE.blit(graphics, sprite, leftPos + r.x0(), topPos + r.y0());
     }
 
     /**

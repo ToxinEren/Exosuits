@@ -25,8 +25,8 @@ import org.junit.jupiter.api.Test;
 /**
  * Che cosa disegna l'HUD ({@link HudModel}, design §5.12): percentuale e riempimento per difetto, il colore
  * dell'energia dallo stato del server, l'avviso che lampeggia dal tick del cambio, la sagoma con la legenda, che e'
- * anche quella della stazione, le celle di scorta, le righe della barra e i contorni, e nessun colore magenta per i
- * controlli degli scatti.
+ * anche quella della stazione, le celle di scorta, le righe della barra e i contorni, e nessun colore dei testi magenta
+ * per i controlli degli scatti (quelli dei disegni li controlla HudLayoutTest sulla texture).
  */
 class HudModelTest {
 
@@ -192,18 +192,16 @@ class HudModelTest {
     @Test
     void noHudColourIsMagentaForTheChecks() {
         assertTrue(magenta(0xFFFF00FF), "control: FF00FF is magenta for arm_measure.sh");
+        // i colori dei testi: la percentuale nel colore dell'energia, "xN" bianco o grigio, il testo senza cella
+        // grigio; tutto il resto viene dalla texture, e i suoi texel li controlla HudLayoutTest
         List<Integer> drawn = new ArrayList<>();
-        for (PieceCondition condition : PieceCondition.values()) {
-            drawn.add(HudModel.conditionColor(condition));
-            drawn.add(HudModel.outline(HudModel.conditionColor(condition)));
-        }
         for (Optional<EnergyState> energy : List.of(NORMAL, LOW, EMPTY, NO_INDICATORS)) {
             drawn.add(HudModel.energyColor(energy));
-            drawn.add(HudModel.lighter(HudModel.energyColor(energy)));
         }
-        drawn.addAll(List.of(HudModel.PLATE, HudModel.PLATE_EDGE, HudModel.BAR_EDGE, HudModel.BAR_BACK,
-                HudModel.UNMOUNTED_FILL, HudModel.UNMOUNTED_OUTLINE, HudModel.CELL_BODY, HudModel.CELL_CAP,
-                HudModel.CELL_CHARGE));
+        FrameState state = withCell(10_000, 5_000);
+        drawn.add(HudModel.of(HudLevel.FULL, state, NORMAL, 0, 0).spareColor());
+        drawn.add(HudModel.of(HudLevel.FULL, state, NORMAL, 1, 0).spareColor());
+        drawn.add(HudModel.GREY);
         for (int colour : drawn) {
             assertTrue(HudModel.ALL_COLOURS.contains(colour), "ALL_COLOURS lacks " + Integer.toHexString(colour));
         }

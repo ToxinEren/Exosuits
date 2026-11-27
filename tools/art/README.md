@@ -93,11 +93,18 @@ inietta un difetto alla volta in una copia del modello costruita in memoria e pr
 13. `station.py` si ferma su una stazione che non passa i controlli: esce con 1 senza scrivere nessun file;
 14. facce della stazione con un vertice a T (sotto, "Stazione di manutenzione"): una faccia divisa a meta' e'
     segnalata da `bench.t_junctions`, e `station.py` senza la divisione dei rettangoli esce con 1 senza scrivere nulla.
+15-23. schermata, HUD e vignetta (`tools/art/gui.py`, sotto, "Schermata, HUD, vignetta e icona del kit"): un disegno
+    fuori dalla sua texture, due disegni sovrapposti, un texel non trasparente fuori dai disegni, un buco nello sfondo
+    della schermata, un colore della legenda ritoccato in `station.png` (bordo di un posto, barra della durata) e in
+    `hud.png` (sagoma, barra, avviso), un texel magenta in ciascuna delle quattro immagini, la vignetta fuori dalla
+    regola del design (un texel oltre 0,42, il pixel d'angolo sotto, un texel sul lato opposto, un riflesso in basso),
+    e `gui.py` che esce con 1 senza scrivere nulla su texture che non passano i controlli.
 
-Le prove 1a, 1b, 1c, 11, 12 e 14 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
-iniettata; per la stazione, che senza il difetto passi il controllo) e falliscono dicendolo se il disegno cambia; 1a e
-1b contano solo la segnalazione sulla faccia di cui hanno verificato la premessa (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova
-registrata. Un controllo nuovo va aggiunto anche li'.
+Le prove 1a, 1b, 1c, 11, 12, 14 e 15-23 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
+iniettata; per la stazione e per le texture dell'interfaccia, che senza il difetto passino il controllo) e falliscono
+dicendolo se il disegno cambia; 1a e 1b contano solo la segnalazione sulla faccia di cui hanno verificato la premessa
+(nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova registrata. Un
+controllo nuovo va aggiunto anche li'.
 
 `ExoframeGeometryTest` (JUnit) legge il file generato e controlla nomi e perni delle ossa (quelli dei
 pezzi e delle decalcomanie costruiti da `SuitBones`), i due ingombri, che le quattro copie di un pezzo abbiano le
@@ -447,18 +454,24 @@ bordo, rivetti compresi, come nelle anteprime (quella in alto e' rivolta verso t
 
 Genera nello stile A, Officina (la direzione della stazione scelta dal proprietario il 27 novembre 2026), la grafica
 2D della milestone 4: la texture della schermata della stazione (design M4, §5.3), quella dei disegni dell'HUD
-(§5.12), gli angoli della vignetta del casco (§5.12, "Vignetta") e l'icona del kit di riparazione (§5.8). Sono
-anteprime per il proprietario: nulla e' integrato, il gioco disegna ancora schermata e HUD con i colori pieni e la
-vignetta segnaposto di `tools/gen_placeholders.py`. L'integrazione, dopo la sua risposta, sostituira' i riempimenti
-con i disegni e portera' il confronto in `check_art.sh`, come per la stazione.
+(§5.12), gli angoli della vignetta del casco (§5.12, "Vignetta") e l'icona del kit di riparazione (§5.8). Il
+proprietario ha approvato le anteprime il 27 novembre 2026, con i due scostamenti dell'HUD dal design (§5.12, "Grafica
+della parte 4d"): le tre texture dell'interfaccia sono nel mod, in
+`src/main/resources/assets/redstone_exoframes/textures/gui/`, e `gui.py` e' l'unico che le scrive; `check_art.sh` le
+rigenera in una cartella temporanea e le confronta con quelle committate (`compare_png.py`), e ogni file di
+`textures/gui` dev'essere uno di quelli che scrive. L'icona del kit entra nel mod con il kit della parte 4b (l'oggetto
+non c'e' ancora): fino ad allora la scrive solo `--kit`.
 
-    python3 tools/art/gui.py --out <dir>       scrive <dir>/textures/gui/station.png, <dir>/textures/gui/hud.png,
-                                               <dir>/textures/gui/hud_vignette.png e <dir>/textures/item/repair_kit.png
+    python3 tools/art/gui.py --out src/main/resources/assets/redstone_exoframes
+                                               rigenera le tre texture dell'interfaccia del mod
+    python3 tools/art/gui.py --out <dir> [--kit]
+                                               scrive <dir>/textures/gui/station.png, <dir>/textures/gui/hud.png e
+                                               <dir>/textures/gui/hud_vignette.png; con --kit anche
+                                               <dir>/textures/item/repair_kit.png
     python3 tools/art/gui.py --map             stampa dove sta ogni disegno nelle due texture (u, v, larghezza,
                                                altezza), anche ogni pezzo della sagoma per stato
 
-`--out` e' obbligatorio e il generatore non scrive mai nei sorgenti: la vignetta del mod resta quella di
-`gen_placeholders.py`, che `check_art.sh` confronta.
+`--out` e' obbligatorio.
 
 - `textures/gui/station.png`, 512x256: lo sfondo di 316x232 in (0, 0) con cio' che non cambia mai (cornice di bronzo e
   piastra d'acciaio rivettata, i quattro pannelli incassati, i 36 slot del giocatore, le prese dei sei posti e della
@@ -471,10 +484,14 @@ con i disegni e portera' il confronto in `check_art.sh`, come per la stazione.
   grigio (8x8), l'icona della cella di scorta (5x8) normale e spenta.
 - `textures/gui/hud_vignette.png`, 144x80: i quattro angoli 72x40 dove li prende `SuitHud` (alto a sinistra, alto a
   destra; basso a sinistra, basso a destra).
-- `textures/item/repair_kit.png`, 16x16, piatta.
+- `textures/item/repair_kit.png`, 16x16, piatta (solo con `--kit`).
 
-I posti dei disegni (`gui_layout.py`, `STATION_ATLAS` e `HUD_ATLAS`; `--map` li stampa) sono quelli da copiare nel
-codice all'integrazione, e ogni disegno ha la grandezza del rettangolo del design che sostituisce. I colori che il
+I posti dei disegni (`gui_layout.py`, `STATION_ATLAS` e `HUD_ATLAS`; `--map` li stampa) sono le costanti `Sprite` di
+`client/StationLayout` e `client/HudLayout`, con lo stesso nome in maiuscolo e il trattino basso al posto del punto
+(`tutti.normale` e' `TUTTI_NORMALE`, `sagoma.integro` e' `SAGOMA_INTEGRO`), anche quelle dei widget delle parti 4a-2 e
+4b; `StationLayoutTest` e `HudLayoutTest` le confrontano con le PNG del mod (ogni texel non trasparente in un disegno
+con la sua costante, nessun magenta, i colori della legenda), quindi un posto cambiato qui va cambiato anche li'. Ogni
+disegno ha la grandezza del rettangolo del design che riempie. I colori che il
 codice mette da se' restano al codice: le sedici tinte e i colori del livello si riempiono prima, sotto le cornici
 `tinta` e `predefinito` (con le finestre trasparenti), i dodici colori di un preset sopra il suo fondo; i testi li
 scrive il codice con il carattere del gioco.
@@ -486,11 +503,8 @@ dai disegni tutto trasparente, lo sfondo opaco; i colori della legenda esatti (b
 barra della durata; pezzi della sagoma pieni del colore con il contorno a un terzo e solo quei due colori; riempimenti
 della barra dell'energia con la prima riga piu' chiara; avvisi); nessun texel "magenta" per
 `tools/client/arm_measure.sh`; la vignetta con l'opacita' 107 (0,42) nei pixel d'angolo e mai di piu', zero sui due lati
-opposti di ogni angolo, i riflessi solo nei due angoli in alto. Provati a mano il 27 novembre 2026 con nove difetti
-iniettati in memoria (un texel magenta, la vignetta troppo scura, aperta sul lato opposto, con un riflesso in basso,
-con il pixel d'angolo sbagliato, un verde della legenda ritoccato, un bordo di un posto, un texel fuori dai disegni, un
-buco nello sfondo): tutti segnalati. Le prove negative in `selftest.py` e il confronto in `check_art.sh` arrivano con
-l'integrazione.
+opposti di ogni angolo, i riflessi solo nei due angoli in alto. Le prove negative di questi controlli sono le 15-23 di
+`selftest.py` (sopra).
 
 Struttura: `gui_layout.py` (la geometria del design, i posti nelle texture, la legenda, le tinte), `gui_officina.py`
 (i disegni, con le scale di `pixel.py`), `gui.py` (il punto d'ingresso con i controlli).
@@ -506,13 +520,17 @@ client in una cartella fuori dal repository):
         'assets/minecraft/textures/item/redstone.png'
     python3 -I tools/art/preview/gui_preview.py --vanilla <dir> [--assets <dir>] [--out <dir>]
 
-Senza `--assets` lo script fa scrivere a `gui.py` i file in `tools/art/preview/out/gui/` (ignorata da git); scrive le
-anteprime in `docs/superpowers/specs/anteprime/2026-11-27-m4d-grafica/` e si ferma se una PNG ha blocchi oltre a IHDR,
-IDAT e IEND. Ritaglia ogni disegno dalle PNG generate con i posti di `gui_layout.py` e lo mette nel rettangolo del
-design, a scala 1, poi ingrandisce senza filtri alla scala 2. La schermata a 960x540 sta sullo scatto della 4a-1
-`1.21.1-neoforge-stazione-colori-suoi.png`, nello stesso punto in cui la disegna il gioco, e il telaio dell'anteprima
-3D e' quello del suo ritaglio, copiato pixel per pixel; quella a 640x480 (la grandezza minima) sta sullo scatto
-`stazione-posata` oscurato come fa il gioco dietro una schermata. L'HUD e la vignetta stanno sugli scatti della 4c
-senza la vignetta segnaposto (`danneggiato` con la mano destra, `mancino-danneggiato` con la sinistra), dove il gruppo
-disegnato oggi a colori pieni si copre prima con l'erba delle righe subito sopra, specchiata (la piastra e'
-traslucida). Le icone sono quelle generate e quella della stazione nel mod.
+Senza `--assets` lo script fa scrivere a `gui.py` i file in `tools/art/preview/out/gui/` (ignorata da git), con
+`--kit`; scrive le anteprime in `docs/superpowers/specs/anteprime/2026-11-27-m4d-grafica/` e si ferma se una PNG ha
+blocchi oltre a IHDR, IDAT e IEND. Gli scatti del gioco su cui compone, e la vignetta segnaposto del confronto, li
+legge con git come erano al commit `74a890c`, prima dell'integrazione: quelli di oggi mostrano gia' la schermata e
+l'HUD nello stile A, e lo script toglie proprio il fondo piatto dell'anteprima 3D e il gruppo dell'HUD a colori pieni.
+Cosi' rifa' le anteprime del 27 novembre uguali al byte. Ritaglia ogni disegno dalle PNG generate con i posti di
+`gui_layout.py` e lo mette nel rettangolo del design, a scala 1, poi ingrandisce senza filtri alla scala 2. La
+schermata a 960x540 sta sullo scatto della 4a-1 `1.21.1-neoforge-stazione-colori-suoi.png`, nello stesso punto in cui
+la disegna il gioco, e il telaio dell'anteprima 3D e' quello del suo ritaglio, copiato pixel per pixel; quella a
+640x480 (la grandezza minima) sta sullo scatto `stazione-posata` oscurato come fa il gioco dietro una schermata. L'HUD
+e la vignetta stanno sugli scatti della 4c senza la vignetta segnaposto (`danneggiato` con la mano destra,
+`mancino-danneggiato` con la sinistra), dove il gruppo disegnato oggi a colori pieni si copre prima con l'erba delle
+righe subito sopra, specchiata (la piastra e' traslucida). Le icone sono quelle generate e quella della stazione nel
+mod.

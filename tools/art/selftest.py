@@ -27,11 +27,25 @@ Prove della stazione di manutenzione (tools/art/station.py, bench.Bench.check), 
      meta' e' segnalata da bench.t_junctions, e station.py senza la divisione dei rettangoli (le facce di prima) esce
      con 1 senza scrivere nulla.
 
-Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12, 14) verificano prima la loro premessa (che cosa copre la
-parte iniettata; per la stazione, che senza il difetto passi il controllo): se il disegno cambia e la premessa non vale
-piu', la prova fallisce dicendolo, invece di passare senza provare nulla. 1a e 1b verificano la premessa sulla faccia
-nord e contano solo una segnalazione su quella faccia: la coppia iniettata e' complanare anche su altre facce, e una
-segnalazione su un'altra faccia non proverebbe la regola. Senza nessuna prova registrata l'esecuzione fallisce.
+Prove della schermata, dell'HUD e della vignetta (tools/art/gui.py, gui.check), sulle texture del mod costruite in
+memoria:
+ 15. un disegno fuori dalla sua texture (un posto della mappa che esce dai 512 pixel di station.png);
+ 16. due disegni sovrapposti (un posto della mappa sopra un altro);
+ 17. un texel non trasparente fuori dai disegni;
+ 18. un buco nello sfondo della schermata (un texel trasparente);
+ 19. un colore della legenda ritoccato in station.png: il bordo di un posto e il riempimento della barra della durata;
+ 20. un colore della legenda ritoccato in hud.png: un pezzo della sagoma, un riempimento della barra e un avviso;
+ 21. un texel "magenta" per arm_measure.sh, in ciascuna delle quattro immagini;
+ 22. la vignetta fuori dalla regola del design: un texel oltre 107 (0,42), il pixel d'angolo sotto 107, un texel non
+     trasparente sul lato opposto di un angolo, un riflesso in un angolo in basso;
+ 23. gui.py si ferma su texture che non passano i controlli: esce con 1 e non scrive nessun file.
+
+Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12, 14, 15-23) verificano prima la loro premessa (che
+cosa copre la parte iniettata; per la stazione e per le texture dell'interfaccia, che senza il difetto passino il
+controllo): se il disegno cambia e la premessa non vale piu', la prova fallisce dicendolo, invece di passare senza
+provare nulla. 1a e 1b verificano la premessa sulla faccia nord e contano solo una segnalazione su quella faccia: la
+coppia iniettata e' complanare anche su altre facce, e una segnalazione su un'altra faccia non proverebbe la regola.
+Senza nessuna prova registrata l'esecuzione fallisce.
 """
 import os
 import sys
@@ -436,6 +450,191 @@ def station_t_junction():
     if written:
         return False, f'station.py ha scritto {written} nonostante i vertici a T'
     return True, f'{hits[0]}; station.py senza la divisione: uscita 1, nessun file scritto'
+
+
+
+# --- schermata, HUD e vignetta (tools/art/gui.py) ---------------------------------------------------------------------
+def gui_textures():
+    """Le texture dell'interfaccia del mod costruite in memoria (gui.build), copie da guastare. Premessa: senza difetti
+    passano gui.check."""
+    import gui
+    out = gui.build()
+    problems = gui.check(out)
+    if problems:
+        raise Premise(f'le texture dell\'interfaccia senza difetti non passano il controllo: {problems[0]}')
+    return {k: v.copy() for k, v in out.items()}
+
+
+def gui_hits(out, words):
+    """Le segnalazioni di gui.check che contengono tutte le parole date."""
+    import gui
+    return [p for p in gui.check(out) if all(w in p for w in words)]
+
+
+def atlas_hits(atlas, words):
+    """Le segnalazioni del controllo dei posti di station.png con la mappa data, che contengono le parole date."""
+    import gui
+    import gui_layout
+    problems = []
+    gui.check_atlas('station.png', gui_textures()['schermata'], atlas, gui_layout.STATION_TEX, problems)
+    return [p for p in problems if all(w in p for w in words)]
+
+
+def first_transparent(img, used_by):
+    """Un texel trasparente fuori da ogni disegno della mappa, per iniettarci un texel pieno."""
+    import numpy as np
+    used = np.zeros(img.shape[:2], bool)
+    for u, v, w, h in used_by.values():
+        used[v:v + h, u:u + w] = True
+    ys, xs = np.nonzero(~used & (img[..., 3] == 0))
+    if not len(ys):
+        raise Premise('nessun texel libero nella texture')
+    return int(ys[0]), int(xs[0])
+
+
+@case('15. un disegno dell\'interfaccia fuori dalla sua texture')
+def gui_outside():
+    import gui_layout
+    atlas = dict(gui_layout.STATION_ATLAS)
+    u, v, w, h = atlas['tutti.normale']
+    atlas['tutti.normale'] = (512 - w + 4, v, w, h)
+    hits = atlas_hits(atlas, ('tutti.normale', 'fuori dalla texture'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('16. due disegni dell\'interfaccia sovrapposti')
+def gui_overlap():
+    import gui_layout
+    atlas = dict(gui_layout.STATION_ATLAS)
+    u, v, _, _ = atlas['tutti.normale']
+    w, h = atlas['scelta'][2:]
+    atlas['scelta'] = (u + 2, v + 2, w, h)
+    if atlas_hits(dict(gui_layout.STATION_ATLAS), ()):
+        raise Premise('la mappa del mod ha gia\' una segnalazione')
+    hits = atlas_hits(atlas, ('scelta', 'si sovrappone'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('17. un texel non trasparente fuori dai disegni')
+def gui_stray_texel():
+    import gui_layout
+    out = gui_textures()
+    y, x = first_transparent(out['hud'], gui_layout.HUD_ATLAS)
+    out['hud'][y, x] = (40, 40, 40, 255)
+    hits = gui_hits(out, ('hud.png', 'fuori dai disegni'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('18. un buco nello sfondo della schermata')
+def gui_background_hole():
+    out = gui_textures()
+    out['schermata'][100, 150, 3] = 0
+    hits = gui_hits(out, ('sfondo', 'opaco'))
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('19. un colore della legenda ritoccato in station.png (bordo di un posto, barra della durata)')
+def gui_station_legend():
+    import gui_layout
+    found = []
+    for key, (dy, dx) in (('posto.critico', (0, 5)), ('durata.danneggiato', (3, 60))):
+        out = gui_textures()
+        u, v, _, _ = gui_layout.STATION_ATLAS[key]
+        out['schermata'][v + dy, u + dx, 1] ^= 1
+        hits = gui_hits(out, (key.split('.')[1], 'colore esatto'))
+        if not hits:
+            return False, f'nessuna segnalazione per {key}'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('20. un colore della legenda ritoccato in hud.png (sagoma, barra, avviso)')
+def gui_hud_legend():
+    import gui_layout
+    found = []
+    x0, y0, x1, y1 = gui_layout.SIL_PIECES['torso']
+    cases = (('sagoma.danneggiato', ((y0 + y1) // 2, (x0 + x1) // 2), ('sagoma.danneggiato.torso',)),
+             ('barra.rossa', (3, 30), ('barra.rossa', 'colore esatto')),
+             ('avviso.grigia', (7, 1), ('avviso.grigia', 'colore esatto')))
+    for key, (dy, dx), words in cases:
+        out = gui_textures()
+        u, v, _, _ = gui_layout.HUD_ATLAS[key]
+        out['hud'][v + dy, u + dx, 0] ^= 1
+        hits = gui_hits(out, words)
+        if not hits:
+            return False, f'nessuna segnalazione per {key}'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('21. un texel "magenta" in ciascuna delle quattro immagini dell\'interfaccia')
+def gui_magenta():
+    import gui_layout
+    found = []
+    u, v, _, _ = gui_layout.HUD_ATLAS['piastra']
+    for key, name, (y, x) in (('schermata', 'station.png', (50, 50)), ('hud', 'hud.png', (v + 10, u + 10)),
+                              ('vignetta', 'hud_vignette.png', (5, 5)), ('kit', 'repair_kit.png', (8, 8))):
+        out = gui_textures()
+        out[key][y, x] = (200, 0, 200, 255 if key != 'vignetta' else 60)
+        hits = gui_hits(out, (name, 'magenta'))
+        if not hits:
+            return False, f'nessuna segnalazione per {name}'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('22. la vignetta fuori dalla regola del design')
+def gui_vignette_rule():
+    import gui_layout
+    vw, vh = gui_layout.VIGNETTE_W, gui_layout.VIGNETTE_H
+    found = []
+    for what, change, words in (
+            ('un texel oltre 107', lambda a: a.__setitem__((3, 3, 3), 120), ('oltre',)),
+            ('il pixel d\'angolo sotto 107', lambda a: a.__setitem__((0, 2 * vw - 1, 3), 100), ('pixel d\'angolo',)),
+            ('un texel sul lato opposto', lambda a: a.__setitem__((10, vw - 1, 3), 4), ('lati opposti',)),
+            ('un riflesso in basso', lambda a: a.__setitem__((2 * vh - 5, 20), (236, 250, 250, 40)),
+             ('riflesso negli angoli in basso',))):
+        out = gui_textures()
+        change(out['vignetta'])
+        hits = gui_hits(out, ('hud_vignette.png',) + words)
+        if not hits:
+            return False, f'nessuna segnalazione per {what}'
+        found.append(hits[0])
+    return True, '; '.join(found)
+
+
+@case('23. gui.py si ferma su texture che non passano i controlli')
+def gui_stops():
+    import contextlib
+    import io
+    import tempfile
+    import gui
+    real_build = gui.build
+
+    def broken_build():
+        out = real_build()
+        out['schermata'][100, 150, 3] = 0
+        return out
+
+    saved_argv = sys.argv
+    with tempfile.TemporaryDirectory() as out:
+        gui.build = broken_build
+        sys.argv = ['gui.py', '--out', out, '--kit']
+        try:
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                gui.main()
+        except SystemExit as e:
+            code = e.code
+        else:
+            code = 0
+        finally:
+            gui.build, sys.argv = real_build, saved_argv
+        written = [os.path.join(d, f) for d, _, fs in os.walk(out) for f in fs]
+    if code != 1:
+        return False, f'gui.py e\' uscito con {code} invece di 1'
+    if written:
+        return False, f'gui.py ha scritto {written} nonostante il difetto'
+    return True, 'uscita 1, nessun file scritto'
 
 
 def main():

@@ -18,8 +18,9 @@ import java.util.function.IntUnaryOperator;
 /**
  * Che cosa disegna l'HUD della tuta in un tick (design §5.12), in Java puro con i soli tipi di core/: il livello, la
  * sagoma con il colore di ogni slot, la percentuale e il riempimento della barra, il colore dell'energia, l'avviso e le
- * celle di scorta. SuitHud lo calcola una volta per tick del client e lo disegna. I colori, ARGB, sono l'unica legenda
- * dell'HUD e della stazione: {@link StationLayout} prende da qui i suoi (Decisione 3 del piano). Lo prova HudModelTest.
+ * celle di scorta. SuitHud lo calcola una volta per tick del client e lo disegna con i disegni della texture dell'HUD
+ * che {@link HudLayout} sceglie da questi colori. I colori, ARGB, sono l'unica legenda dell'HUD e della stazione:
+ * {@link StationLayout} prende da qui i suoi (Decisione 3 del piano). Lo prova HudModelTest.
  *
  * @param level       il livello dell'HUD
  * @param silhouette  il colore di ogni slot della sagoma: tutti e sei con {@link HudLevel#FULL}, nessuno altrimenti
@@ -51,31 +52,10 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
      * riga "barra"), e le celle di scorta quando ce n'e' almeno una (riga "celle di scorta": "bianco").
      */
     static final int WHITE = 0xFFFFFFFF;
-    /** La piastra di fondo, nero al 60 % (design §5.12, "Elementi", riga "piastra di fondo": 99101216). */
-    static final int PLATE = 0x99101216;
-    /** Il bordo di 1 pixel della piastra, rame al 43 % (design §5.12, "Elementi", riga "piastra di fondo"). */
-    static final int PLATE_EDGE = 0x6EB87333;
-    /** Il bordo della cornice della barra (design §5.12, "Elementi", riga "barra": FF0C0D0F). */
-    static final int BAR_EDGE = 0xFF0C0D0F;
-    /** Il fondo della cornice della barra (design §5.12, "Elementi", riga "barra": FF282A2E). */
-    static final int BAR_BACK = 0xFF282A2E;
     /** Il fondo scuro di un pezzo non montato (design §5.12, "Elementi", riga "sagoma": 5A000000). */
     static final int UNMOUNTED_FILL = 0x5A000000;
     /** Il contorno grigio di un pezzo non montato (design §5.12, "Elementi", riga "sagoma": FF464646). */
     static final int UNMOUNTED_OUTLINE = 0xFF464646;
-    /**
-     * Il corpo dell'icona della cella di 5x8 (design §5.12, "Elementi", riga "celle di scorta"; il colore e' quello
-     * delle anteprime, design §12, anteprime.py): segnaposto fino alla grafica della parte 4d.
-     */
-    static final int CELL_BODY = 0xFF3C3F44;
-    /** Il tappo dell'icona della cella (design §5.12, riga "celle di scorta"; colore delle anteprime, §12). */
-    static final int CELL_CAP = 0xFF969696;
-    /**
-     * La carica dell'icona della cella, il rosso della stazione: lo stesso valore di {@code StationLayout.CELL_RED}
-     * (design §5.12, riga "celle di scorta"); unificare le due costanti e' un riporto per la 4d (design §14).
-     */
-    static final int CELL_CHARGE = 0xFFC81E1E;
-
     /** Il riempimento pieno della barra, in pixel dell'interfaccia (design §5.12, "Elementi", riga "barra": 61x6). */
     static final int FILL_MAX = 61;
     /**
@@ -85,15 +65,15 @@ record HudModel(HudLevel level, Map<PieceSlot, Paint> silhouette, boolean hasCel
     static final int BLINK_TICKS = 10;
 
     /**
-     * Tutti i colori che l'HUD disegna da se': la legenda, il bianco, i nove dei disegni, i contorni che
-     * {@link #outline} da' ai quattro colori della legenda e le righe chiare che {@link #lighter} da' ai quattro colori
-     * dell'energia (quella del bianco e' il bianco stesso). Nessuno e' magenta per tools/client/arm_measure.sh: con la
-     * mano destra l'HUD sta nella meta' sinistra degli scatti, dove il controllo "dipinto" di m3d_shots.sh vuole zero
-     * magenta, e con la sinistra nella meta' destra ("mancino"). Lo controlla HudModelTest.
+     * Tutti i colori che l'HUD disegna da se', cioe' i suoi testi: la percentuale nel colore dell'energia (verde,
+     * rosso, grigio, o bianco prima del primo pacchetto con gli indicatori), "xN" delle celle di scorta in bianco o in
+     * grigio e il testo senza cella in grigio. Tutto il resto viene dalla texture dei disegni dell'HUD (parte 4d, stile
+     * A), con i colori esatti della legenda: lo controlla HudLayoutTest sulla PNG, anche che nessun texel sia magenta.
+     * Nessuno di questi e' magenta per tools/client/arm_measure.sh: con la mano destra l'HUD sta nella meta' sinistra
+     * degli scatti, dove il controllo "dipinto" di m3d_shots.sh vuole zero magenta, e con la sinistra nella meta'
+     * destra ("mancino"). Lo controlla HudModelTest.
      */
-    static final List<Integer> ALL_COLOURS = List.of(GREEN, YELLOW, RED, GREY, WHITE, PLATE, PLATE_EDGE, BAR_EDGE,
-            BAR_BACK, UNMOUNTED_FILL, UNMOUNTED_OUTLINE, CELL_BODY, CELL_CAP, CELL_CHARGE, outline(GREEN),
-            outline(YELLOW), outline(RED), outline(GREY), lighter(GREEN), lighter(RED), lighter(GREY), lighter(WHITE));
+    static final List<Integer> ALL_COLOURS = List.of(GREEN, RED, GREY, WHITE);
 
     /** Il modello del livello {@link HudLevel#NONE}: nulla da disegnare. */
     static final HudModel NONE = new HudModel(HudLevel.NONE, Map.of(), false, 0, 0, WHITE, false, false, 0);

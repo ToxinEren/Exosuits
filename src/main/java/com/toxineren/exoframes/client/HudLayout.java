@@ -13,8 +13,11 @@ import java.util.Objects;
  * sovrapposizioni in §12 e in anteprime/2026-11-19-m4/layout.py), in Java puro, senza classi di Minecraft: il gruppo
  * per mano principale e grandezza dell'interfaccia, i suoi due sottogruppi, gli elementi dentro di loro e gli angoli
  * della vignetta. I rettangoli sono in pixel dell'interfaccia, con il bordo destro e quello in basso esclusi; gli
- * elementi sono relativi al loro sottogruppo, uguali per le due mani: l'interno non si specchia mai. Lo prova
- * HudLayoutTest, anche contro gli elementi del gioco base alle sette grandezze del design.
+ * elementi sono relativi al loro sottogruppo, uguali per le due mani: l'interno non si specchia mai. Poi i disegni
+ * dell'HUD nella loro texture (parte 4d, stile A: {@code textures/gui/hud.png}, scritta da tools/art/gui.py), con i
+ * nomi della mappa del generatore, e quale disegno va con i colori di {@link HudModel}: i disegni hanno la grandezza
+ * dei rettangoli che riempiono e i colori esatti della legenda. Lo prova HudLayoutTest, anche contro gli elementi del
+ * gioco base alle sette grandezze del design e contro la PNG del mod.
  */
 final class HudLayout {
     /** La larghezza del gruppo (design §5.12, "Dove": "Un gruppo di 88x35 pixel dell'interfaccia"). */
@@ -74,6 +77,52 @@ final class HudLayout {
     static final int NO_CELL_X = 2;
     /** L'ordinata del testo senza cella: la riga della barra (Decisione 1 del piano, su design §5.12). */
     static final int NO_CELL_Y = 20;
+
+    /** La larghezza della texture dei disegni dell'HUD (tools/art/gui.py, {@code textures/gui/hud.png}). */
+    static final int TEXTURE_W = 256;
+    /** L'altezza della texture dei disegni dell'HUD. */
+    static final int TEXTURE_H = 128;
+
+    /** La piastra di fondo con il livello FULL: tutto il gruppo. */
+    static final Sprite PIASTRA = new Sprite(0, 0, 88, 35);
+    /** La piastra con il livello BAR_ONLY: il solo sottogruppo dell'energia. */
+    static final Sprite PIASTRA_BARRA = new Sprite(0, 36, 67, 35);
+    /**
+     * La figura della sagoma con i sei pezzi integri: verde 55FF55, il contorno a un terzo (un pezzo: silhouettePiece).
+     */
+    static final Sprite SAGOMA_INTEGRO = new Sprite(90, 0, 21, 35);
+    /** La figura della sagoma con i sei pezzi danneggiati: giallo FFFF55 (un pezzo: silhouettePiece). */
+    static final Sprite SAGOMA_DANNEGGIATO = new Sprite(112, 0, 21, 35);
+    /** La figura della sagoma con i sei pezzi critici: rosso FF5555 (un pezzo: silhouettePiece). */
+    static final Sprite SAGOMA_CRITICO = new Sprite(134, 0, 21, 35);
+    /** La figura della sagoma con i sei pezzi rotti: grigio 8A8A8A (un pezzo: silhouettePiece). */
+    static final Sprite SAGOMA_ROTTO = new Sprite(156, 0, 21, 35);
+    /**
+     * La figura della sagoma con i sei pezzi non montati: il fondo 5A000000 e il contorno 464646 (un pezzo:
+     * silhouettePiece).
+     */
+    static final Sprite SAGOMA_ASSENTE = new Sprite(178, 0, 21, 35);
+    /** La cornice della barra (BAR_FRAME). */
+    static final Sprite BARRA_CORNICE = new Sprite(69, 37, 63, 8);
+    /** Il riempimento della barra (BAR_FILL) con l'energia NORMAL: verde 55FF55; la prima riga piu' chiara. */
+    static final Sprite BARRA_VERDE = new Sprite(69, 46, 61, 6);
+    /** Il riempimento della barra (BAR_FILL) con l'energia LOW: rosso FF5555; la prima riga piu' chiara. */
+    static final Sprite BARRA_ROSSA = new Sprite(69, 53, 61, 6);
+    /** Il riempimento della barra (BAR_FILL) con l'energia EMPTY: grigio 8A8A8A; la prima riga piu' chiara. */
+    static final Sprite BARRA_GRIGIA = new Sprite(69, 60, 61, 6);
+    /**
+     * Il riempimento della barra (BAR_FILL) con l'energia prima del primo pacchetto con gli indicatori: bianco; la
+     * prima riga piu' chiara.
+     */
+    static final Sprite BARRA_BIANCA = new Sprite(69, 67, 61, 6);
+    /** L'avviso (WARNING) con l'energia LOW: rosso FF5555. */
+    static final Sprite AVVISO_ROSSA = new Sprite(134, 37, 8, 8);
+    /** L'avviso (WARNING) con l'energia EMPTY: grigio 8A8A8A. */
+    static final Sprite AVVISO_GRIGIA = new Sprite(143, 37, 8, 8);
+    /** L'icona della cella di scorta, con almeno una cella. */
+    static final Sprite CELLA = new Sprite(152, 37, 5, 8);
+    /** L'icona della cella di scorta, spenta: nessuna cella. */
+    static final Sprite CELLA_SPENTA = new Sprite(158, 37, 5, 8);
 
     /**
      * I pezzi della sagoma, relativi al suo sottogruppo, vista da dietro: il braccio sinistro a sinistra (design §5.12,
@@ -158,6 +207,66 @@ final class HudLayout {
                 new Rect(w - VIGNETTE_W, 0, w, VIGNETTE_H),
                 new Rect(0, h - VIGNETTE_H, VIGNETTE_W, h),
                 new Rect(w - VIGNETTE_W, h - VIGNETTE_H, w, h));
+    }
+
+    /**
+     * La figura della sagoma con i colori di un pezzo ({@link HudModel#silhouette}): con il pieno della legenda di una
+     * condizione la figura di quella condizione, con il pieno di un pezzo non montato quella dei non montati. Il pezzo
+     * si ritaglia con {@link #silhouettePiece}; i texel della figura hanno esattamente il pieno e il contorno di
+     * {@code paint} (HudLayoutTest).
+     *
+     * @throws IllegalArgumentException con un pieno che non e' della legenda
+     */
+    static Sprite figure(HudModel.Paint paint) {
+        return switch (Objects.requireNonNull(paint, "paint").fill()) {
+            case HudModel.GREEN -> SAGOMA_INTEGRO;
+            case HudModel.YELLOW -> SAGOMA_DANNEGGIATO;
+            case HudModel.RED -> SAGOMA_CRITICO;
+            case HudModel.GREY -> SAGOMA_ROTTO;
+            case HudModel.UNMOUNTED_FILL -> SAGOMA_ASSENTE;
+            default -> throw new IllegalArgumentException("no figure for " + paint);
+        };
+    }
+
+    /** Il pezzo dello slot nella figura data: il suo rettangolo del sottogruppo della sagoma ({@link #piece}). */
+    static Sprite silhouettePiece(Sprite figure, PieceSlot slot) {
+        Rect r = piece(slot);
+        return figure.part(r.x0(), r.y0(), r.width(), r.height());
+    }
+
+    /**
+     * Il riempimento della barra nel colore dell'energia ({@link HudModel#energyColor}): verde, rosso, grigio, o
+     * bianco prima del primo pacchetto con gli indicatori; si disegna largo {@link HudModel#fillWidth}.
+     *
+     * @throws IllegalArgumentException con un colore che non e' dell'energia
+     */
+    static Sprite barFill(int energyColor) {
+        return switch (energyColor) {
+            case HudModel.GREEN -> BARRA_VERDE;
+            case HudModel.RED -> BARRA_ROSSA;
+            case HudModel.GREY -> BARRA_GRIGIA;
+            case HudModel.WHITE -> BARRA_BIANCA;
+            default -> throw new IllegalArgumentException("no bar fill for " + Integer.toHexString(energyColor));
+        };
+    }
+
+    /**
+     * L'avviso nel colore dell'energia: c'e' solo con {@code LOW}, rosso, e con {@code EMPTY}, grigio
+     * ({@link HudModel#warningOn}).
+     *
+     * @throws IllegalArgumentException con un altro colore
+     */
+    static Sprite warning(int energyColor) {
+        return switch (energyColor) {
+            case HudModel.RED -> AVVISO_ROSSA;
+            case HudModel.GREY -> AVVISO_GRIGIA;
+            default -> throw new IllegalArgumentException("no warning for " + Integer.toHexString(energyColor));
+        };
+    }
+
+    /** L'icona della cella di scorta: spenta senza celle di scorta, come "x0" e' grigio (scelta della 4d). */
+    static Sprite cellIcon(int spareCells) {
+        return spareCells > 0 ? CELLA : CELLA_SPENTA;
     }
 
     /**

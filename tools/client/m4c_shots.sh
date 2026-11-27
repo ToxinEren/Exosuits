@@ -71,7 +71,8 @@
 #                       file della A (dai predefiniti H avrebbe nascosto l'HUD, con la vignetta accesa: "True True")
 #   gruppo              senza-vignetta contro nascosto: il riquadro della differenza e' il gruppo, e nella sagoma ci
 #                       sono pixel: tutto l'HUD sta nel gruppo, che non tocca braccio, barra, mirino e chat
-#   testo               la percentuale verde nell'area della percentuale, a sinistra nel sottogruppo dell'energia
+#   testo               la percentuale verde nell'area della percentuale, a sinistra nel sottogruppo dell'energia,
+#                       nel suo riquadro esatto ("100%")
 #   barra-normale       il verde del riempimento: le sue cinque righe piene, da sinistra, sotto la riga piu' chiara
 #   sagoma              danneggiato contro senza-vignetta: cambia solo la sagoma, da verde a gialla
 #   critico             la sagoma rossa, senza giallo
@@ -93,11 +94,10 @@
 #                       angolo (lo scuro parte dall'angolo, come vuole la texture: un angolo disegnato altrove, o
 #                       specchiato, non ci arriva), e nello schermo intero tanti pixel quanti nei quattro angoli
 #                       insieme: J cambia solo gli angoli. In ogni angolo, poi, tanti pixel della tinta della vignetta
-#                       (0A0C0E, il colore della texture) in pieno quanti in senza-vignetta: la vignetta e'
-#                       traslucida, perche' disegnata opaca (la fusione spenta) dipingerebbe gli angoli della sua tinta
-#                       (misurati 0, 0, 400 e 0 nei due scatti, sulle quattro varianti: i 400 in basso a sinistra sono
-#                       la cornice della barra, 0C0D0F, disegnata sopra la vignetta). In quello in basso a sinistra il
-#                       gruppo sta sopra la vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
+#                       (182C34, il vetro dell'elmo, il colore di quasi tutti i texel della texture) in pieno quanti in
+#                       senza-vignetta: la vignetta e' traslucida, perche' disegnata opaca (la fusione spenta)
+#                       dipingerebbe gli angoli della sua tinta. In quello in basso a sinistra il gruppo sta sopra la
+#                       vignetta: la piastra traslucida la lascia vedere, pezzi e testi no
 #   mancino-gruppo      mancino contro mancino-nascosto: il gruppo nell'angolo in basso a destra, la sagoma sul bordo
 #                       destro, la percentuale verde a sinistra del sottogruppo dell'energia (l'interno non e'
 #                       specchiato)
@@ -163,6 +163,7 @@ GROUP_RIGHT=176x70+4+466             # il gruppo, 88x35 in (2, 233)
 SILHOUETTE_RIGHT=42x70+4+466         # la sagoma, verso il bordo
 ENERGY_RIGHT=134x70+46+466           # l'energia, verso l'interno; e' anche la piastra con la sola barra
 PERCENT_AREA_RIGHT=58x18+50+482      # la percentuale piu' larga, con o senza avviso
+TEXT_BOX_RIGHT=46x14+50+482          # il verde di "100%" (il client di sviluppo e' in inglese), ombra esclusa
 WARNING_PERCENT_RIGHT=42x16+50+482   # nell'area della percentuale, l'avviso fisso e "0%" in grigio (esaurita)
 SPARE_AREA_RIGHT=50x18+126+482       # l'icona della cella e "xN" fino a due cifre
 BAR_FILL_RIGHT=122x12+52+508         # il riempimento della barra, la prima riga piu' chiara
@@ -189,15 +190,21 @@ YELLOW=FFFF55
 RED=FF5555
 GREY=8A8A8A
 WHITE=FFFFFF
-# La tinta della vignetta, RRGGBB: VIGNETTE_TINT (10, 12, 14) di tools/gen_placeholders.py, il colore della texture.
-VIGNETTE_TINT=0A0C0E
+# La tinta della vignetta, RRGGBB: il vetro dell'elmo (GLASS di tools/art/gui_officina.py), il colore di quasi tutti i
+# texel della texture (da 1239 a 1255 per angolo, dove lo scuro e' piu' lontano dall'angolo): disegnata opaca, con la
+# fusione spenta, la vignetta dipingerebbe gli angoli di questo colore; nessun disegno dell'HUD gli sta entro il 4 %.
+VIGNETTE_TINT=182C34
 
 # --- soglie ---------------------------------------------------------------------------------------------------------
 # Ciascuna e' la meta', arrotondata per difetto alla decina, del valore misurato su 1.21.1-neoforge, la prima variante
-# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola. Sulle quattro varianti le misure sono
-# uguali al pixel (esecuzioni di fine parte 4c, 26 novembre 2026), salvo la vignetta nei due angoli in basso, scritta
-# per variante accanto a VIGNETTE_MIN, e i pixel della differenza di barra-bassa, che non hanno soglia (1992 con
-# l'avviso spento nello scatto, 2052 con l'avviso acceso: dipende dal mezzo secondo in cui cade lo scatto).
+# (fra parentesi); quella che serve a piu' misure e' la meta' della piu' piccola. Le misure sono quelle con la grafica
+# della parte 4d (lo stile A, 27 novembre 2026, due esecuzioni per variante): sulle quattro varianti uguali al pixel,
+# salvo la vignetta, scritta per variante accanto a VIGNETTE_MIN, e i pixel della differenza di barra-bassa, che non
+# hanno soglia (2064 con l'avviso acceso nello scatto, 1992 con l'avviso spento, una volta su 1.21.1-fabric; con la
+# grafica di prima 2052 e 1992: dipende dal mezzo secondo in cui cade lo scatto). Solo la soglia della vignetta e'
+# rifatta sulla grafica nuova (la meta' della misura piu' piccola, come le altre): le misure nuove dei pezzi della
+# sagoma e delle celle di scorta superano le soglie della 4c, che restano, con la misura di allora accanto; le altre
+# misure non sono cambiate.
 
 # I pixel dell'HUD intero contro l'HUD nascosto: gruppo, terza-persona e mancino-gruppo (misurati 12320 in tutti e
 # tre: ogni pixel del gruppo, 176x70).
@@ -205,31 +212,34 @@ GROUP_MIN=6160
 # La sagoma contro la sagoma nascosta, piastra e pezzi: gruppo e mancino-gruppo (misurati 2940 nei due: ogni pixel
 # della sagoma, 42x70).
 SIL_MIN=1470
-# I soli pezzi che cambiano colore, pieno e contorno: sagoma e mancino-sagoma (misurati 1024 nei due).
+# I soli pezzi che cambiano colore, pieno e contorno: sagoma e mancino-sagoma (misurati 1024 nei due con i rettangoli
+# pieni della 4c; con la grafica della 4d 992, perche' l'elmo ha gli angoli in alto smussati e il torso si stringe in
+# vita: la soglia resta).
 SIL_CHANGE_MIN=510
 # Il colore pieno dei pezzi: sagoma (verde prima, giallo dopo), critico (rosso) e mancino-sagoma (giallo) (misurati
-# 424 in tutti e quattro).
+# 424 in tutti e quattro con la 4c, 408 con la grafica della 4d: la soglia resta).
 SIL_COLOUR_MIN=210
 # La percentuale: testo (verde, misurati 244), barra-esaurita (grigio, con l'avviso fisso: 248) e mancino-gruppo
 # (verde: 244).
 TEXT_MIN=120
 # Le cinque righe del colore pieno della barra piena: barra-normale (misurati 1220).
 BAR_MIN=610
-# "x0" che diventa "x1": scorta (misurati 228).
+# "x0" che diventa "x1": scorta (misurati 228 con la 4c; 312 con la grafica della 4d, dove anche l'icona della cella,
+# spenta senza celle di scorta, si accende: la soglia resta).
 SPARE_MIN=110
 # Il grigio di "x0" e il bianco di "x1": scorta (misurati 112 e 84).
 SPARE_COLOUR_MIN=40
 # La sola barra contro la sola barra nascosta: solo-barra (misurati 9380: ogni pixel del sottogruppo dell'energia,
 # 134x70).
 BAR_ONLY_MIN=4690
-# La vignetta accesa contro la vignetta spenta, in ciascuno dei quattro angoli: vignetta (misurati 4260 in alto a
-# sinistra e in alto a destra, sul cielo; 653 in basso a sinistra, dove il gruppo sta sopra la vignetta e dove l'erba
-# e' scura; 2451 in basso a destra, sull'erba e sul braccio della tuta). Sulle quattro varianti: 4260 nei due angoli in
-# alto; in basso a sinistra 651 e 654 su 1.20.1-forge, 653 su 1.20.1-fabric, 649 su 1.21.1-fabric e 653 su
-# 1.21.1-neoforge, che cambiano di qualche pixel anche fra due esecuzioni della stessa variante; in basso a destra 2475
-# sulle due 1.20.1 e 2451 sulle due 1.21.1 (l'erba e il braccio sotto quell'angolo differiscono di poco fra le due
-# versioni).
-VIGNETTE_MIN=320
+# La vignetta accesa contro la vignetta spenta, in ciascuno dei quattro angoli: vignetta (misurati 3916 in alto a
+# sinistra e in alto a destra, sul cielo; 326 in basso a sinistra, dove il gruppo sta sopra la vignetta e dove l'erba e'
+# scura; 1961 in basso a destra, sull'erba e sul braccio della tuta). Sulle quattro varianti, in due esecuzioni: 3916,
+# 3916, 326 e 1961 su 1.21.1-neoforge, 1.20.1-fabric e 1.21.1-fabric; su 1.20.1-forge 328 in basso a sinistra, e una
+# volta 3914 in alto a sinistra e 1937 in basso a destra (cambiano di qualche pixel anche fra due esecuzioni della
+# stessa variante). La vignetta dello stile A (l'acciaio del bordo che sfuma nel verde scuro del vetro) cambia meno
+# pixel di quella segnaposto della 4c, che era quasi nera (4260, 4260, 649-654 e 2451-2475).
+VIGNETTE_MIN=160
 # Fissa: 500 RE di 10 000 sono 3 pixel dell'interfaccia, 6 dello schermo (misurati 6; la barra piena ne ha 122).
 LOW_FILL_MAX_W=10
 
@@ -397,8 +407,10 @@ checks() {
 
     m1=$(take_measure colore "$a/senza-vignetta.png" "$GREEN" "$PERCENT_AREA_RIGHT")
     good=1
-    [ "$(val "$m1" colore)" -ge "$TEXT_MIN" ] && good=0
-    verdict testo "$good" "$m1" "colore >= $TEXT_MIN: la percentuale verde a sinistra nel sottogruppo dell'energia"
+    [ "$(val "$m1" colore)" -ge "$TEXT_MIN" ] && is_box "$m1" "$TEXT_BOX_RIGHT" && good=0
+    want="colore >= $TEXT_MIN e riquadro=$TEXT_BOX_RIGHT: la percentuale verde a sinistra nel sottogruppo"
+    want+=" dell'energia"
+    verdict testo "$good" "$m1" "$want"
 
     m1=$(take_measure colore "$a/senza-vignetta.png" "$GREEN" "$BAR_FILL_RIGHT")
     good=1
@@ -492,8 +504,7 @@ checks() {
     m4=$(take_measure differenza "$a/pieno.png" "$a/senza-vignetta.png" "$CORNER_BOTTOM_RIGHT")
     sum=$(($(val "$m1" pixel) + $(val "$m2" pixel) + $(val "$m3" pixel) + $(val "$m4" pixel)))
     # La vignetta e' traslucida (la fusione accesa): disegnata opaca dipingerebbe gli angoli della sua tinta, quindi in
-    # ogni angolo i pixel di quel colore sono tanti in pieno quanti in senza-vignetta (0, 0, 400 e 0: i 400 in basso a
-    # sinistra sono la cornice della barra, 0C0D0F, disegnata sopra la vignetta).
+    # ogni angolo i pixel di quel colore sono tanti in pieno quanti in senza-vignetta.
     tints=""
     tint_good=0
     for corner in "$CORNER_TOP_LEFT" "$CORNER_TOP_RIGHT" "$CORNER_BOTTOM_LEFT" "$CORNER_BOTTOM_RIGHT"; do

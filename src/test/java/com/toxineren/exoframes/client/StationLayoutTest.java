@@ -24,7 +24,9 @@ import org.junit.jupiter.api.Test;
  * La disposizione della schermata della stazione (design §5.3, §5.4 e §5.12): i riquadri dentro la schermata e senza
  * sovrapposizioni, la schermata intera alla grandezza minima dell'interfaccia, i punti che tools/client/m4a1_shots.sh
  * clicca a 960x540 con la scala 2, i colori delle condizioni, il giro dell'anteprima, la vista della tuta dalla vista
- * del telaio e nessun colore magenta per i controlli degli scatti.
+ * del telaio e nessun colore magenta per i controlli degli scatti; i disegni della texture della schermata (parte 4d),
+ * letti dalla PNG del mod: ogni texel in un disegno con il suo nome, lo sfondo opaco, nessun magenta, la grandezza dei
+ * rettangoli che riempiono e i colori esatti della legenda.
  */
 class StationLayoutTest {
     /** La scala dell'interfaccia della sequenza del client: finestra 960x540, interfaccia 480x270. */
@@ -35,6 +37,11 @@ class StationLayoutTest {
     private static final int SLOT = 18;
 
     private static final Rect SCREEN = new Rect(0, 0, StationLayout.WIDTH, StationLayout.HEIGHT);
+    /**
+     * Il rosso della redstone della cella: il bordo del suo posto e la sua barra della carica. Il codice non lo scrive
+     * piu' (sta nei disegni della texture, CELL_RED di tools/art/gui_layout.py): lo legge solo questa prova.
+     */
+    private static final int CELL_RED = 0xFFC81E1E;
 
     @Test
     void widgetsStayInsideTheScreenAndDoNotOverlap() {
@@ -64,6 +71,15 @@ class StationLayoutTest {
             assertInside(entry.getKey(), entry.getValue(), "PIECE_PANEL", StationLayout.PIECE_PANEL);
         }
         assertInside("PREVIEW_CLIP", StationLayout.PREVIEW_CLIP, "PREVIEW_PANEL", StationLayout.PREVIEW_PANEL);
+        assertInside("ARROW_LEFT", StationLayout.ARROW_LEFT, "PREVIEW_CLIP", StationLayout.PREVIEW_CLIP);
+        assertInside("ARROW_RIGHT", StationLayout.ARROW_RIGHT, "PREVIEW_CLIP", StationLayout.PREVIEW_CLIP);
+        assertFalse(overlap(StationLayout.ARROW_LEFT, StationLayout.ARROW_RIGHT), "the two arrows");
+        // le frecce a 3 pixel dai bordi del ritaglio, nel suo fondo, l'una lo specchio dell'altra
+        Rect clip = StationLayout.PREVIEW_CLIP;
+        assertEquals(3, StationLayout.ARROW_LEFT.x0() - clip.x0());
+        assertEquals(3, clip.x1() - StationLayout.ARROW_RIGHT.x1());
+        assertEquals(StationLayout.ARROW_LEFT.y0(), StationLayout.ARROW_RIGHT.y0());
+        assertEquals(StationLayout.ARROW_LEFT.width(), StationLayout.ARROW_RIGHT.width());
 
         Map<String, Rect> blocks = new LinkedHashMap<>();
         blocks.put("FRAME_PANEL", StationLayout.FRAME_PANEL);
@@ -172,11 +188,73 @@ class StationLayoutTest {
         }
         for (int colour : StationLayout.ALL_COLOURS) {
             String hex = Integer.toHexString(colour);
-            assertEquals(0xFF, colour >>> 24, hex + " is not opaque: the world would show through the screen");
+            assertEquals(0xFF, colour >>> 24, hex + " is not opaque");
             assertFalse(magenta(colour), hex + " is magenta for arm_measure.sh");
-            // sotto il mouse un pulsante si schiarisce: anche quel colore non e' magenta
-            assertFalse(magenta(StationLayout.lighter(colour)), hex + " under the mouse is magenta");
         }
+    }
+
+    @Test
+    void spritesCoverTheScreenTextureAndCarryTheLegend() {
+        SpriteSheet.assertMagentaRuleWorks();
+        SpriteSheet sheet = SpriteSheet.load("station.png");
+        assertEquals(StationLayout.TEXTURE_W, sheet.width());
+        assertEquals(StationLayout.TEXTURE_H, sheet.height());
+        sheet.assertCoveredExactlyBy(SpriteSheet.constants(StationLayout.class));
+        // lo sfondo copre la schermata ed e' opaco: il mondo dietro non traspare
+        assertEquals(StationLayout.WIDTH, StationLayout.FONDO.width());
+        assertEquals(StationLayout.HEIGHT, StationLayout.FONDO.height());
+        sheet.assertOpaque("FONDO", StationLayout.FONDO);
+
+        // i posti del pannello del telaio: 20x20, il bordo di 1 pixel nel colore della legenda della condizione, grigio
+        // senza pezzo, rosso della redstone con la cella; il secondo bordo bianco
+        Rect place = StationLayout.PIECE_SLOTS.get(PieceSlot.HELMET);
+        for (PieceCondition condition : PieceCondition.values()) {
+            Sprite sprite = StationLayout.place(condition);
+            assertEquals(place.width(), sprite.width());
+            assertEquals(place.height(), sprite.height());
+            sheet.assertRing("the place of a " + condition + " piece", sprite, StationLayout.conditionColor(condition));
+        }
+        sheet.assertRing("POSTO_VUOTO", StationLayout.POSTO_VUOTO, HudModel.UNMOUNTED_OUTLINE);
+        sheet.assertRing("POSTO_CELLA", StationLayout.POSTO_CELLA, CELL_RED);
+        assertEquals(place.grow(1).width(), StationLayout.SCELTA.width());
+        assertEquals(place.grow(1).height(), StationLayout.SCELTA.height());
+        sheet.assertRing("SCELTA", StationLayout.SCELTA, 0xFFFFFFFF);
+
+        // la barra della durata: il fondo e i riempimenti larghi quanto la barra, nel colore della legenda, la prima
+        // riga piu' chiara
+        Rect bar = StationLayout.DURABILITY_BAR;
+        assertEquals(bar.width(), StationLayout.DURATA_FONDO.width());
+        assertEquals(bar.height(), StationLayout.DURATA_FONDO.height());
+        sheet.assertOpaque("DURATA_FONDO", StationLayout.DURATA_FONDO);
+        for (PieceCondition condition : PieceCondition.values()) {
+            Sprite fill = StationLayout.durability(condition);
+            int colour = StationLayout.conditionColor(condition);
+            assertEquals(bar.width(), fill.width());
+            assertEquals(bar.height(), fill.height());
+            sheet.assertAll("the bar of a " + condition + " piece, first row", fill, 0, 0, fill.width(), 1,
+                    HudModel.lighter(colour));
+            sheet.assertAll("the bar of a " + condition + " piece", fill, 0, 1, fill.width(), fill.height() - 1,
+                    colour);
+        }
+        sheet.assertAll("DURATA_CELLA", StationLayout.DURATA_CELLA, 0, 1, bar.width(), bar.height() - 1, CELL_RED);
+
+        // le frecce dell'anteprima e il pulsante di prova, dalle due meta' esterne di un pulsante alto 16
+        for (Sprite arrow : List.of(StationLayout.FRECCIA_SINISTRA, StationLayout.FRECCIA_DESTRA,
+                StationLayout.FRECCIA_SINISTRA_SOPRA, StationLayout.FRECCIA_DESTRA_SOPRA)) {
+            assertEquals(StationLayout.ARROW_LEFT.width(), arrow.width());
+            assertEquals(StationLayout.ARROW_LEFT.height(), arrow.height());
+        }
+        Rect button = StationLayout.TEST_BUTTON;
+        assertEquals(button.width(), 2 * StationLayout.TEST_BUTTON_HALF);
+        for (Sprite face : List.of(StationLayout.TUTTI_NORMALE, StationLayout.TUTTI_SOPRA,
+                StationLayout.TUTTI_PREMUTO)) {
+            assertEquals(button.height(), face.height());
+            assertTrue(face.width() >= 2 * StationLayout.TEST_BUTTON_HALF, face + " is narrower than the button");
+        }
+        assertEquals(StationLayout.TUTTI_NORMALE, StationLayout.testButton(0, false));
+        assertEquals(StationLayout.TUTTI_SOPRA, StationLayout.testButton(0, true));
+        assertEquals(StationLayout.TUTTI_PREMUTO, StationLayout.testButton(1, false));
+        assertEquals(StationLayout.TUTTI_PREMUTO, StationLayout.testButton(2, true));
     }
 
     /** Tutti i riquadri della tabella "Disposizione della schermata", per nome. */

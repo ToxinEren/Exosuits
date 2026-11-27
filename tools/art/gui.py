@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
 """Genera nello stile A (Officina) la texture della schermata della stazione, quella dei disegni dell'HUD, gli angoli
-della vignetta del casco e l'icona del kit di riparazione (design M4, par. 5.3, 5.8, 5.12; parte 4d). Anteprime per il
-proprietario: niente di questo e' integrato finche' non risponde, e il gioco disegna ancora schermata e HUD con i
-colori pieni.
+della vignetta del casco e l'icona del kit di riparazione (design M4, par. 5.3, 5.8, 5.12; parte 4d). Il proprietario
+ha approvato le anteprime il 27 novembre 2026: le tre texture dell'interfaccia sono nel mod, e questo generatore e'
+l'unico che le scrive; l'icona del kit entra nel mod con il kit della parte 4b (l'oggetto non c'e' ancora).
 
 Uso, dalla radice del repository:
-    python3 tools/art/gui.py --out <dir>
+    python3 tools/art/gui.py --out src/main/resources/assets/redstone_exoframes
+        rigenera le tre texture dell'interfaccia del mod
+    python3 tools/art/gui.py --out <dir> [--kit]
         scrive <dir>/textures/gui/station.png (512x256: lo sfondo di 316x232 in (0, 0) e i disegni dei widget),
-        <dir>/textures/gui/hud.png (256x128: piastre, sagome, barra, avviso, icona della cella),
-        <dir>/textures/gui/hud_vignette.png (144x80: i quattro angoli 72x40 al loro posto) e
+        <dir>/textures/gui/hud.png (256x128: piastre, sagome, barra, avviso, icona della cella) e
+        <dir>/textures/gui/hud_vignette.png (144x80: i quattro angoli 72x40 al loro posto); con --kit anche
         <dir>/textures/item/repair_kit.png (16x16)
     python3 tools/art/gui.py --map
-        stampa dove sta ogni disegno nelle due texture (u, v, larghezza, altezza)
+        stampa dove sta ogni disegno nelle due texture (u, v, larghezza, altezza): i nomi sono quelli delle costanti
+        di client/StationLayout e client/HudLayout
 
-`--out` e' obbligatorio: il generatore non scrive mai nei sorgenti del mod (la vignetta segnaposto la scrive ancora
-tools/gen_placeholders.py, e tools/check_art.sh la confronta). La geometria e i posti nelle texture sono in
-gui_layout.py, i disegni in gui_officina.py.
+`--out` e' obbligatorio. tools/check_art.sh rigenera le tre texture in una cartella temporanea e le confronta con
+quelle committate. La geometria e i posti nelle texture sono in gui_layout.py, i disegni in gui_officina.py.
 
 Stesso input, stessi byte: semi dai nomi delle tele (paint.HashRng), solo interi, PNG senza metadati (exo.write_png:
 IHDR, IDAT, IEND, zlib 9). Esce con 1, senza scrivere nulla, se un controllo non passa: i disegni stanno nella texture
 e non si sovrappongono, fuori da loro la texture e' trasparente, lo sfondo e' opaco; i colori della legenda sono
 quelli esatti; nessun texel e' "magenta" per tools/client/arm_measure.sh; la vignetta rispetta la regola del design
-(0,42 di opacita' nel pixel d'angolo e mai di piu', zero sui lati opposti di ogni angolo, riflessi solo in alto).
+(0,42 di opacita' nel pixel d'angolo e mai di piu', zero sui lati opposti di ogni angolo, riflessi solo in alto). Le
+prove negative di questi controlli sono in tools/art/selftest.py.
 """
 import argparse
 import os
@@ -36,8 +39,10 @@ import gui_layout as L  # noqa: E402
 import gui_officina as A  # noqa: E402
 from exo import write_png  # noqa: E402
 
+# i file del mod, e l'icona del kit, che entra nel mod con il kit della parte 4b (--kit)
 OUTPUTS = (('textures/gui/station.png', 'schermata'), ('textures/gui/hud.png', 'hud'),
-           ('textures/gui/hud_vignette.png', 'vignetta'), ('textures/item/repair_kit.png', 'kit'))
+           ('textures/gui/hud_vignette.png', 'vignetta'))
+KIT_OUTPUT = ('textures/item/repair_kit.png', 'kit')
 
 
 def build():
@@ -166,6 +171,7 @@ def print_map():
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument('--out', help='cartella delle risorse (la struttura di assets/redstone_exoframes)')
+    ap.add_argument('--kit', action='store_true', help="scrive anche l'icona del kit di riparazione")
     ap.add_argument('--map', action='store_true', help='stampa dove sta ogni disegno nelle texture')
     args = ap.parse_args()
     if args.map:
@@ -182,12 +188,10 @@ def main():
     if problems:
         print('FAIL:\n' + '\n'.join(problems), file=sys.stderr)
         sys.exit(1)
-    written = []
-    for rel, key in OUTPUTS:
-        path = os.path.join(os.path.normpath(args.out), rel)
-        write_png(path, out[key])
-        written.append(path)
-    print(f'{len(written)} file: ' + ', '.join(rel for rel, _ in OUTPUTS))
+    outputs = OUTPUTS + ((KIT_OUTPUT,) if args.kit else ())
+    for rel, key in outputs:
+        write_png(os.path.join(os.path.normpath(args.out), rel), out[key])
+    print(f'{len(outputs)} file: ' + ', '.join(rel for rel, _ in outputs))
 
 
 if __name__ == '__main__':

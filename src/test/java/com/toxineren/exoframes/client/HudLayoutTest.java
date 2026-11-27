@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
  * opposto alla mano principale, o in alto a sinistra in un'interfaccia stretta, lontano dal braccio, dalla barra degli
  * oggetti con le barre di stato, dallo slot della seconda mano, dalle righe della chat e dal mirino alle sette
  * grandezze del design; gli elementi dentro i loro sottogruppi e senza sovrapposizioni; l'interno mai specchiato; gli
- * angoli della vignetta; i riquadri a 960x540 con la scala 2 che usano tools/client/arm_measure.sh e m4c_shots.sh.
+ * angoli della vignetta; i riquadri a 960x540 con la scala 2 che usano tools/client/arm_measure.sh e m4c_shots.sh; i
+ * disegni della texture dell'HUD (parte 4d), letti dalla PNG del mod: ogni texel in un disegno con il suo nome, nessun
+ * magenta, la grandezza dei rettangoli che riempiono e i colori esatti della legenda.
  */
 class HudLayoutTest {
     /** La scala dell'interfaccia delle sequenze del client: finestra 960x540, interfaccia 480x270. */
@@ -37,8 +39,9 @@ class HudLayoutTest {
     /** Il segno di moltiplicazione e una cifra: le celle di scorta da 0 a 9. Misurata nel gioco ("x0" e' largo 12). */
     private static final int ONE_DIGIT_SPARE = 12;
     /**
-     * Il segno di moltiplicazione e due cifre: le celle di scorta da 10 a 99. Dedotta, non misurata: una cifra di 6
-     * pixel in piu' di {@link #ONE_DIGIT_SPARE}.
+     * Il segno di moltiplicazione e due cifre: le celle di scorta da 10 a 99. Misurata nel gioco con la grafica della
+     * parte 4d ("x10" e' largo 18: con dieci celle cariche nell'inventario, su 1.21.1-neoforge, la carica rossa
+     * dell'icona sta da 130 a 133 nello scatto, cioe' l'icona a 41 nel sottogruppo dell'energia e il testo a 47).
      */
     private static final int TWO_DIGIT_SPARE = 18;
     /** "Senza cella", il testo senza cella piu' largo ("No cell" e' 33). */
@@ -163,6 +166,115 @@ class HudLayoutTest {
     }
 
     @Test
+    void silhouetteAndWarningRectsAreFixed() {
+        // a grafica finita (parte 4d, design §14 "Per la 4d"): i rettangoli che i disegni della texture riempiono
+        assertEquals(new Rect(8, 3, 14, 9), HudLayout.piece(PieceSlot.HELMET));
+        assertEquals(new Rect(7, 10, 15, 21), HudLayout.piece(PieceSlot.TORSO));
+        assertEquals(new Rect(3, 10, 6, 21), HudLayout.piece(PieceSlot.LEFT_ARM));
+        assertEquals(new Rect(16, 10, 19, 21), HudLayout.piece(PieceSlot.RIGHT_ARM));
+        assertEquals(new Rect(7, 22, 10, 33), HudLayout.piece(PieceSlot.LEFT_LEG));
+        assertEquals(new Rect(12, 22, 15, 33), HudLayout.piece(PieceSlot.RIGHT_LEG));
+        assertEquals(new Rect(2, 8, 10, 16), HudLayout.WARNING);
+    }
+
+    @Test
+    void rectIntersectsAndContainsSayYesAndNo() {
+        Rect a = new Rect(0, 0, 4, 4);
+        assertTrue(a.intersects(new Rect(3, 3, 6, 6)), "one pixel in common");
+        assertFalse(a.intersects(new Rect(4, 0, 6, 4)), "touching edges, no pixel in common");
+        assertTrue(a.contains(new Rect(1, 1, 4, 4)));
+        assertFalse(a.contains(new Rect(1, 1, 5, 4)), "one column outside");
+        assertFalse(a.contains(new Rect(-1, 0, 2, 2)), "one column outside on the left");
+    }
+
+    @Test
+    void spritesCoverTheHudTextureAndCarryTheLegend() {
+        SpriteSheet.assertMagentaRuleWorks();
+        SpriteSheet hud = SpriteSheet.load("hud.png");
+        assertEquals(HudLayout.TEXTURE_W, hud.width());
+        assertEquals(HudLayout.TEXTURE_H, hud.height());
+        hud.assertCoveredExactlyBy(SpriteSheet.constants(HudLayout.class));
+
+        // ogni disegno ha la grandezza del rettangolo che riempie
+        assertEquals(HudLayout.GROUP_W, HudLayout.PIASTRA.width());
+        assertEquals(HudLayout.GROUP_H, HudLayout.PIASTRA.height());
+        assertEquals(HudLayout.ENERGY_W, HudLayout.PIASTRA_BARRA.width());
+        assertEquals(HudLayout.GROUP_H, HudLayout.PIASTRA_BARRA.height());
+        assertEquals(HudLayout.BAR_FRAME.width(), HudLayout.BARRA_CORNICE.width());
+        assertEquals(HudLayout.BAR_FRAME.height(), HudLayout.BARRA_CORNICE.height());
+        for (Sprite figure : List.of(HudLayout.SAGOMA_INTEGRO, HudLayout.SAGOMA_DANNEGGIATO, HudLayout.SAGOMA_CRITICO,
+                HudLayout.SAGOMA_ROTTO, HudLayout.SAGOMA_ASSENTE)) {
+            assertEquals(HudLayout.SILHOUETTE_W, figure.width());
+            assertEquals(HudLayout.GROUP_H, figure.height());
+        }
+        for (Sprite icon : List.of(HudLayout.CELLA, HudLayout.CELLA_SPENTA)) {
+            assertEquals(HudLayout.CELL_ICON_W, icon.width());
+            assertEquals(HudLayout.CELL_ICON_H, icon.height());
+        }
+
+        // la sagoma: per ogni colore che il modello da' a un pezzo, la figura scelta ha quel pieno e quel contorno
+        List<HudModel.Paint> paints = new ArrayList<>();
+        for (int colour : List.of(HudModel.GREEN, HudModel.YELLOW, HudModel.RED, HudModel.GREY)) {
+            paints.add(new HudModel.Paint(colour, HudModel.outline(colour)));
+        }
+        paints.add(new HudModel.Paint(HudModel.UNMOUNTED_FILL, HudModel.UNMOUNTED_OUTLINE));
+        for (HudModel.Paint paint : paints) {
+            for (PieceSlot slot : PieceSlot.values()) {
+                Sprite piece = HudLayout.silhouettePiece(HudLayout.figure(paint), slot);
+                Rect r = HudLayout.piece(slot);
+                assertEquals(r.width(), piece.width(), slot + " width");
+                assertEquals(r.height(), piece.height(), slot + " height");
+                String what = slot + " with " + Integer.toHexString(paint.fill());
+                assertEquals(paint.fill(), hud.argb(piece, piece.width() / 2, piece.height() / 2), what + ", centre");
+                assertEquals(paint.outline(), hud.argb(piece, piece.width() / 2, piece.height() - 1),
+                        what + ", bottom outline");
+                for (int y = 0; y < piece.height(); y++) {
+                    for (int x = 0; x < piece.width(); x++) {
+                        int c = hud.argb(piece, x, y);
+                        assertTrue(SpriteSheet.alpha(c) == 0 || c == paint.fill() || c == paint.outline(),
+                                what + ": texel " + x + "," + y + " is " + Integer.toHexString(c));
+                    }
+                }
+            }
+        }
+        assertThrows(IllegalArgumentException.class,
+                () -> HudLayout.figure(new HudModel.Paint(HudModel.WHITE, HudModel.WHITE)));
+
+        // la barra: il riempimento nel colore dell'energia, la prima riga piu' chiara; l'avviso, rosso o grigio
+        for (int colour : List.of(HudModel.GREEN, HudModel.RED, HudModel.GREY, HudModel.WHITE)) {
+            Sprite fill = HudLayout.barFill(colour);
+            assertEquals(HudLayout.BAR_FILL.width(), fill.width());
+            assertEquals(HudLayout.BAR_FILL.height(), fill.height());
+            String what = "the fill " + Integer.toHexString(colour);
+            hud.assertAll(what + ", first row", fill, 0, 0, fill.width(), 1, HudModel.lighter(colour));
+            hud.assertAll(what, fill, 0, 1, fill.width(), fill.height() - 1, colour);
+        }
+        assertThrows(IllegalArgumentException.class, () -> HudLayout.barFill(HudModel.YELLOW));
+        for (int colour : List.of(HudModel.RED, HudModel.GREY)) {
+            Sprite warning = HudLayout.warning(colour);
+            assertEquals(HudLayout.WARNING.width(), warning.width());
+            assertEquals(HudLayout.WARNING.height(), warning.height());
+            hud.assertAll("the warning " + Integer.toHexString(colour) + ", bottom row", warning, 0,
+                    warning.height() - 1, warning.width(), 1, colour);
+        }
+        assertThrows(IllegalArgumentException.class, () -> HudLayout.warning(HudModel.GREEN));
+        assertEquals(HudLayout.CELLA_SPENTA, HudLayout.cellIcon(0));
+        assertEquals(HudLayout.CELLA, HudLayout.cellIcon(1));
+    }
+
+    @Test
+    void spritePartsStayInsideTheirSprite() {
+        Sprite figure = HudLayout.SAGOMA_INTEGRO;
+        assertEquals(new Sprite(figure.u() + 8, figure.v() + 3, 6, 6),
+                HudLayout.silhouettePiece(figure, PieceSlot.HELMET));
+        assertEquals(new Sprite(69, 46, 3, 6), HudLayout.BARRA_VERDE.left(3));
+        assertThrows(IllegalArgumentException.class, () -> HudLayout.BARRA_VERDE.left(0));
+        assertThrows(IllegalArgumentException.class, () -> HudLayout.BARRA_VERDE.left(HudModel.FILL_MAX + 1));
+        assertThrows(IllegalArgumentException.class, () -> figure.part(20, 0, 2, 1));
+        assertThrows(IllegalArgumentException.class, () -> new Sprite(0, 0, 0, 1));
+    }
+
+    @Test
     void insideIsNeverMirrored() {
         // vista da dietro: il braccio sinistro a sinistra
         assertTrue(HudLayout.piece(PieceSlot.LEFT_ARM).x0() < HudLayout.piece(PieceSlot.TORSO).x0());
@@ -227,7 +339,11 @@ class HudLayoutTest {
         assertEquals("42x70+914+466", screen(HudLayout.silhouetteGroup(480, 270, false)));
         Rect right = HudLayout.energyGroup(480, 270, true);
         Rect left = HudLayout.energyGroup(480, 270, false);
-        assertEquals("122x12+52+508", screen(HudLayout.BAR_FILL.offset(right.x0(), right.y0())));
+        Rect fill = HudLayout.BAR_FILL.offset(right.x0(), right.y0());
+        assertEquals("122x12+52+508", screen(fill));
+        // il corpo della barra: le cinque righe del colore pieno, sotto la prima, piu' chiara (BAR_FILL_BODY_RIGHT di
+        // m4c_shots.sh; design §14 "Per la 4d")
+        assertEquals("122x10+52+510", screen(new Rect(fill.x0(), fill.y0() + 1, fill.x1(), fill.y1())));
         assertEquals("58x18+50+482", screen(HudLayout.PERCENT_AREA.offset(right.x0(), right.y0())));
         assertEquals("58x18+784+482", screen(HudLayout.PERCENT_AREA.offset(left.x0(), left.y0())));
         assertEquals("50x18+126+482", screen(HudLayout.SPARE_AREA.offset(right.x0(), right.y0())));

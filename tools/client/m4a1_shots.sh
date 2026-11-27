@@ -46,7 +46,7 @@
 #                   nella schermata, 36x32+730+410 negli scatti): il numero 102 va al server con il pacchetto dei
 #                   pulsanti del gioco base, il server conta la pressione e il gioco base rimanda il contatore; il
 #                   puntatore di nuovo nel punto neutro; scatto premuto, da guardare: il pulsante in basso a destra
-#                   verde con 1
+#                   premuto (la faccia di bronzo) con 1
 #   8. rotazione    trascinando con il tasto sinistro nel ritaglio dell'anteprima da 620,250 a 740,250 (60 pixel
 #                   dell'interfaccia, 1,5 gradi per pixel) la tuta gira di 90 gradi; l'angolo segue la distanza dal
 #                   punto premuto, quindi non conta il salto del puntatore da 10,10 a 620,250 che su 1.21.1, a pochi
@@ -152,11 +152,15 @@ u=${EXO_SHOT_USER:-Exo}
 # magenta di stazione-aperta (misurato 18582, nel riquadro 167x198+604+96: i sei pezzi dipinti, di fronte).
 MAGENTA_MIN=9290
 # I pixel del pulsante di prova che cambiano fra prima e dopo la pressione: la meta', arrotondata per difetto alla
-# decina, della sagoma fra premuto e stazione-aperta (misurati 1112, nel riquadro 36x32+730+410, il pulsante intero).
+# decina, della sagoma fra premuto e stazione-aperta (misurati 1112, nel riquadro 36x32+730+410, il pulsante intero,
+# con il quadrato grigio che diventava verde; con la grafica della parte 4d 852 sulle quattro varianti, nel riquadro
+# 32x28+732+412: la faccia d'acciaio che diventa di bronzo e il numero, dentro il contorno, che resta; la soglia
+# resta).
 BUTTON_MIN=550
 # I pixel dell'anteprima che cambiano girando la tuta di 90 gradi: la meta', arrotondata per difetto alla decina, della
 # sagoma fra girata e premuto (misurati 24332 sulle due varianti 1.21.1 e 24587 sulle due 1.20.1, nel riquadro
-# 167x198+604+96; di fianco il magenta scende a 9225, nel riquadro 111x198+629+96).
+# 167x198+604+96, sul fondo piatto di prima; sul fondo dell'anteprima della parte 4d 24245 e 24503: la soglia resta;
+# di fianco il magenta scende a 9225, nel riquadro 111x198+629+96).
 ROT_MIN=12160
 # Riquadri negli scatti: la schermata, il ritaglio dell'anteprima, il pulsante di prova.
 SCREEN_RECT=632x464+164+38

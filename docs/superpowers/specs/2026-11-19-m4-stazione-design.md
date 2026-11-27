@@ -277,6 +277,8 @@ Un preset è, per ognuno dei sei slot, una coppia facoltativa di colori (primari
 | vignetta | quattro angoli di 72x40, fissi: `(0,0)`, `(w−72,0)`, `(0,h−40)`, `(w−72,h−40)` | §"Vignetta" qui sotto; solo con `FULL` e in prima persona |
 | moduli | riservato: `x` da `w − 100` a `w − 2`, `y` da 54 a 72 (a 480: 380-478), sotto le due file di effetti del gioco base | niente in M4 (D1); lì può stare il punteggio laterale: è un problema di M5 |
 
+**Grafica della parte 4d** (stile A, "Officina"; disegni della texture `textures/gui/hud.png`, scritta da `tools/art/gui.py`), con due scostamenti dalla tabella che il proprietario ha accettato il 27 novembre 2026. Il bordo di rame della piastra è al 71 % di opacità (`B4`) invece del 43 %, con il rilievo (più chiaro in alto e a sinistra) e un rivetto di bronzo in ogni angolo, mentre il fondo resta nero al 60 %. La cornice della barra è un canale d'acciaio incassato (ombra nera in alto e a sinistra, labbro chiaro in basso e a destra, fondo `FF292D33` con le tacche dei quarti) invece del bordo `FF0C0D0F` pieno sul fondo `FF282A2E`.
+
 **Colori, e il conflitto C-03.** Una legenda sola per tutto l'HUD:
 
 | Significato | Colore | Sagoma (condizione del pezzo) | Energia (stato dal server) |

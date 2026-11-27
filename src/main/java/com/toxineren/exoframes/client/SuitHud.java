@@ -1,6 +1,5 @@
 package com.toxineren.exoframes.client;
 
-import com.mojang.blaze3d.systems.RenderSystem;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.client.HudLayout.Rect;
 import com.toxineren.exoframes.compat.Compat;
@@ -37,14 +36,15 @@ import net.minecraft.world.item.ItemStack;
  * calcolato una volta per tick del client (il partialTick non serve: l'HUD cambia a tick) dalla copia dello stato del
  * server ({@code clientView}) e dagli indicatori che il server manda ({@code clientIndicators}): il client non
  * confronta la carica con soglie sue (DEC-23). Si disegna dal gancio dell'HUD di {@code ClientRenderHooks} a ogni
- * fotogramma, con rettangoli pieni, testi e la texture della vignetta, tutto a scala 1, senza toccare la pila delle
- * pose; nulla con l'interfaccia nascosta (F1), con l'HUD nascosto da H ({@link ClientPrefs}), da spettatore. Sagoma,
- * avviso, icona della cella e texture della vignetta sono segnaposto fino alla grafica della parte 4d (Decisioni 4 e
- * 14 del piano). Una {@code RuntimeException} nel tick o nel disegno non chiude il gioco: quel tick l'HUD sparisce, o
- * quel fotogramma non si disegna, con un ERROR una volta per sessione ciascuno (si azzerano all'uscita dal mondo), e
- * la fusione accesa per la vignetta si spegne comunque. Solo client. {@link #register()} gira una volta durante
- * l'init della mod, che su Forge e NeoForge e' un thread del caricamento delle mod; tutto il resto (tick, disegno,
- * azzeramento e lo stato che condividono) gira sul thread del client.
+ * fotogramma, con i disegni della texture dell'HUD (piastra, sagoma, avviso, icona della cella, cornice e riempimento
+ * della barra: {@link HudLayout}), i testi e la texture della vignetta, tutto a scala 1, senza toccare la pila delle
+ * pose; nulla con l'interfaccia nascosta (F1), con l'HUD nascosto da H ({@link ClientPrefs}), da spettatore. Le due
+ * texture sono quelle della parte 4d nello stile A, scritte da tools/art/gui.py. Una {@code RuntimeException} nel tick
+ * o nel disegno non chiude il gioco: quel tick l'HUD sparisce, o quel fotogramma non si disegna, con un ERROR una volta
+ * per sessione ciascuno (si azzerano all'uscita dal mondo), e la fusione accesa per i disegni si spegne comunque. Solo
+ * client. {@link #register()} gira una volta durante l'init della mod, che su Forge e NeoForge e' un thread del
+ * caricamento delle mod; tutto il resto (tick, disegno, azzeramento e lo stato che condividono) gira sul thread del
+ * client.
  */
 final class SuitHud {
     /** La percentuale dell'energia, con il numero come argomento. */
@@ -54,14 +54,26 @@ final class SuitHud {
     /** Il segno davanti al numero delle celle di scorta: il segno di moltiplicazione (U+00D7). */
     private static final String TIMES = "\u00d7";
     /**
-     * La texture della vignetta del casco, generata da tools/gen_placeholders.py: i quattro angoli di
+     * La texture della vignetta del casco, generata da tools/art/gui.py: i quattro angoli di
      * {@link HudLayout#VIGNETTE_W} x {@link HudLayout#VIGNETTE_H} gia' al loro posto, nell'ordine di
      * {@link HudLayout#vignetteCorners} due per riga (alto a sinistra, alto a destra; basso a sinistra, basso a
      * destra), cosi' il disegno non specchia nulla (Decisione 4 del piano).
      */
     static final ResourceLocation VIGNETTE_TEXTURE = Ids.of("textures/gui/hud_vignette.png");
-    private static final int VIGNETTE_TEXTURE_W = 2 * HudLayout.VIGNETTE_W;
-    private static final int VIGNETTE_TEXTURE_H = 2 * HudLayout.VIGNETTE_H;
+    private static final GuiTexture VIGNETTE = new GuiTexture(VIGNETTE_TEXTURE, 2 * HudLayout.VIGNETTE_W,
+            2 * HudLayout.VIGNETTE_H);
+    /**
+     * I quattro angoli nella texture della vignetta, nell'ordine di {@link HudLayout#vignetteCorners}: l'angolo i nella
+     * colonna i % 2 e nella riga i / 2.
+     */
+    private static final List<Sprite> VIGNETTE_CORNERS = List.of(
+            new Sprite(0, 0, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H),
+            new Sprite(HudLayout.VIGNETTE_W, 0, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H),
+            new Sprite(0, HudLayout.VIGNETTE_H, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H),
+            new Sprite(HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H));
+    /** La texture dei disegni dell'HUD, generata da tools/art/gui.py: i posti sono in {@link HudLayout}. */
+    static final ResourceLocation HUD_TEXTURE = Ids.of("textures/gui/hud.png");
+    private static final GuiTexture HUD = new GuiTexture(HUD_TEXTURE, HudLayout.TEXTURE_W, HudLayout.TEXTURE_H);
 
     /** Il modello dell'ultimo tick: quello che il disegno mostra fino al tick dopo. */
     private static HudModel model = HudModel.NONE;
@@ -142,7 +154,7 @@ final class SuitHud {
      * Disegna il modello dell'ultimo tick: per prima, con {@link HudLevel#FULL}, in prima persona e con la preferenza
      * accesa ({@link ClientPrefs#vignette()}), la vignetta, sotto tutto il resto; poi, nell'angolo della mano
      * principale di adesso, la piastra del livello, con {@link HudLevel#FULL} la sagoma, poi il sottogruppo
-     * dell'energia.
+     * dell'energia. La fusione accesa per i disegni si spegne in un {@code finally}.
      */
     private static void render(GuiGraphics graphics) {
         try {
@@ -155,16 +167,22 @@ final class SuitHud {
             }
             int w = graphics.guiWidth();
             int h = graphics.guiHeight();
-            if (shown.level() == HudLevel.FULL && minecraft.options.getCameraType().isFirstPerson()
-                    && ClientPrefs.vignette()) {
-                drawVignette(graphics, w, h);
+            try {
+                if (shown.level() == HudLevel.FULL && minecraft.options.getCameraType().isFirstPerson()
+                        && ClientPrefs.vignette()) {
+                    drawVignette(graphics, w, h);
+                }
+                boolean mainRight = player.getMainArm() == HumanoidArm.RIGHT;
+                Rect plate = HudLayout.plate(w, h, mainRight, shown.level());
+                HUD.blit(graphics, shown.level() == HudLevel.FULL ? HudLayout.PIASTRA : HudLayout.PIASTRA_BARRA,
+                        plate.x0(), plate.y0());
+                if (shown.level() == HudLevel.FULL) {
+                    drawSilhouette(graphics, HudLayout.silhouetteGroup(w, h, mainRight), shown);
+                }
+                drawEnergy(graphics, minecraft.font, HudLayout.energyGroup(w, h, mainRight), shown);
+            } finally {
+                GuiTexture.endBlend();
             }
-            boolean mainRight = player.getMainArm() == HumanoidArm.RIGHT;
-            framed(graphics, HudLayout.plate(w, h, mainRight, shown.level()), HudModel.PLATE_EDGE, HudModel.PLATE);
-            if (shown.level() == HudLevel.FULL) {
-                drawSilhouette(graphics, HudLayout.silhouetteGroup(w, h, mainRight), shown);
-            }
-            drawEnergy(graphics, minecraft.font, HudLayout.energyGroup(w, h, mainRight), shown);
         } catch (RuntimeException e) {
             if (!drawFailureLogged) {
                 drawFailureLogged = true;
@@ -176,55 +194,45 @@ final class SuitHud {
 
     /**
      * La vignetta del casco (design M4 §5.12, "Vignetta"): i quattro angoli della texture, ciascuno nel suo angolo
-     * dell'interfaccia ({@link HudLayout#vignetteCorners}), a scala 1. {@code blit} non accende la fusione e la texture
-     * e' traslucida: la fusione si accende qui e si spegne in un {@code finally}, cosi' un'eccezione fra un
-     * {@code blit} e l'altro non la lascia accesa per cio' che si disegna dopo. Il gancio dell'HUD disegna dopo tutto
-     * l'HUD del gioco base, e la differenza fra i loader e' voluta (design M4 §5.12 e §10): solo su NeoForge 1.21.1
-     * gli elementi del gioco base che toccano gli angoli (le icone degli effetti in alto a destra, l'indicatore del
-     * salvataggio e i sottotitoli in basso a destra) stanno sopra la vignetta, perche' NeoForge manda il suo evento
-     * dentro il gestore degli strati, con il test di profondita' acceso, e gli strati del gioco base stanno a z piu'
-     * alte; su Fabric 1.21.1, dove Fabric API lo manda alla fine di {@code Gui.render}, dopo che il test di profondita'
-     * si e' spento, e sulle due 1.20.1 la vignetta copre le icone degli effetti, i sottotitoli e l'indicatore del
-     * salvataggio, che con Forge 1.20.1 non si disegna affatto ({@code ForgeGui} non chiama il {@code Gui.render} del
-     * gioco base, l'unico che lo disegna). Gli avvisi in alto a destra (i toast) stanno sopra su tutte e quattro le
-     * varianti: il gioco base li disegna dopo l'HUD e dopo le schermate ({@code GameRenderer.render}).
+     * dell'interfaccia ({@link HudLayout#vignetteCorners}), a scala 1, con la fusione accesa ({@link GuiTexture#blit}):
+     * la texture e' traslucida. Il gancio dell'HUD disegna dopo tutto l'HUD del gioco base, e la differenza fra i
+     * loader e' voluta (design M4 §5.12 e §10): solo su NeoForge 1.21.1 gli elementi del gioco base che toccano gli
+     * angoli (le icone degli effetti in alto a destra, l'indicatore del salvataggio e i sottotitoli in basso a destra)
+     * stanno sopra la vignetta, perche' NeoForge manda il suo evento dentro il gestore degli strati, con il test di
+     * profondita' acceso, e gli strati del gioco base stanno a z piu' alte; su Fabric 1.21.1, dove Fabric API lo manda
+     * alla fine di {@code Gui.render}, dopo che il test di profondita' si e' spento, e sulle due 1.20.1 la vignetta
+     * copre le icone degli effetti, i sottotitoli e l'indicatore del salvataggio, che con Forge 1.20.1 non si disegna
+     * affatto ({@code ForgeGui} non chiama il {@code Gui.render} del gioco base, l'unico che lo disegna). Gli avvisi in
+     * alto a destra (i toast) stanno sopra su tutte e quattro le varianti: il gioco base li disegna dopo l'HUD e dopo
+     * le schermate ({@code GameRenderer.render}).
      */
     private static void drawVignette(GuiGraphics graphics, int w, int h) {
         List<Rect> corners = HudLayout.vignetteCorners(w, h);
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        try {
-            for (int i = 0; i < corners.size(); i++) {
-                Rect corner = corners.get(i);
-                // nella texture l'angolo i sta nella colonna i % 2 e nella riga i / 2
-                graphics.blit(VIGNETTE_TEXTURE, corner.x0(), corner.y0(), i % 2 * HudLayout.VIGNETTE_W,
-                        i / 2 * HudLayout.VIGNETTE_H, HudLayout.VIGNETTE_W, HudLayout.VIGNETTE_H, VIGNETTE_TEXTURE_W,
-                        VIGNETTE_TEXTURE_H);
-            }
-        } finally {
-            RenderSystem.disableBlend();
+        for (int i = 0; i < corners.size(); i++) {
+            VIGNETTE.blit(graphics, VIGNETTE_CORNERS.get(i), corners.get(i).x0(), corners.get(i).y0());
         }
     }
 
-    /** I sei pezzi, ciascuno nel suo rettangolo del sottogruppo della sagoma: il contorno e dentro il pieno. */
+    /** I sei pezzi, ciascuno ritagliato dalla figura dei suoi colori e messo nel suo rettangolo della sagoma. */
     private static void drawSilhouette(GuiGraphics graphics, Rect group, HudModel shown) {
         for (Map.Entry<PieceSlot, HudModel.Paint> piece : shown.silhouette().entrySet()) {
-            HudModel.Paint paint = piece.getValue();
-            framed(graphics, HudLayout.piece(piece.getKey()).offset(group.x0(), group.y0()), paint.outline(),
-                    paint.fill());
+            Rect place = HudLayout.piece(piece.getKey()).offset(group.x0(), group.y0());
+            HUD.blit(graphics, HudLayout.silhouettePiece(HudLayout.figure(piece.getValue()), piece.getKey()),
+                    place.x0(), place.y0());
         }
     }
 
     /**
      * Il sottogruppo dell'energia: l'avviso se acceso, la percentuale (dopo il posto dell'avviso, se c'e') o, senza
-     * cella, il testo al posto della barra; l'icona della cella e "xN" allineati a destra; la barra.
+     * cella, il testo al posto della barra; l'icona della cella e "xN" allineati a destra; la cornice della barra e il
+     * riempimento largo {@link HudModel#fillWidth}, nel colore dell'energia.
      */
     private static void drawEnergy(GuiGraphics graphics, Font font, Rect group, HudModel shown) {
         int x = group.x0();
         int y = group.y0();
         int colour = shown.energyColor();
         if (shown.warningOn()) {
-            drawWarning(graphics, x + HudLayout.WARNING.x0(), y + HudLayout.WARNING.y0(), colour);
+            HUD.blit(graphics, HudLayout.warning(colour), x + HudLayout.WARNING.x0(), y + HudLayout.WARNING.y0());
         }
         if (shown.hasCell()) {
             int textX = shown.warningSlot() ? HudLayout.TEXT_X_AFTER_WARNING : HudLayout.TEXT_X;
@@ -236,54 +244,16 @@ final class SuitHud {
         }
         Component spare = Component.literal(TIMES + shown.spareCells());
         int spareX = x + HudLayout.spareTextX(font.width(spare));
-        drawCellIcon(graphics, spareX - 1 - HudLayout.CELL_ICON_W, y + HudLayout.TEXT_Y);
+        HUD.blit(graphics, HudLayout.cellIcon(shown.spareCells()), spareX - 1 - HudLayout.CELL_ICON_W,
+                y + HudLayout.TEXT_Y);
         graphics.drawString(font, spare, spareX, y + HudLayout.TEXT_Y, shown.spareColor(), true);
         if (shown.hasCell()) {
-            framed(graphics, HudLayout.BAR_FRAME.offset(x, y), HudModel.BAR_EDGE, HudModel.BAR_BACK);
+            HUD.blit(graphics, HudLayout.BARRA_CORNICE, x + HudLayout.BAR_FRAME.x0(), y + HudLayout.BAR_FRAME.y0());
             if (shown.fillWidth() > 0) {
-                Rect fill = HudLayout.BAR_FILL.offset(x, y);
-                int fillEnd = fill.x0() + shown.fillWidth();
-                graphics.fill(fill.x0(), fill.y0(), fillEnd, fill.y0() + 1, HudModel.lighter(colour));
-                graphics.fill(fill.x0(), fill.y0() + 1, fillEnd, fill.y1(), colour);
+                HUD.blit(graphics, HudLayout.barFill(colour).left(shown.fillWidth()), x + HudLayout.BAR_FILL.x0(),
+                        y + HudLayout.BAR_FILL.y0());
             }
         }
-    }
-
-    /**
-     * L'avviso, 8x8 da (x, y), nel colore dell'energia: le righe del triangolo pieno, dalla colonna {@code 3 - riga/2}
-     * alla {@code 4 + riga/2}, senza le colonne 3 e 4 delle righe 2, 3, 4 e 6, dove il punto esclamativo resta del
-     * colore della piastra.
-     */
-    private static void drawWarning(GuiGraphics graphics, int x, int y, int colour) {
-        for (int row = 0; row < HudLayout.WARNING.height(); row++) {
-            int first = 3 - row / 2;
-            int last = 4 + row / 2;
-            if (row == 2 || row == 3 || row == 4 || row == 6) {
-                graphics.fill(x + first, y + row, x + 3, y + row + 1, colour);
-                graphics.fill(x + 5, y + row, x + last + 1, y + row + 1, colour);
-            } else {
-                graphics.fill(x + first, y + row, x + last + 1, y + row + 1, colour);
-            }
-        }
-    }
-
-    /** L'icona della cella, 5x8 da (x, y): il tappo nelle colonne 1-3 della riga 0, il corpo, la carica. */
-    private static void drawCellIcon(GuiGraphics graphics, int x, int y) {
-        graphics.fill(x + 1, y, x + 4, y + 1, HudModel.CELL_CAP);
-        graphics.fill(x, y + 1, x + HudLayout.CELL_ICON_W, y + HudLayout.CELL_ICON_H, HudModel.CELL_BODY);
-        graphics.fill(x + 1, y + 3, x + 4, y + 7, HudModel.CELL_CHARGE);
-    }
-
-    /**
-     * Il rettangolo con il bordo di 1 pixel nel colore {@code edge} e dentro il colore {@code inside}, senza
-     * sovrapporli: con un colore traslucido (la piastra, un pezzo non montato) nessun pixel si fonde due volte.
-     */
-    private static void framed(GuiGraphics graphics, Rect r, int edge, int inside) {
-        graphics.fill(r.x0(), r.y0(), r.x1(), r.y0() + 1, edge);
-        graphics.fill(r.x0(), r.y1() - 1, r.x1(), r.y1(), edge);
-        graphics.fill(r.x0(), r.y0() + 1, r.x0() + 1, r.y1() - 1, edge);
-        graphics.fill(r.x1() - 1, r.y0() + 1, r.x1(), r.y1() - 1, edge);
-        graphics.fill(r.x0() + 1, r.y0() + 1, r.x1() - 1, r.y1() - 1, inside);
     }
 
     /** Dimentica lo stato dell'energia, i tick passati in lui e i due ERROR gia' scritti. All'uscita dal mondo. */

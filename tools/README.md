@@ -11,7 +11,7 @@ della stazione di manutenzione (`tools/art/station.py`) in `tools/art/README.md`
 | `bash tools/check_sources.sh` | regole sui sorgenti (separazione di `core/`, direttive di Stonecutter, codice client): `OK sources` |
 | `bash tools/check_jars.sh` | controlli sui quattro jar in `build/libs/all` (metadati, mixin, risorse, dati della sola versione del jar, privacy): `OK jars`; serve Python 3.11 o più recente |
 | `python3 tools/check_jar_privacy.py <jar>...` | il controllo di privacy sui jar, chiamato da `check_jars.sh`: percorsi locali di un computer, e-mail, `Built-By` nel manifest, metadati di immagini e suoni, autore nelle strutture, e le parole di `EXOFRAMES_PRIVATE_WORDS` |
-| `bash tools/check_art.sh` | prove negative dei generatori della grafica, poi rigenera la grafica del telaio, quella della stazione di manutenzione (`tools/art/station.py`, direzione `officina`) e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
+| `bash tools/check_art.sh` | prove negative dei generatori della grafica, poi rigenera la grafica del telaio, quella della stazione di manutenzione (`tools/art/station.py`, direzione `officina`), le tre texture dell'interfaccia (`tools/art/gui.py`: la schermata della stazione, i disegni dell'HUD e la vignetta del casco) e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
 | `bash tools/check_data.sh` | prove negative del generatore dei dati, poi rigenera ricette, sblocchi, bottino e tag in una cartella temporanea e li confronta con quelli committati; i due alberi per versione contengono solo i file generati: `OK data` |
 | `bash tools/run_gametests.sh [variante...]` | test in gioco sulle varianti (di default tutte e quattro); conta le righe `add(tests,` di tutti i file di `gametest/`; una variante passa se tutti i test elencati sono passati e il log non ha avvisi del mod fuori elenco, ciascuno il numero di volte che l'elenco ammette per il suo loader; prima di ogni variante toglie `versions/<variante>/run-gametest/config/redstone_exoframes.json`, che la mod riscrive con i predefiniti all'avvio (i test contano sui predefiniti) |
 | `python3 -I tools/check_log.py gametest\|client --variant <variante> <log>...` | avvisi ed errori del mod in un log, confrontati con `tools/log_allowlist.txt` con i conteggi del loader della variante (lo chiamano `run_gametests.sh` e `client/client_shot.sh`) |
@@ -39,7 +39,7 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
 byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva. Scrive
-diciannove file:
+diciotto file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -52,11 +52,6 @@ diciannove file:
 - `src/main/resources/assets/redstone_exoframes/textures/block/` (16x16, del tutto opache: i blocchi sono cubi pieni):
   `charger_top.png`, `charger_side.png` e i tre fronti del caricatore, `charger_front.png` (alloggiamento vuoto),
   `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese);
-- `src/main/resources/assets/redstone_exoframes/textures/gui/hud_vignette.png` (144x80): i quattro angoli della
-  vignetta del casco dell'HUD, di 72x40 ciascuno e ciascuno al suo posto (alto a sinistra, alto a destra, basso a
-  sinistra, basso a destra: l'HUD li disegna senza specchiarli), traslucidi, scuri dal pixel d'angolo dello schermo
-  verso l'interno e con due riflessi chiari del vetro nei due in alto, con la formula delle anteprime del design
-  (`draw_vignette` di `docs/superpowers/specs/anteprime/2026-11-19-m4/anteprime.py`); segnaposto fino alla parte 4d;
 - `src/main/resources-mc1.20.1/assets/minecraft/textures/models/armor/redstone_exoframes_frame_layer_1.png` e
   `_layer_2.png` (64x32), solo nei jar 1.20.1: completamente trasparenti, perché il layer armatura di vanilla non
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
@@ -65,12 +60,16 @@ La grafica del telaio sul giocatore e a terra (`textures/entity/exoframe.png` e 
 qui ma da `tools/art/build.py`. Nemmeno quella della stazione di manutenzione: dalla parte 4d i modelli delle due
 metà, le loro texture e l'icona dell'oggetto (`models/block/station_*.json`, `textures/block/station_*.png`,
 `textures/item/station.png`) li scrive `tools/art/station.py` nella direzione scelta dal proprietario, A, "Officina"
-(istruzioni in `tools/art/README.md`, "Stazione di manutenzione"); fino alla parte 4c erano segnaposto di qui.
+(istruzioni in `tools/art/README.md`, "Stazione di manutenzione"); fino alla parte 4c erano segnaposto di qui. E
+nemmeno le texture dell'interfaccia: dalla parte 4d la schermata della stazione, i disegni dell'HUD e la vignetta del
+casco (`textures/gui/station.png`, `hud.png`, `hud_vignette.png`) li scrive `tools/art/gui.py` nello stile A
+(istruzioni in `tools/art/README.md`, "Schermata, HUD, vignetta e icona del kit"); la vignetta, fino alla parte 4c,
+era un segnaposto di qui.
 
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciannove file con quelli committati, pixel per
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciotto file con quelli committati, pixel per
 pixel.
 
 ## Dati per versione: `gen_data.py`

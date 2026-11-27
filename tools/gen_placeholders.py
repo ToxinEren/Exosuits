@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Genera in modo deterministico le texture placeholder (solo stdlib): l'icona del mod, gli oggetti, le facce del
-blocco del caricatore e gli angoli della vignetta del casco dell'HUD, segnaposto fino alla grafica definitiva, e i due
-layer armatura trasparenti di 1.20.1, che restano cosi'. La stazione di manutenzione ha il suo generatore,
-tools/art/station.py.
+"""Genera in modo deterministico le texture placeholder (solo stdlib): l'icona del mod, gli oggetti e le facce del
+blocco del caricatore, segnaposto fino alla grafica definitiva, e i due layer armatura trasparenti di 1.20.1, che
+restano cosi'. La stazione di manutenzione ha il suo generatore, tools/art/station.py; la schermata della stazione, i
+disegni dell'HUD e la vignetta del casco un altro, tools/art/gui.py (parte 4d).
 
 Uso, dalla radice del repository:
     python3 -I tools/gen_placeholders.py               scrive nei sorgenti (src/main/resources...)
@@ -12,7 +12,6 @@ Uso, dalla radice del repository:
 Disegni originali: nessun riferimento a opere o marchi di terzi.
 """
 import argparse
-import math
 import os
 import struct
 import zlib
@@ -21,7 +20,6 @@ MAIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "ma
 ROOT = os.path.join(MAIN, "resources")
 ITEM_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "item")
 BLOCK_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "block")
-GUI_DIR = os.path.join(ROOT, "assets", "redstone_exoframes", "textures", "gui")
 CELL_PATH = os.path.join(ITEM_DIR, "redstone_cell.png")
 ICON_PATH = os.path.join(ROOT, "icon.png")
 # Texture del layer armatura vanilla di 1.20.1 per il materiale "redstone_exoframes_frame" (nome senza namespace, con
@@ -424,39 +422,8 @@ CHARGER_TEXTURES = (("charger_top", draw_charger_top), ("charger_side", draw_cha
 # La stazione di manutenzione non e' piu' qui: dalla parte 4d modelli, texture e icona li scrive tools/art/station.py,
 # con la direzione scelta dal proprietario (A, Officina), e tools/check_art.sh li controlla.
 
-# La vignetta del casco dell'HUD (parte 4c, design M4 par. 5.12), segnaposto fino alla grafica della parte 4d: una
-# texture 144x80 con i quattro angoli di 72x40 gia' al loro posto, alto a sinistra in (0, 0), alto a destra in (72, 0),
-# basso a sinistra in (0, 40) e basso a destra in (72, 40), cosi' l'HUD li disegna senza specchiare nulla. La formula e'
-# quella di draw_vignette delle anteprime del design (docs/superpowers/specs/anteprime/2026-11-19-m4/anteprime.py), con
-# le coordinate della texture: le anteprime restano com'erano, e da qui in poi la texture viene da questo generatore.
-VIGNETTE_W, VIGNETTE_H = 72, 40       # un angolo, in pixel dell'interfaccia
-VIGNETTE_TINT = (10, 12, 14)          # l'oscuramento
-VIGNETTE_MAX_ALPHA = 0.42             # l'opacita' nel pixel d'angolo
-VIGNETTE_GLINTS = ((0.16, 10), (0.10, 18))  # i due riflessi del vetro: opacita' e spostamento verso l'interno
-
-
-def draw_hud_vignette():
-    """I quattro angoli: in ciascuno l'oscuramento dal pixel d'angolo esterno, con l'opacita' 0,42 * (1 - d)^2, dove d
-    e' la distanza da quel pixel misurata in larghezze e altezze dell'angolo (a zero dal lato opposto); nei due angoli
-    in alto i due riflessi del vetro, strisce chiare in diagonale che sostituiscono il pixel."""
-    w, h = 2 * VIGNETTE_W, 2 * VIGNETTE_H
-    px = canvas(w, h)
-    for cx, cy in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
-        x0 = 0 if cx == 0 else VIGNETTE_W
-        y0 = 0 if cy == 0 else VIGNETTE_H
-        for y in range(y0, y0 + VIGNETTE_H):
-            for x in range(x0, x0 + VIGNETTE_W):
-                dx = (x - cx) / VIGNETTE_W
-                dy = (y - cy) / VIGNETTE_H
-                dist = math.sqrt(dx * dx + dy * dy)
-                a = VIGNETTE_MAX_ALPHA * max(0.0, 1.0 - dist) ** 2
-                px[y][x] = VIGNETTE_TINT + (int(a * 255),)
-    for k, off in VIGNETTE_GLINTS:
-        for t in range(26):
-            y = 2 + t // 2
-            px[y][8 + off + t] = (255, 255, 255, int(k * 255))
-            px[y][w - 9 - off - t] = (255, 255, 255, int(k * 255))
-    return px
+# La vignetta del casco dell'HUD non e' piu' qui: dalla parte 4d la scrive tools/art/gui.py, con la schermata della
+# stazione e i disegni dell'HUD, nello stile scelto dal proprietario (A, Officina), e tools/check_art.sh la controlla.
 
 
 def outputs():
@@ -468,7 +435,6 @@ def outputs():
         files.append((os.path.join(ITEM_DIR, name + ".png"), 16, 16, lambda rows=rows: draw_sprite(rows)))
     for name, draw in CHARGER_TEXTURES:
         files.append((os.path.join(BLOCK_DIR, name + ".png"), 16, 16, draw))
-    files.append((os.path.join(GUI_DIR, "hud_vignette.png"), 144, 80, draw_hud_vignette))
     for path in ARMOR_LAYER_PATHS:
         files.append((path, 64, 32, lambda: canvas(64, 32)))
     return files

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Anteprime per il proprietario della parte 4d nello stile A (Officina): la schermata della stazione, l'HUD, la
-vignetta del casco e l'icona del kit, composte dai file che scrive tools/art/gui.py e dagli scatti del gioco committati
-in docs/test-in-gioco/ (solo locali, non nella CI; serve Pillow oltre a numpy).
+vignetta del casco e l'icona del kit, composte dai file che scrive tools/art/gui.py e dagli scatti del gioco di
+docs/test-in-gioco/ come erano al commit 74a890c, con la schermata e l'HUD ancora a colori pieni (gli scatti di oggi
+li mostrano gia' nello stile A); solo locali, non nella CI; servono Pillow, numpy e git.
 
 Uso, dalla radice del repository:
     python3 -I tools/art/preview/gui_preview.py --vanilla <dir> [--assets <dir>] [--out <dir>]
@@ -9,7 +10,7 @@ Uso, dalla radice del repository:
 --vanilla   le risorse del gioco base estratte a parte dal jar del client, fuori dal repository: il carattere
             (assets/minecraft/font/include/default.json e textures/font/*.png) e le icone di sette oggetti
             (textures/item/iron_ingot, copper_ingot, red_dye, white_dye, black_dye, blue_dye, redstone);
---assets    la cartella scritta da `tools/art/gui.py --out` (se manca, il generatore scrive in
+--assets    la cartella scritta da `tools/art/gui.py --out <dir> --kit` (se manca, il generatore scrive in
             tools/art/preview/out/gui/, ignorata da git);
 --out       predefinito docs/superpowers/specs/anteprime/2026-11-27-m4d-grafica/.
 
@@ -22,6 +23,7 @@ colori pieni si copre prima con l'erba della stessa colonna, specchiata, perche'
 scrivono con exo.write_png (solo IHDR, IDAT, IEND) e lo script si ferma se una ha altri blocchi.
 """
 import argparse
+import io
 import json
 import os
 import subprocess
@@ -38,14 +40,17 @@ from PIL import Image, ImageDraw, ImageFont  # noqa: E402
 import gui_layout as L  # noqa: E402
 from exo import write_png  # noqa: E402
 
-SHOTS = os.path.join(REPO, 'docs', 'test-in-gioco')
+SHOTS = 'docs/test-in-gioco'
+# Gli scatti su cui stanno le anteprime del 27 novembre 2026: quelli di prima dell'integrazione, con la schermata e
+# l'HUD a colori pieni, che lo script toglie (il fondo piatto dell'anteprima 3D, il gruppo dell'HUD coperto d'erba).
+SHOTS_REV = '74a890c'
 MOD_TEX = os.path.join(REPO, 'src', 'main', 'resources', 'assets', 'redstone_exoframes', 'textures')
 OUT = os.path.join(REPO, 'docs', 'superpowers', 'specs', 'anteprime', '2026-11-27-m4d-grafica')
 
 TEXT = (0xE6, 0xE6, 0xE6)       # StationLayout.TEXT
 TEXT_DIM = (0x9A, 0xA0, 0xA6)   # StationLayout.TEXT_DIM
-SHOT_PREVIEW_BG = (20, 23, 27)  # StationLayout.PREVIEW_BG nello scatto
-SHOT_ARROW = (152, 158, 164)    # le frecce "<" ">" dello scatto
+SHOT_PREVIEW_BG = (20, 23, 27)  # il fondo piatto dell'anteprima negli scatti di SHOTS_REV (PREVIEW_BG di allora)
+SHOT_ARROW = (152, 158, 164)    # le frecce "<" ">" degli scatti di SHOTS_REV
 
 
 # --- carattere del gioco base e didascalie ---------------------------------------------------------------------------
@@ -118,6 +123,18 @@ def label(im, xy, s, colour=(255, 255, 255), small=False, bg=(16, 17, 20, 200)):
 
 
 # --- risorse ---------------------------------------------------------------------------------------------------------
+def at_rev(path):
+    """Una PNG del repository come era al commit SHOTS_REV, letta con git (percorso dalla radice)."""
+    data = subprocess.run(['git', '-C', REPO, 'show', '%s:%s' % (SHOTS_REV, path)], capture_output=True,
+                          check=True).stdout
+    return Image.open(io.BytesIO(data)).convert('RGBA')
+
+
+def shot(folder, name):
+    """Uno scatto di docs/test-in-gioco/<folder>/<name> come era al commit SHOTS_REV."""
+    return at_rev('%s/%s/%s' % (SHOTS, folder, name))
+
+
 class Sheets:
     def __init__(self, assets, vanilla):
         def load(rel):
@@ -173,7 +190,7 @@ DYES_HAVE = {'rosso': 4, 'bianco': 6, 'nero': 3, 'blu': 2}
 
 def suit_from_shot():
     """Il telaio dell'anteprima 3D dallo scatto della 4a-1, a scala 2: il ritaglio senza il fondo e senza le frecce."""
-    im = Image.open(os.path.join(SHOTS, 'm4a1-screenshot', '1.21.1-neoforge-stazione-colori-suoi.png')).convert('RGBA')
+    im = shot('m4a1-screenshot', '1.21.1-neoforge-stazione-colori-suoi.png')
     x0, y0, x1, y1 = (v * 2 for v in L.GUI['anteprima.ritaglio'])
     lx, ly = 82 * 2, 19 * 2
     clip = np.array(im.crop((lx + x0, ly + y0, lx + x1, ly + y1)))
@@ -334,7 +351,7 @@ def draw_cursor(im, x, y):
 
 def world_behind_screen(w, h):
     """Il mondo dietro la schermata, come lo oscura il gioco base (sfumatura da C0101010 a D0101010)."""
-    im = Image.open(os.path.join(SHOTS, 'm4a1-screenshot', '1.21.1-neoforge-stazione-posata.png')).convert('RGBA')
+    im = shot('m4a1-screenshot', '1.21.1-neoforge-stazione-posata.png')
     im = im.crop(((im.width - w) // 2, (im.height - h) // 2, (im.width + w) // 2, (im.height + h) // 2))
     dim = Image.new('RGBA', (w, h))
     d = ImageDraw.Draw(dim)
@@ -346,8 +363,7 @@ def world_behind_screen(w, h):
 
 def screen_images(sheets, font, out):
     written = []
-    base = Image.open(os.path.join(SHOTS, 'm4a1-screenshot', '1.21.1-neoforge-stazione-colori-suoi.png'))
-    base = base.convert('RGBA')
+    base = shot('m4a1-screenshot', '1.21.1-neoforge-stazione-colori-suoi.png')
     img = compose_screen(sheets, font, 480, 270, base, 'tinta.rosso', True)
     label(img, (8, 8), 'Stazione, stile A: scala 2, finestra 960x540 (mouse sulla tinta rossa)')
     written.append(save(img, out, 'schermata-960x540.png'))
@@ -458,7 +474,7 @@ def hud_base(main_right):
     """Uno scatto della 4c senza la vignetta segnaposto, con il gruppo di oggi coperto dall'erba della stessa colonna
     (le righe subito sopra, specchiate: nessun salto sul bordo)."""
     name = '1.21.1-neoforge-danneggiato.png' if main_right else '1.21.1-neoforge-mancino-danneggiato.png'
-    im = np.array(Image.open(os.path.join(SHOTS, 'm4c-screenshot', name)).convert('RGBA'))
+    im = np.array(shot('m4c-screenshot', name))
     x0, y0, x1, y1 = (v * 2 for v in L.hud_group(480, 270, main_right))
     x0, y0, x1, y1 = x0 - 2, y0 - 2, x1 + 2, min(y1 + 2, im.shape[0])
     h = y1 - y0
@@ -529,10 +545,10 @@ def hud_images(sheets, font, out):
 # --- vignetta ---------------------------------------------------------------------------------------------------------
 def vignette_image(sheets, font, out):
     """La vignetta nuova sullo scatto in prima persona, con l'HUD; sotto, tre angoli ingranditi x2 della sola vignetta
-    (senza l'HUD, che copre quello in basso a sinistra), prima quella segnaposto di oggi e poi la nuova."""
+    (senza l'HUD, che copre quello in basso a sinistra), prima quella segnaposto della parte 4c e poi la nuova."""
     state = HUD_STATES[0][1]
     textures = (('nuova', sheets.vignette),
-                ('segnaposto', Image.open(os.path.join(MOD_TEX, 'gui', 'hud_vignette.png')).convert('RGBA')))
+                ('segnaposto', at_rev('src/main/resources/assets/redstone_exoframes/textures/gui/hud_vignette.png')))
     corners_only = {}
     main = None
     for which, tex in textures:
@@ -627,7 +643,7 @@ def main():
     assets = args.assets
     if not assets:
         assets = os.path.join(HERE, 'out', 'gui')
-        subprocess.run([sys.executable, os.path.join(ART, 'gui.py'), '--out', assets], check=True)
+        subprocess.run([sys.executable, os.path.join(ART, 'gui.py'), '--out', assets, '--kit'], check=True)
     CAP, CAP_SMALL = caption_font(15), caption_font(12)
     sheets = Sheets(assets, args.vanilla)
     font = McFont(args.vanilla)

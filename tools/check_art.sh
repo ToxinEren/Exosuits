@@ -7,8 +7,10 @@
 # allo stesso modo la stazione di manutenzione nella direzione scelta dal proprietario (tools/art/station.py
 # --direction officina: i modelli delle due meta', le texture e l'icona) e la confronta con i file committati, JSON
 # byte per byte e PNG con compare_png.py; ogni modello o texture della stazione committato deve essere uno di quelli
-# generati. Infine rigenera le texture placeholder (tools/gen_placeholders.py --out) e confronta ognuna con quella
-# committata sotto src/main.
+# generati. Poi rigenera allo stesso modo le tre texture dell'interfaccia nello stile A (tools/art/gui.py: la
+# schermata della stazione, i disegni dell'HUD e la vignetta del casco, parte 4d) e le confronta con quelle committate
+# con compare_png.py; ogni texture di textures/gui committata deve essere una di quelle generate. Infine rigenera le
+# texture placeholder (tools/gen_placeholders.py --out) e confronta ognuna con quella committata sotto src/main.
 # Servono python3 e numpy (tools/art/requirements.txt).
 set -eu
 
@@ -88,6 +90,41 @@ for g in "$assets"/models/block/station*.json "$assets"/textures/block/station*.
     [ -e "$g" ] || continue
     if [ ! -f "$tmp/station/${g#"$assets/"}" ]; then
         echo "FAIL: $g non viene da tools/art/station.py (la direzione $station_direction non lo scrive): va tolto" >&2
+        fail=1
+    fi
+done
+
+# schermata della stazione, disegni dell'HUD e vignetta del casco (parte 4d), nello stile A approvato dal proprietario
+# il 27 novembre 2026: tools/art/gui.py scrive gli stessi percorsi relativi agli asset del mod, in una sottocartella
+# sua (l'icona del kit, con --kit, entra nel mod con il kit della parte 4b)
+gui_regen="python3 tools/art/gui.py --out $assets"
+if ! python3 tools/art/gui.py --out "$tmp/gui" >"$tmp/gui.log" 2>&1; then
+    cat "$tmp/gui.log" >&2
+    echo "FAIL: tools/art/gui.py non e' riuscito" >&2
+    exit 1
+fi
+count=0
+while IFS= read -r -d '' g; do
+    rel=${g#"$tmp/gui/"}
+    count=$((count + 1))
+    if [ ! -f "$assets/$rel" ]; then
+        echo "FAIL: manca $assets/$rel (rigenerare con $gui_regen)" >&2
+        fail=1
+    elif ! python3 tools/art/compare_png.py "$g" "$assets/$rel"; then
+        echo "FAIL: $assets/$rel diverso da quello generato (rigenerare con $gui_regen)" >&2
+        fail=1
+    fi
+done < <(find "$tmp/gui" -type f -print0)
+if [ "$count" -eq 0 ]; then
+    echo "FAIL: tools/art/gui.py non ha scritto nessun file" >&2
+    fail=1
+fi
+# il generatore e' l'unico a scrivere le texture dell'interfaccia: in textures/gui nessun file fuori da quelli che
+# ha scritto
+for g in "$assets"/textures/gui/*; do
+    [ -e "$g" ] || continue
+    if [ ! -f "$tmp/gui/${g#"$assets/"}" ]; then
+        echo "FAIL: $g non viene da tools/art/gui.py: va tolto" >&2
         fail=1
     fi
 done
