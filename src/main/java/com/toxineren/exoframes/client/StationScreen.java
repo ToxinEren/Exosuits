@@ -76,11 +76,12 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     private double rotationStartX;
     private float rotationStartAngle;
     /**
-     * Il widget su cui e' stato premuto un tasto del mouse, finche' quel tasto ({@link #pressedButton}) non si lascia;
-     * null altrimenti. Il trascinamento e il rilascio di quel tasto non vanno al gioco base.
+     * I tasti del mouse premuti su un widget e non ancora lasciati, un bit per tasto ({@link #bit}): il trascinamento e
+     * il rilascio di ciascuno non vanno al gioco base, anche se nel frattempo un altro tasto e' stato premuto altrove.
      */
-    private Widget pressedWidget;
-    private int pressedButton;
+    private int widgetButtons;
+    /** Il widget su cui e' tenuto il tasto sinistro, che lo mostra premuto; null altrimenti. */
+    private Widget leftPressed;
 
     /** La vista che la schermata mostra: quando il menu ne ha una nuova si rifanno la tuta e le icone. */
     private StationView shown;
@@ -160,27 +161,30 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
     /**
      * Un tasto premuto su un widget (un posto, "Tutti", la freccia) resta della schermata fino al suo rilascio, e non
      * va al gioco base; se e' il sinistro, manda il numero del widget ({@link #act}). Il tasto sinistro nel ritaglio
-     * dell'anteprima comincia a girare la tuta. Il resto va al gioco base. Ogni pressione dimentica quella di prima, e
-     * una pressione sinistra smette di girare la tuta: se un rilascio si e' perso, non resta armato e non ruba quello
-     * di una pressione andata al gioco base.
+     * dell'anteprima comincia a girare la tuta. Il resto va al gioco base. Ogni tasto si ricorda per conto suo: una
+     * pressione fuori dai widget dimentica solo una pressione dello stesso tasto (se il suo rilascio si e' perso, non
+     * ruba quello di una pressione andata al gioco base), mentre il rilascio di un tasto tenuto su un widget resta
+     * della schermata anche se nel frattempo un altro tasto e' andato al gioco base. Una pressione sinistra smette di
+     * girare la tuta.
      */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         double x = mouseX - leftPos;
         double y = mouseY - topPos;
-        pressedWidget = null;
         if (button == InputConstants.MOUSE_BUTTON_LEFT) {
             rotating = false;
+            leftPressed = null;
         }
         Widget widget = widgetAt(x, y);
         if (widget != null) {
-            pressedWidget = widget;
-            pressedButton = button;
+            widgetButtons |= bit(button);
             if (button == InputConstants.MOUSE_BUTTON_LEFT) {
+                leftPressed = widget;
                 act(widget, x, y);
             }
             return true;
         }
+        widgetButtons &= ~bit(button);
         if (button == InputConstants.MOUSE_BUTTON_LEFT && StationLayout.PREVIEW_CLIP.contains(x, y)) {
             rotating = true;
             rotationStartX = mouseX;
@@ -200,7 +204,7 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
      */
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (pressedWidget != null && button == pressedButton) {
+        if ((widgetButtons & bit(button)) != 0) {
             return true;
         }
         if (button == InputConstants.MOUSE_BUTTON_LEFT && rotating) {
@@ -218,8 +222,11 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
      */
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (pressedWidget != null && button == pressedButton) {
-            pressedWidget = null;
+        if ((widgetButtons & bit(button)) != 0) {
+            widgetButtons &= ~bit(button);
+            if (button == InputConstants.MOUSE_BUTTON_LEFT) {
+                leftPressed = null;
+            }
             return true;
         }
         if (button == InputConstants.MOUSE_BUTTON_LEFT && rotating) {
@@ -242,7 +249,12 @@ public final class StationScreen extends CompatContainerScreen<StationMenu> {
 
     /** Vero mentre il tasto sinistro, premuto sul widget, e' tenuto. */
     private boolean pressed(Widget widget) {
-        return pressedWidget == widget && pressedButton == InputConstants.MOUSE_BUTTON_LEFT;
+        return leftPressed == widget;
+    }
+
+    /** Il bit del tasto del mouse in {@link #widgetButtons}; nessuno per un numero che non e' fra 0 e 31. */
+    private static int bit(int button) {
+        return button >= 0 && button < Integer.SIZE ? 1 << button : 0;
     }
 
     /**
