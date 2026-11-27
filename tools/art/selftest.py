@@ -19,11 +19,16 @@ pretende che i controlli lo segnalino. Esce con 1 se un difetto passa inosservat
   9. un osso di primo livello con i pezzi di due slot;
  10. build.py si ferma su un modello che non passa i controlli: esce con 1 e non scrive nessun file.
 
-Le prove che dipendono dal disegno del mod (1a, 1b, 1c) verificano prima la loro premessa (che cosa copre la parte
-iniettata): se il disegno cambia e la premessa non vale piu', la prova fallisce dicendolo, invece di passare senza
-provare nulla. 1a e 1b verificano la premessa sulla faccia nord e contano solo una segnalazione su quella faccia: la
-coppia iniettata e' complanare anche su altre facce, e una segnalazione su un'altra faccia non proverebbe la regola.
-Senza nessuna prova registrata l'esecuzione fallisce.
+Prove della stazione di manutenzione (tools/art/station.py, bench.Bench.check), sulla direzione del mod (officina):
+ 11. una tasca del fronte aperta verso terra (arriva alla riga del suolo);
+ 12. una tasca del fronte unita a una tasca del piano, senza aprirsi verso il piano;
+ 13. station.py si ferma su una stazione che non passa i controlli: esce con 1 e non scrive nessun file.
+
+Le prove che dipendono dal disegno del mod (1a, 1b, 1c, 11, 12) verificano prima la loro premessa (che cosa copre la
+parte iniettata; per la stazione, che senza il difetto passi il controllo): se il disegno cambia e la premessa non vale
+piu', la prova fallisce dicendolo, invece di passare senza provare nulla. 1a e 1b verificano la premessa sulla faccia
+nord e contano solo una segnalazione su quella faccia: la coppia iniettata e' complanare anche su altre facce, e una
+segnalazione su un'altra faccia non proverebbe la regola. Senza nessuna prova registrata l'esecuzione fallisce.
 """
 import os
 import sys
@@ -290,6 +295,88 @@ def build_stops():
         return False, f'build.py e\' uscito con {code} invece di 1'
     if written:
         return False, f'build.py ha scritto {written} nonostante il difetto'
+    return True, 'uscita 1, nessun file scritto'
+
+
+STATION_DIRECTION = 'officina'      # la direzione nel mod (tools/check_art.sh)
+
+
+def station_bench(extra=None):
+    """La stazione del mod come banco (bench.Bench), con il difetto `extra(bench)` aggiunto dopo il disegno. Premessa:
+    senza il difetto il banco passa bench.Bench.check."""
+    from bench import Bench
+    from station_designs import load
+    design = load(STATION_DIRECTION)
+    clean = Bench()
+    design.build(clean)
+    problems = clean.check()
+    if problems:
+        raise Premise(f'la stazione {STATION_DIRECTION} senza difetti non passa il controllo: {problems[0]}')
+    b = Bench()
+    design.build(b)
+    if extra:
+        extra(b)
+    return b
+
+
+def ground_pocket(b):
+    # colonne 20-23 della tela del fronte (la meta' laterale), righe 10-15: l'ultima riga e' quella del suolo (y 0)
+    b.cut('front', (20, 10, 24, 16), 2)
+
+
+@case('11. tasca della stazione aperta verso terra')
+def station_ground_pocket():
+    hits = [p for p in station_bench(ground_pocket).check() if 'tasca di front aperta verso bottom' in p]
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('12. tasche della stazione unite fra due facce')
+def station_joined_pockets():
+    def joined(b):
+        # sul piano, colonne 4-7 e righe 13-14 (z 2 e 1), profonda 1 (y 15); sul fronte, le stesse colonne e la riga 1
+        # (y 14), profonda 2 (z 0 e 1): le due tasche si toccano in z 1, e nessuna arriva al piano dell'altra faccia
+        b.cut('top', (4, 13, 8, 15), 1)
+        b.cut('front', (4, 1, 8, 2), 2)
+    problems = station_bench(joined).check()
+    opened = [p for p in problems if 'aperta' in p]
+    if opened:
+        raise Premise(f'il difetto iniettato apre anche una tasca: {opened[0]}')
+    hits = [p for p in problems if 'unite' in p and 'front' in p and 'top' in p]
+    return bool(hits), hits[0] if hits else 'nessuna segnalazione'
+
+
+@case('13. station.py si ferma su una stazione che non passa i controlli')
+def station_stops():
+    import contextlib
+    import io
+    import tempfile
+    import types
+    import station
+    real = station.load(STATION_DIRECTION)
+
+    def broken_build(b):
+        real.build(b)
+        ground_pocket(b)
+
+    broken = types.SimpleNamespace(build=broken_build, icon=real.icon)
+    saved_load, saved_argv = station.load, sys.argv
+    with tempfile.TemporaryDirectory() as out:
+        station.load = lambda name: broken
+        sys.argv = ['station.py', '--direction', STATION_DIRECTION, '--out', out]
+        try:
+            with contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+                station.main()
+        except SystemExit as e:
+            code = e.code
+        else:
+            code = 0
+        finally:
+            station.load, sys.argv = saved_load, saved_argv
+        written = [os.path.join(d, f) for d, _, fs in os.walk(out) for f in fs]
+    if code != 1:
+        return False, f'station.py e\' uscito con {code} invece di 1'
+    if written:
+        return False, f'station.py ha scritto {written} nonostante il difetto'
     return True, 'uscita 1, nessun file scritto'
 
 

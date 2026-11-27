@@ -9,9 +9,10 @@ Uso, dalla radice del repository:
         (station_top, station_side, station_front_main, station_front_side, station_back_main,
         station_back_side, station_bottom) e <dir>/textures/item/station.png
 
-`--out` e' obbligatorio: finche' il proprietario non sceglie, la grafica del mod resta quella dei segnaposto.
-L'integrazione sara' `--out src/main/resources/assets/redstone_exoframes` con la direzione scelta (il blockstate e il
-modello dell'oggetto di oggi restano validi: stessi nomi dei modelli, oggetto `item/station`).
+`--out` e' obbligatorio. La stazione del mod e' la direzione scelta dal proprietario il 27 novembre 2026, A
+(`officina`): `--direction officina --out src/main/resources/assets/redstone_exoframes` la rigenera, e
+tools/check_art.sh la rigenera in una cartella temporanea e la confronta con i file committati. Il blockstate e il
+modello dell'oggetto, scritti a mano, usano gli stessi nomi dei modelli e l'icona `item/station`.
 
 Stesso input, stessi byte: nessuna data, nessun numero casuale fuori da paint.HashRng con semi dai nomi, solo interi,
 JSON con chiavi in ordine fisso (exo.dumps_json), PNG senza metadati (exo.write_png: IHDR, IDAT, IEND, zlib 9).

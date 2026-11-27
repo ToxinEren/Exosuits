@@ -1,16 +1,17 @@
 # tools
 
-Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio (`tools/art/build.py`) in
-`tools/art/README.md`; per il client senza schermo (`tools/client/client_shot.sh`, le sequenze `m3a_shots.sh`,
-`m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`, `m3c2_shots.sh`, `m3d_shots.sh`, `m4a1_shots.sh`, `m4c_shots.sh` e
-lo strumento di misura degli scatti, `arm_measure.sh`) in `tools/client/README.md`.
+Strumenti del repository, da lanciare dalla radice. Istruzioni per la grafica del telaio (`tools/art/build.py`) e
+della stazione di manutenzione (`tools/art/station.py`) in `tools/art/README.md`; per il client senza schermo
+(`tools/client/client_shot.sh`, le sequenze `m3a_shots.sh`, `m3b_shots.sh`, `m3c_shots.sh`, `m3c_rules_shots.sh`,
+`m3c2_shots.sh`, `m3d_shots.sh`, `m4a1_shots.sh`, `m4c_shots.sh` e lo strumento di misura degli scatti,
+`arm_measure.sh`) in `tools/client/README.md`.
 
 | Strumento | Che cosa fa |
 |---|---|
 | `bash tools/check_sources.sh` | regole sui sorgenti (separazione di `core/`, direttive di Stonecutter, codice client): `OK sources` |
 | `bash tools/check_jars.sh` | controlli sui quattro jar in `build/libs/all` (metadati, mixin, risorse, dati della sola versione del jar, privacy): `OK jars`; serve Python 3.11 o più recente |
 | `python3 tools/check_jar_privacy.py <jar>...` | il controllo di privacy sui jar, chiamato da `check_jars.sh`: percorsi locali di un computer, e-mail, `Built-By` nel manifest, metadati di immagini e suoni, autore nelle strutture, e le parole di `EXOFRAMES_PRIVATE_WORDS` |
-| `bash tools/check_art.sh` | prove negative del generatore della grafica, poi rigenera la grafica del telaio e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
+| `bash tools/check_art.sh` | prove negative dei generatori della grafica, poi rigenera la grafica del telaio, quella della stazione di manutenzione (`tools/art/station.py`, direzione `officina`) e le texture placeholder in una cartella temporanea e le confronta con quelle committate: `OK art` |
 | `bash tools/check_data.sh` | prove negative del generatore dei dati, poi rigenera ricette, sblocchi, bottino e tag in una cartella temporanea e li confronta con quelli committati; i due alberi per versione contengono solo i file generati: `OK data` |
 | `bash tools/run_gametests.sh [variante...]` | test in gioco sulle varianti (di default tutte e quattro); conta le righe `add(tests,` di tutti i file di `gametest/`; una variante passa se tutti i test elencati sono passati e il log non ha avvisi del mod fuori elenco, ciascuno il numero di volte che l'elenco ammette per il suo loader; prima di ogni variante toglie `versions/<variante>/run-gametest/config/redstone_exoframes.json`, che la mod riscrive con i predefiniti all'avvio (i test contano sui predefiniti) |
 | `python3 -I tools/check_log.py gametest\|client --variant <variante> <log>...` | avvisi ed errori del mod in un log, confrontati con `tools/log_allowlist.txt` con i conteggi del loader della variante (lo chiamano `run_gametests.sh` e `client/client_shot.sh`) |
@@ -38,7 +39,7 @@ avviso spostato su un altro loader) fa fallire il controllo come uno in più, in
 
 Disegni originali e procedurali, solo libreria standard di Python 3; due esecuzioni danno file identici byte per
 byte. Tranne i due layer armatura trasparenti, sono segnaposto, da sostituire con la grafica definitiva. Scrive
-ventiquattro file:
+diciannove file:
 
 - `src/main/resources/icon.png` (64x64): l'icona del mod;
 - `src/main/resources/assets/redstone_exoframes/textures/item/` (16x16):
@@ -48,14 +49,9 @@ ventiquattro file:
   - `exoframe_helmet.png`, `exoframe_torso.png`, `exoframe_legs.png`, `exoframe_boots.png`: i segnaposto che
     stanno negli slot armatura di chi indossa il telaio (`exoframe_torso.png` è anche la texture dell'oggetto di
     prova `suit_model`);
-  - `station.png`: l'oggetto della stazione di manutenzione, un'icona piatta (un banco con sopra un telaio piccolo);
 - `src/main/resources/assets/redstone_exoframes/textures/block/` (16x16, del tutto opache: i blocchi sono cubi pieni):
   `charger_top.png`, `charger_side.png` e i tre fronti del caricatore, `charger_front.png` (alloggiamento vuoto),
-  `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese); della
-  stazione di manutenzione, sulla stessa piastra, `station_top.png` (un piano di lavoro con due guide di rame),
-  `station_side.png` (una fascia di rame e tre feritoie) e i fronti delle due metà, `station_front_main.png` (un
-  pannello con una spia di redstone e un cassetto) e `station_front_side.png` (un pannello con una griglia di metallo
-  e un cassetto), segnaposto fino alla grafica della parte 4d;
+  `charger_front_cell.png` (con la cella) e `charger_front_lit.png` (con la cella e le tacche rosse accese);
 - `src/main/resources/assets/redstone_exoframes/textures/gui/hud_vignette.png` (144x80): i quattro angoli della
   vignetta del casco dell'HUD, di 72x40 ciascuno e ciascuno al suo posto (alto a sinistra, alto a destra, basso a
   sinistra, basso a destra: l'HUD li disegna senza specchiarli), traslucidi, scuri dal pixel d'angolo dello schermo
@@ -66,12 +62,15 @@ ventiquattro file:
   disegni nulla sopra la tuta. Questi due non sono segnaposto: restano così.
 
 La grafica del telaio sul giocatore e a terra (`textures/entity/exoframe.png` e `exoframe_glowmask.png`) non viene da
-qui ma da `tools/art/build.py`.
+qui ma da `tools/art/build.py`. Nemmeno quella della stazione di manutenzione: dalla parte 4d i modelli delle due
+metà, le loro texture e l'icona dell'oggetto (`models/block/station_*.json`, `textures/block/station_*.png`,
+`textures/item/station.png`) li scrive `tools/art/station.py` nella direzione scelta dal proprietario, A, "Officina"
+(istruzioni in `tools/art/README.md`, "Stazione di manutenzione"); fino alla parte 4c erano segnaposto di qui.
 
     python3 -I tools/gen_placeholders.py               riscrive i file nei sorgenti
     python3 -I tools/gen_placeholders.py --out <dir>   scrive gli stessi file sotto <dir> (percorsi relativi a src/main)
 
-`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i ventiquattro file con quelli committati, pixel per
+`tools/check_art.sh` (anche nella CI) usa `--out` e confronta i diciannove file con quelli committati, pixel per
 pixel.
 
 ## Dati per versione: `gen_data.py`

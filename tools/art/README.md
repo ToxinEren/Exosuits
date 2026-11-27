@@ -84,11 +84,15 @@ inietta un difetto alla volta in una copia del modello costruita in memoria e pr
 8. faccia fine diversa dalla sua versione a densita' normale;
 9. un osso di primo livello con i pezzi di due slot (regola: un solo slot per osso di primo livello, su cui si
    regge il controllo delle facce complanari);
-10. `build.py` si ferma su un modello che non passa i controlli: esce con 1 senza scrivere nessun file.
+10. `build.py` si ferma su un modello che non passa i controlli: esce con 1 senza scrivere nessun file;
+11. stazione di manutenzione (`bench.Bench.check`, sulla direzione del mod, `officina`, sotto): una tasca del fronte
+    aperta verso terra;
+12. una tasca del fronte unita a una tasca del piano, senza aprirsi verso il piano;
+13. `station.py` si ferma su una stazione che non passa i controlli: esce con 1 senza scrivere nessun file.
 
-Le prove 1a, 1b e 1c verificano prima la loro premessa sul disegno del mod (che cosa copre la parte iniettata) e
-falliscono dicendolo se il disegno cambia; 1a e 1b contano solo la segnalazione sulla faccia di cui hanno verificato
-la premessa (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova
+Le prove 1a, 1b, 1c, 11 e 12 verificano prima la loro premessa sul disegno del mod (che cosa copre la parte
+iniettata; per la stazione, che senza il difetto passi il controllo) e falliscono dicendolo se il disegno cambia; 1a e
+1b contano solo la segnalazione sulla faccia di cui hanno verificato la premessa (nord). Esce con 1 se un difetto passa, se una premessa non vale piu' o se non c'e' nessuna prova
 registrata. Un controllo nuovo va aggiunto anche li'.
 
 `ExoframeGeometryTest` (JUnit) legge il file generato e controlla nomi e perni delle ossa (quelli dei
@@ -328,21 +332,26 @@ sopra e sotto comprese, facce specchiate (`uv_size` negativo) specchiate. La tex
 
 Genera la grafica del blocco stazione (design M4, §5.1) in una delle direzioni proposte al proprietario: i modelli di
 blocco del gioco base delle due meta', le loro texture 16x16 (16 texel per lato di blocco) e l'icona piatta 16x16
-dell'oggetto. Finche' il proprietario non sceglie, nel mod restano i segnaposto di `tools/gen_placeholders.py`: il
-generatore scrive solo dove gli si dice.
+dell'oggetto. Il 27 novembre 2026 il proprietario ha scelto la direzione A, `officina`: i file della stazione nel mod
+sono i suoi, e `check_art.sh` la rigenera in una cartella temporanea e la confronta con quelli committati (JSON byte
+per byte, PNG con `compare_png.py`); ogni modello o texture della stazione nel mod dev'essere uno di quelli che
+scrive. Le altre due direzioni restano nel generatore, per le anteprime.
 
     python3 tools/art/station.py --list        le direzioni: nome, lettera, titolo, idea
+    python3 tools/art/station.py --direction officina --out src/main/resources/assets/redstone_exoframes
+                                               rigenera la stazione del mod
     python3 tools/art/station.py --direction <officina|rame|pistoni> --out <dir>
                                                scrive <dir>/models/block/station_main.json e station_side.json,
                                                <dir>/textures/block/station_top, station_side, station_front_main,
                                                station_front_side, station_back_main, station_back_side,
                                                station_bottom (.png) e <dir>/textures/item/station.png
 
-`--out` e' obbligatorio. L'integrazione (parte 4d, dopo la risposta) sara'
-`--out src/main/resources/assets/redstone_exoframes` con la direzione scelta: il blockstate `station.json` e il
-modello dell'oggetto `item/station.json` di oggi restano validi (stessi nomi). Restano da fare allora: togliere la
-stazione da `tools/gen_placeholders.py` (che oggi scrive `station_top`, `station_side`, `station_front_*` e
-`item/station.png`, e che `check_art.sh` confronta), mettere il nuovo generatore in `check_art.sh`.
+`--out` e' obbligatorio. Il blockstate `station.json` e il modello dell'oggetto `item/station.json` sono scritti a
+mano e restano quelli della parte 4a-1 (stessi nomi dei modelli; l'oggetto e' l'icona piatta `item/station`): il
+blockstate gira i due modelli di `y` 90, 180 e 270 per i fronti a est, a sud e a ovest, come la fornace del gioco
+base, e il generatore li disegna con il fronte a nord e la laterale a ovest della principale, cioe' alla destra di
+chi guarda il fronte, dove la posa `StationBlock` (`FACING.getCounterClockWise()`). Dalla parte 4d
+`tools/gen_placeholders.py` non scrive piu' nulla della stazione.
 
 Stesse regole del generatore della tuta: stesso input, stessi byte (semi dai nomi, `paint.HashRng`, solo interi),
 JSON con `exo.dumps_json`, PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 9), numpy di `requirements.txt`.
@@ -361,8 +370,8 @@ JSON con `exo.dumps_json`, PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 
   esterna (terra, piano, un altro lato) o tocca una tasca di un'altra faccia: il blocco e' un cubo pieno che nasconde
   le facce dei vicini, e una tasca aperta cosi' lascerebbe vedere attraverso il mondo. Provato a mano (27 novembre
   2026) con tre difetti iniettati in memoria (una tasca del fronte fino a terra, una fino al piano, una che tocca una
-  tasca del piano: segnalate; una tasca chiusa: nessuna segnalazione); la prova negativa in `selftest.py`, che questo
-  file chiede per ogni controllo nuovo, si aggiunge con l'integrazione, quando `station.py` entra in `check_art.sh`.
+  tasca del piano: segnalate; una tasca chiusa: nessuna segnalazione); dalla parte 4d le prove negative sono in
+  `selftest.py` (11, 12 e 13, sopra), eseguito da `check_art.sh`.
 - `pixel.py`: tele a palette (un materiale e un gradino della sua scala per texel: luci e ombre a gradini, senza
   sfumature), rumore, spazzolatura, rivetti, e `relief`, che illumina e ombreggia i bordi delle tasche dalla mappa
   delle profondita' (luce dall'alto a sinistra).
@@ -374,14 +383,27 @@ JSON con `exo.dumps_json`, PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 
 rientrata, nel blocco accanto nella direzione della faccia (`ModelBlockRenderer.calculateShape`, bit 0, e
 `renderModelFaceFlat`, letti con javap su 1.20.1 e 1.21.1). Le pareti delle tasche rivolte verso terra o verso
 l'altra meta' prendono la luce di un blocco opaco: nere con la luce liscia spenta, come nelle anteprime. Con la luce
-liscia accesa (il predefinito) dovrebbero restare piu' scure delle altre ma sfumate: e' una deduzione, non letta nel
-bytecode ne' vista nel client.
+liscia accesa (il predefinito, `options.ao`), visto nel client vero il 27 novembre 2026 (parte 4d): le pareti rivolte
+verso l'altra meta' sono sfumate e piu' chiare che nelle anteprime (il fianco sinistro del cassetto in alto va da
+(23,25,27) in alto a (19,20,22) piu' in basso, accanto al fronte del cassetto, (67,72,78); l'anteprima lo da' a
+(6,6,7)); quelle rivolte verso terra sono nere, (1,1,1), piu' scure della regola delle anteprime, ma si vedono solo
+da sotto il piano della stazione, e nessuna anteprima le mostra. La luce liscia scurisce anche la parte bassa delle
+facce vicino a terra, come per ogni blocco del gioco base.
+
+**Crepe di un pixel.** Le facce scoperte, unite in rettangoli, si incontrano anche con vertici a T (l'angolo di un
+rettangolo a meta' del lato di un altro): lungo quei lati il disegno puo' lasciare scoperto un pixel, e li' si vede
+cio' che sta dietro la superficie del blocco, cioe' nulla (le facce dei blocchi vicini sono nascoste dal cubo pieno):
+un pixel del colore del cielo. Nel client vero (parte 4d, 27 novembre 2026, 960x540) sono comparsi due pixel cosi' in
+uno degli otto scatti della stazione di ogni variante, sempre gli stessi, e due in quattordici altre viste su
+1.21.1-neoforge, tutti su spigoli rientranti delle tasche (dove una parete incontra il fondo o la faccia esterna).
+Non manca nessuna faccia: le facce dei due modelli coprono esattamente quelle scoperte dei voxel, una volta sola.
 
 **Anteprime** (solo locali, non nella CI; Playwright come sopra):
 
     cd tools/art/preview && node station.js    tutte le direzioni in docs/superpowers/specs/anteprime/2026-11-27-m4d/
     node station.js --directions rame --out <dir>
-    node station.js --check 1 --vanilla <dir>  controllo del visore sulla stazione segnaposto di oggi (sotto)
+    node station.js --check 1 [--vanilla <dir>]
+                                               controllo del visore sulla stazione del mod (sotto)
 
 `station.js` esegue `station.py` per ogni direzione in `out/stazione/gen/<nome>` e disegna con `scene.html` da quei
 file e dal blockstate del mod: la principale con facing=north e la laterale a ovest, alla destra di chi guarda il
@@ -394,14 +416,21 @@ senza antialiasing. Opzioni nuove di `scene.html` (le viste di `shot.js` non cam
 `vanilla`, `dy` dei modelli, `antialias`, `background`, `floor.color`. Scrive `<L>-<nome>-mondo.png`,
 `<L>-<nome>-texture.png` e `confronto.png`, e si ferma se una PNG ha blocchi oltre a IHDR, IDAT, IEND.
 
-Il controllo `--check` disegna la stazione segnaposto di oggi (modelli del mod con il genitore `orientable` del gioco
-base, i cui JSON `orientable`, `orientable_with_bottom`, `cube` e `block` si estraggono a parte dal jar del client
-in `<dir>/assets/minecraft/models/block/`, fuori dal repository) in `out/stazione/controllo.png`; confrontata con
-`docs/test-in-gioco/m4a1-screenshot/1.20.1-forge-stazione-posata.png` (27 novembre 2026): la spia rossa a sinistra
-sul fronte della principale, la griglia sulla laterale a destra, le guide del piano da sinistra a destra, i bordi
-chiari del piano davanti e a destra e quelli del fronte in alto e a sinistra, come nel gioco. Quello scatto mostra
-solo il fronte e il piano di un cubo con le UV predefinite; il resto delle regole che `bench.py` e `blockmodel.js`
-seguono e' letto con javap, uguale su 1.20.1 e 1.21.1: l'ordine dei vertici di `FaceInfo` nelle sei direzioni,
+Il controllo `--check` disegna la stazione dai file del mod in `out/stazione/controllo.png`, da confrontare con
+`docs/test-in-gioco/m4a1-screenshot/*-stazione-posata.png`. Il 27 novembre 2026, prima dell'integrazione, i file del
+mod erano quelli segnaposto (modelli con il genitore `orientable` del gioco base, i cui JSON `orientable`,
+`orientable_with_bottom`, `cube` e `block` si estraggono a parte dal jar del client in
+`<dir>/assets/minecraft/models/block/`, fuori dal repository: e' a questo che serve `--vanilla`); il disegno,
+confrontato con lo scatto `1.20.1-forge-stazione-posata.png` di allora, mostrava come nel gioco la spia rossa a
+sinistra sul fronte della principale, la griglia sulla laterale a destra, le guide del piano da sinistra a destra, i
+bordi chiari del piano davanti e a destra e quelli del fronte in alto e a sinistra. Quello scatto mostrava solo il
+fronte e il piano di un cubo con le UV predefinite; il resto delle regole che `bench.py` e `blockmodel.js` seguono e'
+letto con javap, uguale su 1.20.1 e 1.21.1: l'ordine dei vertici di `FaceInfo` nelle sei direzioni,
 `BlockFaceUV.getU/getV` con l'indice spostato dalla rotazione, le UV predefinite di `BlockElement.uvsByFace` e il
 verso della rotazione del blockstate (`BlockModelRotation`: `rotateYXZ(-y, -x, 0)`, quindi y 90 porta il nord a
-est). Il client vero non ha ancora disegnato gli elementi piatti a una faccia ne' le facce con `rotation` 90.
+est). Dalla parte 4d i modelli del mod sono quelli della direzione A, senza genitore (`--vanilla` non serve piu'), e
+il client vero li ha disegnati sulle quattro varianti (27 novembre 2026): stesse facce e stesso orientamento delle
+anteprime, gli elementi piatti a una faccia al loro posto, e delle facce con `rotation` 90 (i bordi in alto e in
+basso delle tasche degli estremi) quella in basso, vista dall'alto, porta i texel della riga dello zoccolo lungo il
+bordo, rivetti compresi, come nelle anteprime (quella in alto e' rivolta verso terra, quindi nera); gli scatti
+`*-stazione-posata.png` sono rifatti con questa grafica.

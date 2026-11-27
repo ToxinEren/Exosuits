@@ -4,10 +4,11 @@
 //   node station.js                              tutte le direzioni, nella cartella delle anteprime del design M4
 //   node station.js --directions officina,rame   solo alcune
 //   node station.js --out <dir>                  le immagini finite in <dir>
-//   node station.js --check 1 --vanilla <dir>    controllo del visore: la stazione segnaposto di oggi (blockstate,
-//                                                modelli e texture del mod; i genitori orientable, cube e block del
-//                                                gioco base da <dir>/assets/minecraft/models, estratti dal jar del
-//                                                client, fuori dal repository) in out/stazione/controllo.png, da
+//   node station.js --check 1 [--vanilla <dir>]  controllo del visore: la stazione del mod (blockstate, modelli e
+//                                                texture del mod; dalla parte 4d la direzione A, senza genitori; i
+//                                                segnaposto di prima volevano i genitori orientable, cube e block
+//                                                del gioco base da <dir>/assets/minecraft/models, estratti dal jar
+//                                                del client, fuori dal repository) in out/stazione/controllo.png, da
 //                                                confrontare con docs/test-in-gioco/m4a1-screenshot/*-stazione-posata.png
 //
 // Per ogni direzione `python3 tools/art/station.py --direction <nome> --out out/stazione/gen/<nome>` scrive i file
@@ -197,7 +198,7 @@ async function shoot(browser, url, file, size, element) {
   const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
   fs.mkdirSync(path.join(WORK, 'render'), { recursive: true });
   if (args.check) {
-    // la stazione segnaposto di oggi, dai file del mod, per confrontarla con uno scatto del client vero
+    // la stazione del mod, dai suoi file, per confrontarla con uno scatto del client vero
     const cfg = viewCfg('-', 'davanti-vicino');
     Object.assign(cfg, { assets: 'model', vanilla: 'vanilla/assets/minecraft', dir: [-0.05, 0.75, -1] });
     await shoot(browser, `${base}/preview/scene.html?cfg=${encodeURIComponent(JSON.stringify(cfg))}`,

@@ -20,9 +20,11 @@
 #   3. posa         con la stazione in mano e il mirino sul pavimento davanti (inclinazione 55) un clic destro la posa
 #                   con l'oggetto: "execute if block" vuole la principale in 0 -60 1 e la laterale in -1 -60 1, con
 #                   il fronte a nord; la mano torna vuota, e dopo un secondo, quando l'oggetto che scende non copre piu'
-#                   la laterale, scatto stazione-posata, da guardare: le due meta' affiancate e scoperte, con le
-#                   texture segnaposto e i fronti verso il giocatore (l'estremo ovest della laterale esce dal bordo
-#                   destro dello scatto), nessun blocco viola e nero (un modello o una texture mancante)
+#                   la laterale, scatto stazione-posata, da guardare: le due meta' affiancate e scoperte, con la
+#                   grafica della parte 4d (direzione A, Officina: a sinistra lo schermo di redstone, le manopole e
+#                   la leva della principale, a destra i due cassetti della laterale) e i fronti verso il giocatore
+#                   (l'estremo ovest della laterale esce dal bordo destro dello scatto), nessun blocco viola e nero
+#                   (un modello o una texture mancante)
 #   4. senza telaio con l'inclinazione 60 il mirino sta sul fianco nord della principale: un clic destro, senza telai
 #                   a portata, non apre nulla; scatto nessun-telaio mezzo secondo dopo, da guardare: nessuna
 #                   schermata e, sulla barra delle azioni, "No exoframe nearby: place one on the station or within 2
