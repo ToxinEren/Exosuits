@@ -292,8 +292,8 @@ public final class ChargerGameTests {
      * Ogni oggetto, blocco e tipo di entita' della mod ha il suo nome nei due file di lingua, letti dal jar; e cosi' le
      * chiavi dei testi che il codice tiene in costanti: quelle del caricatore ({@link #CHARGER_TEXT_KEYS}), quelle
      * dell'oggetto telaio ({@link ExoframeItem#TEXT_KEYS}: il suggerimento e il messaggio dell'oggetto che non si
-     * posa), quelle della stazione ({@link StationTexts#KEYS}, le righe del suggerimento del suo oggetto, i messaggi del
-     * blocco e del menu) e il titolo della sua schermata. Una costante scritta diversa dalla chiave del file
+     * posa), quelle della stazione ({@link StationTexts#KEYS}, le righe del suggerimento del suo oggetto, i messaggi
+     * del blocco e del menu) e il titolo della sua schermata. Una costante scritta diversa dalla chiave del file
      * mostrerebbe in gioco la chiave nuda, e nessun altro test lo vedrebbe.
      */
     private static void everyItemAndBlockHasANameInBothLanguages(GameTestHelper helper) {

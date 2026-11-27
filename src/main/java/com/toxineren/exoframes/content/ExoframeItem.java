@@ -71,8 +71,8 @@ public final class ExoframeItem extends CompatItem {
     /**
      * L'oggetto telaio che torna a chi raccoglie a mano un telaio vuoto, fatto con lo stato del telaio letto prima di
      * toglierlo dal registro (design M4 §5.11). L'oggetto porta lo sblocco e il rinforzo del telaio, e il proprietario
-     * solo se il telaio ne ha uno e a raccoglierlo e' un altro giocatore: un telaio sbloccato, prestato e raccolto da un
-     * altro, resta cosi' del suo proprietario anche quando lo si posa di nuovo, mentre un telaio raccolto dal suo
+     * solo se il telaio ne ha uno e a raccoglierlo e' un altro giocatore: un telaio sbloccato, prestato e raccolto da
+     * un altro, resta cosi' del suo proprietario anche quando lo si posa di nuovo, mentre un telaio raccolto dal suo
      * proprietario e' libero, e chi lo posa ne diventa il proprietario. Quando non c'e' nulla da portare (nessun
      * proprietario da conservare, ne' sbloccato ne' rinforzato) l'oggetto resta senza dati, uguale a uno fabbricato.
      * Pezzi e cella non ci sono mai: si raccoglie solo un telaio vuoto.
