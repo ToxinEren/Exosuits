@@ -275,8 +275,8 @@ public final class StationMenu extends AbstractContainerMenu {
 
     /**
      * Un pulsante della schermata. Sul server lo esegue {@link StationActions#press}, nell'ordine dei controlli di
-     * design §5.6, e da' vero se la scelta e' cambiata o il telaio e' cambiato (il gioco base manda allora al client
-     * cio' che e' cambiato, il cursore compreso); ogni altro esito da' falso. Sul client, dove la schermata lo chiama
+     * design §5.6, e da' vero per ogni scelta (anche se la scelta e' gia' quella) e per un telaio cambiato (il gioco
+     * base manda allora al client il cursore); ogni altro esito da' falso. Sul client, dove la schermata lo chiama
      * prima di mandare il numero, come i menu del gioco base: vero per ogni numero della tabella
      * ({@link StationAction}), e per le tre scelte prima la predizione ({@link #select}).
      */

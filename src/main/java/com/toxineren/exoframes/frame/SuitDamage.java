@@ -33,8 +33,9 @@ import net.minecraft.world.entity.player.Player;
  * <p>
  * <b>Guardie</b>, nell'ordine: un {@code ServerPlayer}; un importo maggiore di zero (cosi' anche {@code NaN} esce;
  * dopo uno scudo che para tutto Fabric e NeoForge chiamano l'aggancio con zero); non in creativa
- * ({@code getAbilities().instabuild}, mai {@code isCreative()}: i giocatori finti dei test rispondono sempre vero) ne'
- * spettatore; un telaio indossato. Il registro in sola lettura si riconosce da {@code mutate} che restituisce falso.
+ * ({@code getAbilities().instabuild}, mai {@code isCreative()}: i giocatori finti di {@code mockServerPlayer}
+ * rispondono sempre vero) ne' spettatore; un telaio indossato. Il registro in sola lettura si riconosce da
+ * {@code mutate} che restituisce falso.
  * <p>
  * <b>L'usura.</b> Il tipo di danno da {@code Compat.damage().classify}, l'importo in millesimi di punto, la
  * ripartizione con {@link DamageRouter#routeMilli} dell'unico ripartitore ({@link RedstoneExoframes#damageRouter()})

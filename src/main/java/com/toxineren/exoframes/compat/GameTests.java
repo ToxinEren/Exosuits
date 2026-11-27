@@ -68,8 +68,8 @@ public interface GameTests {
     ServerPlayer survivalPlayer(GameTestHelper helper);
 
     /**
-     * I messaggi di sistema (chat e barra delle azioni) arrivati al giocatore finto di {@link #mockServerPlayer}, in
-     * ordine, dalla sua creazione; vuota per un altro giocatore. Esiste solo per i test.
+     * I messaggi di sistema (chat e barra delle azioni) arrivati a un giocatore finto di {@link #mockServerPlayer} o di
+     * {@link #operatorPlayer}, in ordine, dalla sua creazione; vuota per un altro giocatore. Esiste solo per i test.
      */
     List<Component> messagesTo(ServerPlayer player);
 

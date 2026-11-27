@@ -123,8 +123,8 @@ public record StationView(Map<PieceSlot, PieceInfo> pieces, Optional<CellInfo> c
     }
 
     /**
-     * La stessa vista con un'altra scelta: la predizione del client quando sceglie (design §5.6), o il server che rifa'
-     * la vista dopo una scelta. Questa vista non cambia.
+     * La stessa vista con un'altra scelta: la predizione del client quando sceglie (design §5.6; la chiama
+     * {@code StationMenu.select}). Questa vista non cambia.
      *
      * @throws IllegalArgumentException se la scelta non sta fra 0 e {@link #SELECT_ALL}
      */

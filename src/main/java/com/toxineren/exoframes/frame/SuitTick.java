@@ -50,8 +50,8 @@ import net.minecraft.world.phys.Vec3;
  * finestra dell'attivita' e il limite delle sincronizzazioni.
  * <p>
  * <b>Creativa e spettatore.</b> Con {@code getAbilities().instabuild} o {@code isSpectator()} non si consuma nulla,
- * ne' attivita' ne' salti; il record resta. Mai {@code isCreative()}: i giocatori finti dei test rispondono sempre
- * vero.
+ * ne' attivita' ne' salti; il record resta. Mai {@code isCreative()}: i giocatori finti di {@code mockServerPlayer}
+ * rispondono sempre vero.
  * <p>
  * <b>Salti.</b> Dalla statistica vanilla dei salti, che il server incrementa a ogni stacco da terra ricevuto dal
  * client: si paga al piu' un salto per tick, e la base si rilegge a ogni tick, pagato o no, quindi un salto non pagato

@@ -69,12 +69,11 @@ import net.minecraft.world.phys.Vec3;
  * vero sulla stazione ({@code clickBlock}) si usa solo dove non apre nulla. I pulsanti passano dal gestore del
  * pacchetto del gioco base ({@code pressButton}), con i suoi controlli; che cosa fa ogni pulsante lo provano i test di
  * {@link StationActionGameTests}, qui solo i pacchetti che il gioco base scarta. Le posizioni sono relative alla
- * struttura del
- * test: la stazione, posata con le due meta' da {@code placeStation} e rivolta a nord, ha la principale in
- * {@link #MAIN} e la laterale in (2, 1, 3), quindi l'impronta x [2, 4], z [3, 4] con la base a y 1; il giocatore A sta
- * due blocchi a sud ({@link #STAND}), il secondo giocatore, B, dove serve, accanto ({@link #OTHER_STAND}). Ogni test
- * chiude i menu e toglie telai, record e le due meta' della stazione, anche se fallisce. Gli aiuti comuni stanno in
- * {@link GameTestKit}.
+ * struttura del test: la stazione, posata con le due meta' da {@code placeStation} e rivolta a nord, ha la principale
+ * in {@link #MAIN} e la laterale in (2, 1, 3), quindi l'impronta x [2, 4], z [3, 4] con la base a y 1; il giocatore A
+ * sta due blocchi a sud ({@link #STAND}), il secondo giocatore, B, dove serve, accanto ({@link #OTHER_STAND}). Ogni
+ * test chiude i menu e toglie telai, record e le due meta' della stazione, anche se fallisce. Gli aiuti comuni stanno
+ * in {@link GameTestKit}.
  */
 public final class StationMenuGameTests {
     /** Dove sta la meta' principale della stazione dei test, relativa alla struttura. */
