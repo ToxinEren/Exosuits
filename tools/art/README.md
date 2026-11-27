@@ -399,6 +399,10 @@ nulla (le facce dei vicini sono nascoste dal cubo pieno), quindi si vedrebbe il 
 prima sugli spigoli delle tasche. `_conform` taglia i rettangoli lungo la perpendicolare per ogni vertice che sta
 dentro un loro lato, finche' non ne resta nessuno (direzione A: 648 + 432 facce invece di 84 + 66, con gli stessi
 texel), e `station.py` non scrive nulla se `bench.t_junctions` ne trova uno nei modelli finiti.
+I tagli finiscono sugli spigoli esterni del blocco, quindi lungo la base restano vertici dentro il lato della faccia
+di sopra del blocco accanto, a terra (direzione A: 38, prima 2): vertici a T fra due blocchi, che il generatore non
+puo' togliere. Nel cloud nessun puntino chiaro lungo la base in 49 viste (27 novembre 2026); la checklist della
+4a-1 chiede di guardarla sul PC.
 
 **Anteprime** (solo locali, non nella CI; Playwright come sopra):
 
