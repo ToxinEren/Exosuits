@@ -148,6 +148,18 @@ class StationViewTest {
     }
 
     @Test
+    void withSelectionChangesOnlyTheSelection() {
+        StationView first = StationView.of(paintedHelmetAndTorso(), true, false, 0, true, false);
+        StationView all = first.withSelection(StationView.SELECT_ALL);
+
+        assertEquals(StationView.of(paintedHelmetAndTorso(), true, false, StationView.SELECT_ALL, true, false), all);
+        assertEquals(0, first.selection());
+        assertEquals(StationView.SELECT_ALL, all.selection());
+        assertThrows(IllegalArgumentException.class, () -> first.withSelection(8));
+        assertThrows(IllegalArgumentException.class, () -> first.withSelection(-1));
+    }
+
+    @Test
     void equalContentMakesEqualViews() {
         StationView first = StationView.of(paintedHelmetAndTorso(), true, true, 0, false, false);
         StationView second = StationView.of(paintedHelmetAndTorso(), true, true, 0, false, false);

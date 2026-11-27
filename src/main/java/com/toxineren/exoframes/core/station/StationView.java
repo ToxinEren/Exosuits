@@ -122,6 +122,17 @@ public record StationView(Map<PieceSlot, PieceInfo> pieces, Optional<CellInfo> c
                 selection, hasStowed, free);
     }
 
+    /**
+     * La stessa vista con un'altra scelta: la predizione del client quando sceglie (design §5.6), o il server che rifa'
+     * la vista dopo una scelta. Questa vista non cambia.
+     *
+     * @throws IllegalArgumentException se la scelta non sta fra 0 e {@link #SELECT_ALL}
+     */
+    public StationView withSelection(int selection) {
+        return new StationView(pieces, cell, unlocked, reinforced, canToggleLock, ownerOnly, selection, hasStowed,
+                free);
+    }
+
     /** Il numero della scelta dello slot: 0-5, nell'ordine di {@link PieceSlot} (la tabella dei pulsanti, §5.6). */
     public static int selectionOf(PieceSlot slot) {
         return Objects.requireNonNull(slot, "slot must not be null").ordinal();

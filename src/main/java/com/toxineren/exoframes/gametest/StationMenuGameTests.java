@@ -29,6 +29,7 @@ import io.netty.buffer.Unpooled;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,9 +65,11 @@ import net.minecraft.world.phys.Vec3;
  * giocatore. Il menu non si apre dalla rete del loader:
  * {@code openStation} cerca il telaio come il clic vero ({@link StationFinder#find}, che deve trovarlo), costruisce il
  * menu del server con lo stesso costruttore del clic e lo mette in {@code player.containerMenu} (perche', lo dice il
- * suo Javadoc); che il clic apra davvero la schermata lo prova il client vero, con tools/client/m4a1_shots.sh. Il clic
+ * suo Javadoc); che il clic apra davvero la schermata lo prova il client vero, con tools/client/m4a_shots.sh. Il clic
  * vero sulla stazione ({@code clickBlock}) si usa solo dove non apre nulla. I pulsanti passano dal gestore del
- * pacchetto del gioco base ({@code pressButton}), con i suoi controlli. Le posizioni sono relative alla struttura del
+ * pacchetto del gioco base ({@code pressButton}), con i suoi controlli; che cosa fa ogni pulsante lo provano i test di
+ * {@link StationActionGameTests}, qui solo i pacchetti che il gioco base scarta. Le posizioni sono relative alla
+ * struttura del
  * test: la stazione, posata con le due meta' da {@code placeStation} e rivolta a nord, ha la principale in
  * {@link #MAIN} e la laterale in (2, 1, 3), quindi l'impronta x [2, 4], z [3, 4] con la base a y 1; il giocatore A sta
  * due blocchi a sud ({@link #STAND}), il secondo giocatore, B, dove serve, accanto ({@link #OTHER_STAND}). Ogni test
@@ -89,8 +92,8 @@ public final class StationMenuGameTests {
      */
     private static final BlockPos LONE_SIDE = new BlockPos(5, 1, 1);
 
-    /** Numeri di pulsante che non sono quello di prova: nessuno cambia il contatore. */
-    private static final int[] OTHER_BUTTONS = {0, 101, 103, 127, -1};
+    /** Numeri che non sono nella tabella dei pulsanti (buchi e numeri fuori): nessuno fa nulla. */
+    private static final int[] NOT_BUTTONS = {15, 23, 103, 127, -1};
 
     /** La ricerca senza telai a portata. */
     private static final StationFinder.Result NONE_IN_REACH =
@@ -107,9 +110,9 @@ public final class StationMenuGameTests {
     @GameTestGenerator
     public static Collection<TestFunction> generate() {
         List<TestFunction> tests = new ArrayList<>();
-        add(tests, "placeholderButtonCountsOnTheServer", StationMenuGameTests::placeholderButtonCountsOnTheServer);
-        add(tests, "placeholderButtonIgnoresSpectatorsAndTheDead",
-                StationMenuGameTests::placeholderButtonIgnoresSpectatorsAndTheDead);
+        add(tests, "buttonsOfAnotherOrAClosedMenuAreDiscarded",
+                StationMenuGameTests::buttonsOfAnotherOrAClosedMenuAreDiscarded);
+        add(tests, "buttonsIgnoreSpectatorsAndTheDead", StationMenuGameTests::buttonsIgnoreSpectatorsAndTheDead);
         add(tests, "finderUsesTheFootprintAndTheHeight", StationMenuGameTests::finderUsesTheFootprintAndTheHeight);
         add(tests, "finderPicksTheNearestUsableFrame", StationMenuGameTests::finderPicksTheNearestUsableFrame);
         add(tests, "clickWithNoFrameInReachSaysSo", StationMenuGameTests::clickWithNoFrameInReachSaysSo);
@@ -132,37 +135,35 @@ public final class StationMenuGameTests {
     }
 
     /**
-     * Il pulsante di prova conta sul server: ogni pressione del numero {@link StationMenu#TEST_BUTTON} per il menu
-     * aperto fa crescere il contatore di uno; gli altri numeri, un id di menu che non e' quello aperto e, chiuso il
-     * menu, il pacchetto con l'id vecchio (il gioco base lo scarta) non lo cambiano. Sopra la stazione un telaio del
-     * giocatore: senza telaio il menu non resterebbe valido.
+     * I pulsanti di un altro menu o di un menu chiuso si scartano (design §5.18, pacchetti in ritardo): sopra la
+     * stazione il telaio del giocatore con elmo e torso; la scelta del torso con l'id di un altro menu lascia la scelta
+     * all'elmo, con l'id del menu aperto la porta al torso; i numeri fuori dalla tabella non cambiano la scelta e il
+     * record; chiuso il menu, lo smontaggio dell'elmo con l'id vecchio (il gioco base lo scarta) lascia l'elmo montato.
      */
-    private static void placeholderButtonCountsOnTheServer(GameTestHelper helper) {
+    private static void buttonsOfAnotherOrAClosedMenuAreDiscarded(GameTestHelper helper) {
         BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
         ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
         p.setGameMode(GameType.SURVIVAL);
         standFacingNorth(helper, p, STAND);
-        ExoframeEntity frame = frameOnStation(helper, ownedBy(p), MAIN);
+        ExoframeEntity frame = frameOnStation(helper, helmetAndTorso(p), MAIN);
         try {
             StationMenu menu = openStation(helper, p, MAIN);
-            pressButton(p, menu.containerId, StationMenu.TEST_BUTTON);
-            helper.assertTrue(menu.testPresses() == 1, "presses after the first test button: " + menu.testPresses());
-            for (int id : OTHER_BUTTONS) {
+            pressButton(p, menu.containerId + 1, 1);
+            helper.assertTrue(menu.selection() == 0, "the selection of another menu id changed the selection to "
+                    + menu.selection());
+            pressButton(p, menu.containerId, 1);
+            helper.assertTrue(menu.selection() == 1, "after button 1 the selection is " + menu.selection());
+            for (int id : NOT_BUTTONS) {
                 pressButton(p, menu.containerId, id);
-                helper.assertTrue(menu.testPresses() == 1, "button " + id + " changed the presses to "
-                        + menu.testPresses());
+                helper.assertTrue(menu.selection() == 1, "number " + id + " changed the selection to "
+                        + menu.selection());
+                assertHelmetAndTorso(helper, frame, "number " + id);
             }
-            pressButton(p, menu.containerId + 1, StationMenu.TEST_BUTTON);
-            helper.assertTrue(menu.testPresses() == 1, "the test button of another menu id changed the presses to "
-                    + menu.testPresses());
-            pressButton(p, menu.containerId, StationMenu.TEST_BUTTON);
-            helper.assertTrue(menu.testPresses() == 2, "presses after the second test button: " + menu.testPresses());
 
             p.closeContainer();
             helper.assertTrue(p.containerMenu == p.inventoryMenu, "the station menu is still open");
-            pressButton(p, menu.containerId, StationMenu.TEST_BUTTON);
-            helper.assertTrue(menu.testPresses() == 2, "the test button of a closed menu changed the presses to "
-                    + menu.testPresses());
+            pressButton(p, menu.containerId, 16);
+            assertHelmetAndTorso(helper, frame, "the unmount of a closed menu");
         } finally {
             cleanUp(helper, side, frame, p);
         }
@@ -170,32 +171,36 @@ public final class StationMenuGameTests {
     }
 
     /**
-     * Uno spettatore non preme il pulsante di prova (il gioco base scarta il pacchetto) e il menu non vale per lui; un
-     * giocatore morto, in sopravvivenza, non lo preme nemmeno chiamando il menu direttamente, e il menu non vale per
-     * lui. Prima, e di nuovo in sopravvivenza da vivo, il menu vale: il telaio del giocatore sta sopra la stazione.
-     * Tutto nello stesso tick: il gioco non arriva a far morire davvero il giocatore finto, che torna a salute piena.
+     * I pulsanti non valgono per uno spettatore e per un morto (design §5.6 e §5.18): sopra la stazione il telaio del
+     * giocatore con elmo e torso; da spettatore lo smontaggio dell'elmo (il gioco base scarta il pacchetto) lascia
+     * l'elmo, e il menu non vale per lui; tornato in sopravvivenza il menu vale; con la salute a zero, in
+     * sopravvivenza, lo smontaggio dell'elmo e la scelta del torso chiamati sul menu direttamente danno falso, l'elmo
+     * resta, la scelta non cambia e il menu non vale. Tutto nello stesso tick: il gioco non arriva a far morire davvero
+     * il giocatore finto, che torna a salute piena.
      */
-    private static void placeholderButtonIgnoresSpectatorsAndTheDead(GameTestHelper helper) {
+    private static void buttonsIgnoreSpectatorsAndTheDead(GameTestHelper helper) {
         BlockPos side = placeStation(helper, MAIN, Direction.NORTH);
         ServerPlayer p = Compat.gameTests().mockServerPlayer(helper);
         p.setGameMode(GameType.SURVIVAL);
         standFacingNorth(helper, p, STAND);
-        ExoframeEntity frame = frameOnStation(helper, ownedBy(p), MAIN);
+        ExoframeEntity frame = frameOnStation(helper, helmetAndTorso(p), MAIN);
         try {
             StationMenu menu = openStation(helper, p, MAIN);
             helper.assertTrue(menu.stillValid(p), "the station menu is not valid right after opening");
             p.setGameMode(GameType.SPECTATOR);
-            pressButton(p, menu.containerId, StationMenu.TEST_BUTTON);
-            helper.assertTrue(menu.testPresses() == 0, "a spectator pressed the test button: " + menu.testPresses());
+            pressButton(p, menu.containerId, 16);
+            assertHelmetAndTorso(helper, frame, "the unmount of a spectator");
             helper.assertTrue(!menu.stillValid(p), "the station menu is still valid for a spectator");
 
             p.setGameMode(GameType.SURVIVAL);
             helper.assertTrue(menu.stillValid(p), "the station menu is not valid again in survival");
             p.setHealth(0f);
             try {
-                helper.assertTrue(!menu.clickMenuButton(p, StationMenu.TEST_BUTTON),
-                        "a dead player pressed the test button");
-                helper.assertTrue(menu.testPresses() == 0, "presses after a dead player: " + menu.testPresses());
+                helper.assertTrue(!menu.clickMenuButton(p, 16), "a dead player unmounted the helmet");
+                helper.assertTrue(!menu.clickMenuButton(p, 1), "a dead player selected the torso");
+                assertHelmetAndTorso(helper, frame, "the buttons of a dead player");
+                helper.assertTrue(menu.selection() == 0, "a dead player changed the selection to "
+                        + menu.selection());
                 helper.assertTrue(!menu.stillValid(p), "the station menu is still valid for a dead player");
             } finally {
                 p.setHealth(p.getMaxHealth());
@@ -1057,6 +1062,22 @@ public final class StationMenuGameTests {
         PlacedFrame record = Compat.frameState().placed(helper.getLevel().getServer(), frame.frameId()).orElse(null);
         helper.assertTrue(record != null, "frame " + frame.frameId() + " is not placed");
         return record;
+    }
+
+    /** Uno stato del giocatore con l'elmo e il torso Rottame nuovi. */
+    private static FrameState helmetAndTorso(ServerPlayer owner) {
+        FrameState state = ownedBy(owner);
+        state.mount(scrapPiece(PieceSlot.HELMET));
+        state.mount(scrapPiece(PieceSlot.TORSO));
+        return state;
+    }
+
+    /** Il record del telaio ha ancora l'elmo e il torso, e nessuna cella. */
+    private static void assertHelmetAndTorso(GameTestHelper helper, ExoframeEntity frame, String after) {
+        FrameState state = recordState(helper, frame);
+        helper.assertTrue(state.pieces().keySet().equals(EnumSet.of(PieceSlot.HELMET, PieceSlot.TORSO))
+                && state.cell() == null, "after " + after + " the record has " + state.pieces().keySet()
+                + " and the cell " + state.cell());
     }
 
     /** Vero se lo stack e' dell'oggetto dato, con quel conto. */

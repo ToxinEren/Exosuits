@@ -107,6 +107,12 @@ final class FrameStateSavedData extends SavedData {
     private boolean structuralUnsaved;
     /** Vero dopo l'ERROR per una scrittura fallita, fino alla prossima scrittura riuscita. */
     private boolean writeFailureLogged;
+    /**
+     * Quanti rifiuti delle modifiche dei telai piazzati sono aperti ({@code GameTests.refusePlacedUpdates}, solo per i
+     * test): finche' e' sopra zero {@link FrameStateAccessImpl#updatePlaced} da' falso senza cambiare nulla e senza
+     * log. Non e' la sola lettura: {@link #readOnly()}, il salvataggio e gli ERROR del registro non lo guardano.
+     */
+    int placedUpdateRefusals;
 
     /**
      * Il dato si crea o si carica una volta per server: e' il momento in cui i risultati di lettura degli stack

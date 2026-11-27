@@ -12,9 +12,13 @@ import com.toxineren.exoframes.content.ChargerBlockEntity;
 import com.toxineren.exoframes.content.ChargerItem;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.StationBlock;
+import com.toxineren.exoframes.content.StationItem;
 import com.toxineren.exoframes.core.energy.ChargerRule.Status;
 import com.toxineren.exoframes.frame.FrameSounds;
 import com.toxineren.exoframes.frame.FrameSounds.Sound;
+import com.toxineren.exoframes.station.StationMenu;
+import com.toxineren.exoframes.station.StationTexts;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -285,8 +289,10 @@ public final class ChargerGameTests {
 
     /**
      * Ogni oggetto, blocco e tipo di entita' della mod ha il suo nome nei due file di lingua, letti dal jar; e cosi' le
-     * chiavi dei testi del caricatore che il codice tiene in costanti ({@link #CHARGER_TEXT_KEYS}): una costante
-     * scritta diversa dalla chiave del file mostrerebbe in gioco la chiave nuda, e nessun altro test lo vedrebbe.
+     * chiavi dei testi che il codice tiene in costanti: quelle del caricatore ({@link #CHARGER_TEXT_KEYS}), quelle
+     * della stazione ({@link StationTexts#KEYS}, le righe del suggerimento del suo oggetto, i messaggi del blocco e del
+     * menu) e il titolo della sua schermata. Una costante scritta diversa dalla chiave del file mostrerebbe in gioco la
+     * chiave nuda, e nessun altro test lo vedrebbe.
      */
     private static void everyItemAndBlockHasANameInBothLanguages(GameTestHelper helper) {
         List<String> items = new ArrayList<>();
@@ -317,6 +323,11 @@ public final class ChargerGameTests {
         wanted.addAll(blocks);
         wanted.addAll(entities);
         wanted.addAll(CHARGER_TEXT_KEYS);
+        wanted.addAll(StationTexts.KEYS);
+        wanted.addAll(StationItem.TOOLTIP_KEYS);
+        wanted.add(StationBlock.NO_FRAME);
+        wanted.add(StationMenu.FRAME_GONE);
+        wanted.add(StationMenu.TITLE_KEY);
         List<String> missing = new ArrayList<>();
         for (String file : LANG_FILES) {
             Map<String, String> texts = readLang(helper, file);

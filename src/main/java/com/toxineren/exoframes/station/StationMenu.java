@@ -6,8 +6,10 @@ import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModMenus;
 import com.toxineren.exoframes.core.frame.FrameState;
+import com.toxineren.exoframes.core.station.StationAction;
 import com.toxineren.exoframes.core.station.StationReach;
 import com.toxineren.exoframes.core.station.StationView;
+import com.toxineren.exoframes.core.station.TickGate;
 import com.toxineren.exoframes.frame.FramePermissions;
 import dev.architectury.registry.menu.MenuRegistry;
 import java.util.Objects;
@@ -25,7 +27,6 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerLevelAccess;
-import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
@@ -40,23 +41,21 @@ import net.minecraft.world.item.ItemStack;
  * Ha due costruttori: quello del server, con il livello della stazione, che calcola una volta l'impronta della
  * stazione; e quello del client, la fabbrica del tipo, che legge subito i dati extra e non tiene il buffer. Il gioco
  * chiama {@link #stillValid} solo sul server, a ogni tick del giocatore e prima di ogni pulsante: il menu resta aperto
- * finche' il giocatore puo' stare alla stazione e il telaio resta piazzato, a portata e usabile da lui. Il pulsante di
- * prova ({@link #TEST_BUTTON}) va al server con il pacchetto dei pulsanti del gioco base, e il numero delle pressioni
- * confermate ({@link #testPresses}) torna al client con la sincronizzazione dei dati del menu del gioco base: il cambio
- * che la schermata mostra viene dal server.
+ * finche' il giocatore puo' stare alla stazione e il telaio resta piazzato, a portata e usabile da lui.
+ * <p>
+ * I pulsanti della schermata (la tabella di design §5.6, decodificata da {@link StationAction}) vanno al server con il
+ * pacchetto dei pulsanti del gioco base, che prima controlla l'id del menu aperto, lo spettatore e {@link #stillValid};
+ * sul server li esegue {@link StationActions#press}, con al piu' un'azione che scrive per tick per menu
+ * ({@link #takeWriteTurn}). La scelta ({@link #selection}) la tiene il menu sul server e cambia solo con i pulsanti
+ * 0-7; il client la predice come i menu del gioco base ({@link #select}), e se la vista del server dice altro vince il
+ * server. Ogni altro cambio la schermata lo vede arrivare con la vista: nel menu non vive nessun oggetto, e la
+ * stazione non mette mai nulla sul cursore.
  * <p>
  * La vista del telaio per chi ha aperto il menu ({@link #view}, una {@link StationView}) arriva al client nei dati
  * extra e, quando cambia, con il pacchetto {@code station_view}: la manda {@link #broadcastChanges}, al piu' una volta
- * per tick, e sul client {@link StationNet#apply} la mette nel menu aperto con quel numero. La scelta del pezzo e'
- * quella dell'apertura: nella parte 4a-1 il pannello e' in sola lettura.
+ * per tick, e sul client {@link StationNet#apply} la mette nel menu aperto con quel numero.
  */
 public final class StationMenu extends AbstractContainerMenu {
-    /**
-     * Il pulsante di prova: il numero piu' alto della tabella di design §5.6 (dove andra' "salva" del preset 3). Su
-     * 1.20.1 il pacchetto dei pulsanti scrive il numero in un byte, quindi ogni numero sta fra 0 e 127.
-     */
-    public static final int TEST_BUTTON = 102;
-
     /** La chiave del titolo della schermata. */
     public static final String TITLE_KEY = "container." + RedstoneExoframes.MOD_ID + ".station";
 
@@ -72,9 +71,6 @@ public final class StationMenu extends AbstractContainerMenu {
     public static final int INVENTORY_Y = 150;
     /** L'ordinata dell'oggetto della barra degli oggetti (la barra sta in 207..225). */
     public static final int HOTBAR_Y = 208;
-
-    /** Il tick dell'ultimo invio della vista prima del primo: nessuno, quindi il primo puo' partire subito. */
-    private static final int NEVER = Integer.MIN_VALUE;
 
     /** Il passo degli slot nella schermata, in pixel dell'interfaccia: uno slot del gioco base con la sua cornice. */
     private static final int SLOT_PITCH = 18;
@@ -95,18 +91,21 @@ public final class StationMenu extends AbstractContainerMenu {
     private final ContainerLevelAccess access;
     /** L'impronta della stazione, calcolata una volta all'apertura sul server; null nel menu del client. */
     private final StationReach.Footprint footprint;
-    /** Le pressioni del pulsante di prova confermate dal server, che il gioco base sincronizza con il client. */
-    private final DataSlot testPresses = DataSlot.standalone();
-    /** La scelta del pezzo, quella dell'apertura: nella 4a-1 non cambia (i pulsanti 0-7 sono della 4a-2). */
-    private final int selection;
+    /**
+     * La scelta: 0-5 lo slot nell'ordine di {@code PieceSlot}, 6 la cella, 7 tutti i pezzi. All'apertura quella dei
+     * dati extra; poi cambia solo con i pulsanti 0-7 ({@link #select}).
+     */
+    private int selection;
     /** La vista del telaio che la schermata mostra: all'apertura quella dei dati extra. */
     private StationView view;
     /** L'ultima vista mandata al client: all'apertura quella dei dati extra. */
     private StationView lastSentView;
     /** Quante viste il menu ha mandato con il pacchetto {@code station_view} dall'apertura. */
     private int viewsSent;
-    /** Il tick del server dell'ultimo invio della vista; {@link #NEVER} prima del primo. */
-    private int lastSentTick = NEVER;
+    /** Al piu' un invio della vista per tick del server (design §5.13). */
+    private final TickGate viewGate = new TickGate();
+    /** Al piu' un'azione che scrive per tick del server (design §5.6): le altre dello stesso tick si ignorano. */
+    private final TickGate writeGate = new TickGate();
     /** Vero dopo la prima eccezione di {@link #stillValid}, scritta nel log una volta sola per menu. */
     private boolean checkFailureLogged;
     /** Vero dopo la prima eccezione della vista in {@link #broadcastChanges}, scritta nel log una volta per menu. */
@@ -144,7 +143,6 @@ public final class StationMenu extends AbstractContainerMenu {
         this.selection = opening.view().selection();
         this.view = opening.view();
         this.lastSentView = opening.view();
-        addDataSlot(testPresses);
         addPlayerSlots(inventory);
     }
 
@@ -241,23 +239,64 @@ public final class StationMenu extends AbstractContainerMenu {
         return viewsSent;
     }
 
-    /** Le pressioni del pulsante di prova confermate dal server (sul client, quelle ricevute dal server). */
-    public int testPresses() {
-        return testPresses.get();
+    /**
+     * La scelta del menu: sul server quella con cui si rifa' la vista; sul client l'ultima predetta (la schermata
+     * mostra quella della vista, {@link #view}).
+     */
+    public int selection() {
+        return selection;
     }
 
     /**
-     * Un pulsante della schermata, sul server: il pulsante di prova, premuto da un giocatore vivo, aumenta di uno le
-     * pressioni e da' vero (il gioco base manda allora al client cio' che e' cambiato); ogni altro numero, o un
-     * giocatore morto, da' falso senza cambiare nulla e senza scrivere nel log.
+     * Cambia la scelta: sul server la mette il pulsante 0-7 ({@link StationActions#press}), e la vista mandata dopo la
+     * porta al client; sul client e' la predizione, come i menu del gioco base, e cambia anche la vista che la
+     * schermata mostra, finche' non arriva quella del server.
+     *
+     * @throws IllegalArgumentException se la scelta non sta fra 0 e {@link StationView#SELECT_ALL}
+     */
+    public void select(int selection) {
+        if (selection < 0 || selection > StationView.SELECT_ALL) {
+            throw new IllegalArgumentException("selection must be in [0, " + StationView.SELECT_ALL + "]: "
+                    + selection);
+        }
+        this.selection = selection;
+        if (level == null) {
+            view = view.withSelection(selection);
+        }
+    }
+
+    /**
+     * Il turno di scrittura del tick dato: vero, e il turno e' preso, se in quel tick il menu non ha ancora fatto
+     * un'azione che scrive; falso altrimenti. Un contatore dei tick che torna indietro fa ripartire il limite.
+     */
+    boolean takeWriteTurn(int tick) {
+        return writeGate.tryUse(tick);
+    }
+
+    /**
+     * Un pulsante della schermata. Sul server lo esegue {@link StationActions#press}, nell'ordine dei controlli di
+     * design §5.6, e da' vero se la scelta e' cambiata o il telaio e' cambiato (il gioco base manda allora al client
+     * cio' che e' cambiato, il cursore compreso); ogni altro esito da' falso. Sul client, dove la schermata lo chiama
+     * prima di mandare il numero, come i menu del gioco base: vero per ogni numero della tabella
+     * ({@link StationAction}), e per le tre scelte prima la predizione ({@link #select}).
      */
     @Override
     public boolean clickMenuButton(Player player, int id) {
-        if (id != TEST_BUTTON || !player.isAlive()) {
+        if (level == null) {
+            Optional<StationAction> action = StationAction.decode(id);
+            if (action.isEmpty()) {
+                return false;
+            }
+            if (!action.get().writes()) {
+                select(id);
+            }
+            return true;
+        }
+        if (!(player instanceof ServerPlayer serverPlayer)) {
             return false;
         }
-        testPresses.set(testPresses.get() + 1);
-        return true;
+        StationActions.Outcome outcome = StationActions.press(this, serverPlayer, id);
+        return outcome == StationActions.Outcome.SELECTED || outcome == StationActions.Outcome.DONE;
     }
 
     /**
@@ -296,7 +335,7 @@ public final class StationMenu extends AbstractContainerMenu {
     /**
      * Il gioco lo chiama solo sul server, a ogni tick del giocatore e dopo ogni pulsante accettato. Prima il gioco base
      * manda al client cio' che e' cambiato nei dati del menu; poi, sul server, la vista del telaio (design §5.5 e
-     * §5.13): rifatta dal record per chi ha aperto il menu, con la scelta dell'apertura, va al client con il pacchetto
+     * §5.13): rifatta dal record per chi ha aperto il menu, con la scelta del menu, va al client con il pacchetto
      * {@code station_view} se e' diversa dall'ultima mandata (l'uguaglianza dei record) e se in questo tick non se n'e'
      * mandata un'altra; altrimenti aspetta il tick dopo. Cosi' ogni cambio del telaio, da qualunque parte venga (un
      * altro giocatore, un comando, un danno), arriva al client entro un tick, senza che nessuno lo annunci, e al piu'
@@ -325,10 +364,7 @@ public final class StationMenu extends AbstractContainerMenu {
     private void sendViewIfChanged() {
         MinecraftServer server = level.getServer();
         int now = server.getTickCount();
-        if (now < lastSentTick) {
-            lastSentTick = NEVER; // il contatore dei tick e' tornato indietro: il limite riparte
-        }
-        if (now == lastSentTick || !(viewer instanceof ServerPlayer player)) {
+        if (!viewGate.open(now) || !(viewer instanceof ServerPlayer player)) {
             return;
         }
         Optional<PlacedFrame> frame = Compat.frameState().placed(server, frameId);
@@ -342,7 +378,7 @@ public final class StationMenu extends AbstractContainerMenu {
         Compat.net().sendToPlayer(player, StationViewPacket.ID, new StationViewPacket(containerId, current));
         lastSentView = current;
         view = current;
-        lastSentTick = now;
+        viewGate.use(now);
         viewsSent++;
     }
 

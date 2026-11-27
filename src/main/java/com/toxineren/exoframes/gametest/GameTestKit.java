@@ -12,8 +12,10 @@ import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModBlocks;
 import com.toxineren.exoframes.content.ModEntities;
 import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.PieceItem;
 import com.toxineren.exoframes.content.StationBlock;
 import com.toxineren.exoframes.content.StationPart;
+import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
@@ -83,7 +85,8 @@ import net.minecraft.world.phys.Vec3;
  * test della parte 3b, {@code CarryOverGameTests} i riporti della 3c, {@code EnergyGameTests},
  * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests},
  * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2, {@code StationMenuGameTests} il menu della stazione
- * e {@code StationBlockGameTests} il suo blocco di due meta' (parte 4a-1). Ogni classe ha un costruttore pubblico senza
+ * e {@code StationBlockGameTests} il suo blocco di due meta' (parte 4a-1), {@code StationActionGameTests} i suoi
+ * pulsanti (parte 4a-2). Ogni classe ha un costruttore pubblico senza
  * argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
  * {@code Compat.gameTests().register(Classe.class)} in {@code RedstoneExoframes.init()}. Un test e' un metodo
  * {@code private static void temaCaso(GameTestHelper helper)} che chiude con {@code helper.succeed()}, piu' una riga
@@ -494,6 +497,14 @@ final class GameTestKit {
         return Piece.fresh(slot, Tier.SCRAP, RedstoneExoframes.config().tiers);
     }
 
+    /**
+     * L'oggetto di un pezzo Rottame dello slot con la durata data su 180 (il massimo predefinito del Rottame), senza
+     * moduli e con l'aspetto dato: come lo da' lo smontaggio.
+     */
+    static ItemStack scrapPieceStack(PieceSlot slot, int durability, Appearance look) {
+        return PieceItem.fromPiece(new Piece(slot, Tier.SCRAP, 180, durability), List.of(), look);
+    }
+
     /** Un clic destro con la mano principale sul telaio, nel punto dato relativo ai suoi piedi. */
     static InteractionResult click(ExoframeEntity frame, ServerPlayer player, double x, double y, double z) {
         return frame.interactAt(player, new Vec3(x, y, z), InteractionHand.MAIN_HAND);
@@ -814,7 +825,7 @@ final class GameTestKit {
      * menu lavora sul server come quello vero (pulsanti, {@code stillValid}, {@code broadcastChanges}, chiusura) e non
      * manda pacchetti di slot ne' di dati del menu; la vista del telaio parte da {@code broadcastChanges} con
      * {@code Net}, che su NeoForge 1.21.1 salta il giocatore finto, e il menu conta i suoi invii
-     * ({@code viewsSent}). Che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a1_shots.sh).
+     * ({@code viewsSent}). Che il clic apra davvero la schermata lo prova il client vero (tools/client/m4a_shots.sh).
      */
     static StationMenu openStation(GameTestHelper helper, ServerPlayer player, BlockPos relativeMain) {
         ServerLevel level = helper.getLevel();

@@ -3,6 +3,7 @@ package com.toxineren.exoframes.compat.client;
 import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.compat.SuitSummary.PieceLook;
 import com.toxineren.exoframes.core.armor.Appearance;
+import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
 import java.util.Collections;
@@ -29,26 +30,34 @@ public record SuitView(Map<PieceSlot, PieceView> pieces) {
     }
 
     /**
-     * La vista di un riassunto visivo: lo stato visivo e' la posizione della condizione ({@code INTACT} 0,
-     * {@code DAMAGED} 1, {@code CRITICAL} 2, {@code BROKEN} 3); un colore {@link Appearance#UNPAINTED} prende il
-     * colore predefinito del livello del pezzo dalla funzione della sua regione.
+     * La vista di un riassunto visivo: lo stato visivo e' quello della condizione ({@link #visualState}); un colore
+     * {@link Appearance#UNPAINTED} prende il colore predefinito del livello del pezzo dalla funzione della sua regione.
      */
     public static SuitView of(SuitSummary summary, ToIntFunction<Tier> primaryDefault,
             ToIntFunction<Tier> secondaryDefault) {
         Map<PieceSlot, PieceView> pieces = new EnumMap<>(PieceSlot.class);
         for (Map.Entry<PieceSlot, PieceLook> entry : summary.pieces().entrySet()) {
             PieceLook look = entry.getValue();
-            int state = switch (look.condition()) {
-                case INTACT -> 0;
-                case DAMAGED -> 1;
-                case CRITICAL -> 2;
-                case BROKEN -> 3;
-            };
+            int state = visualState(look.condition());
             int primary = resolve(look.appearance().primary(), look.tier(), primaryDefault);
             int secondary = resolve(look.appearance().secondary(), look.tier(), secondaryDefault);
             pieces.put(entry.getKey(), new PieceView(state, primary, secondary));
         }
         return new SuitView(pieces);
+    }
+
+    /**
+     * Lo stato visivo di un pezzo nella sua condizione, quello che {@link SuitRenderer} disegna: integro 0,
+     * danneggiato 1, critico 2, rotto 3. L'unica corrispondenza fra condizione e stato visivo, per il telaio nel mondo
+     * ({@link #of}) e per l'anteprima della stazione.
+     */
+    public static int visualState(PieceCondition condition) {
+        return switch (Objects.requireNonNull(condition, "condition must not be null")) {
+            case INTACT -> 0;
+            case DAMAGED -> 1;
+            case CRITICAL -> 2;
+            case BROKEN -> 3;
+        };
     }
 
     private static int resolve(int color, Tier tier, ToIntFunction<Tier> fallback) {

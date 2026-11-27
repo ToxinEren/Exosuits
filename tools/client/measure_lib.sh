@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# Aiuti comuni alle sequenze del client che controllano gli scatti con arm_measure.sh (m3d_shots.sh, m4a1_shots.sh,
+# Aiuti comuni alle sequenze del client che controllano gli scatti con arm_measure.sh (m3d_shots.sh, m4a_shots.sh,
 # m4c_shots.sh): trasformano le righe delle misure in controlli "ok" o "KO". Si carica con source dalla sequenza, non
 # si esegue.
 #

@@ -125,6 +125,18 @@ public interface GameTests {
     boolean registryChangeUnsaved(MinecraftServer server);
 
     /**
+     * Fa rifiutare al registro del server le modifiche dei telai piazzati finche' il rifiuto resta aperto:
+     * {@code FrameStateAccess.updatePlaced} da' falso per ogni telaio senza cambiare nulla e senza scrivere nel log,
+     * come quando il registro e' in sola lettura. Il registro non diventa in sola lettura: il resto delle operazioni,
+     * il salvataggio e gli ERROR della sola lettura non cambiano. Esiste solo per i test, che provano cosi' che chi
+     * scrive con {@code updatePlaced} non prende e non da' nulla quando la scrittura non riesce; gli aiuti dei test per
+     * il registro lavorano su copie in cartelle temporanee e non toccano il registro vivo. I test girano insieme sullo
+     * stesso registro: il rifiuto si apre e si chiude nello stesso corpo sincrono di un test, con un
+     * try-with-resources, cosi' nessun altro test lo vede. Piu' rifiuti aperti insieme si sommano.
+     */
+    Refusal refusePlacedUpdates(MinecraftServer server);
+
+    /**
      * Quante volte {@code FrameStateAccess.syncTo} e' stato chiamato per questo giocatore da quando e' entrato nel
      * server, anche quando il loader non ha spedito il pacchetto (su NeoForge 1.21.1 il giocatore finto non ha il
      * canale). Esiste solo per i test.
@@ -208,6 +220,12 @@ public interface GameTests {
      * l'equipaggiamento: zero eventi dopo un cambio degli slot armatura vuol dire nessun suono. Esiste solo per i test.
      */
     EquipEventCounter countEquipEvents(ServerLevel level, BlockPos center);
+
+    /** Il rifiuto di {@link #refusePlacedUpdates}; {@link #close} lo toglie, una volta sola anche se ripetuto. */
+    interface Refusal extends AutoCloseable {
+        @Override
+        void close();
+    }
 
     /** Il contatore di {@link #countEquipEvents}; {@link #close} smette di ascoltare. */
     interface EquipEventCounter extends AutoCloseable {

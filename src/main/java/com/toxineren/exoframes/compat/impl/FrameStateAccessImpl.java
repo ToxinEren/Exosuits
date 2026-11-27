@@ -197,6 +197,9 @@ public final class FrameStateAccessImpl implements FrameStateAccess {
         Objects.requireNonNull(frameId, "frameId must not be null");
         Objects.requireNonNull(change, "change must not be null");
         FrameStateSavedData data = FrameStateSavedData.get(server);
+        if (data.placedUpdateRefusals > 0) {
+            return false; // un test ha aperto GameTests.refusePlacedUpdates: rifiutata in silenzio, nulla cambia
+        }
         if (data.readOnly()) {
             data.logRefusedChange();
             return false;

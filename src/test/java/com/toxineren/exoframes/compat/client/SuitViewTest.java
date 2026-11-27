@@ -64,6 +64,17 @@ class SuitViewTest {
     }
 
     @Test
+    void visualStateFollowsTheCondition() {
+        assertEquals(0, SuitView.visualState(PieceCondition.INTACT));
+        assertEquals(1, SuitView.visualState(PieceCondition.DAMAGED));
+        assertEquals(2, SuitView.visualState(PieceCondition.CRITICAL));
+        assertEquals(3, SuitView.visualState(PieceCondition.BROKEN));
+        SuitView view = SuitView.of(new SuitSummary(Map.of(PieceSlot.LEFT_ARM,
+                new PieceLook(Tier.SCRAP, PieceCondition.CRITICAL, Appearance.DEFAULT))), PRIMARY, SECONDARY);
+        assertEquals(2, view.pieces().get(PieceSlot.LEFT_ARM).state());
+    }
+
+    @Test
     void bareSummaryGivesEmptyView() {
         SuitView view = SuitView.of(SuitSummary.BARE, PRIMARY, SECONDARY);
         assertTrue(view.pieces().isEmpty());

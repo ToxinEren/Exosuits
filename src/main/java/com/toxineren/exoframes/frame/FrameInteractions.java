@@ -3,18 +3,14 @@ package com.toxineren.exoframes.frame;
 import com.toxineren.exoframes.RedstoneExoframes;
 import com.toxineren.exoframes.compat.Compat;
 import com.toxineren.exoframes.compat.FrameStateAccess;
-import com.toxineren.exoframes.compat.ItemDataAccess.PieceData;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
-import com.toxineren.exoframes.compat.SuitSummary;
 import com.toxineren.exoframes.content.CellItem;
 import com.toxineren.exoframes.content.ModItems;
 import com.toxineren.exoframes.content.PieceItem;
 import com.toxineren.exoframes.content.PieceKind;
-import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.Piece;
 import com.toxineren.exoframes.core.armor.PieceSlot;
-import com.toxineren.exoframes.core.energy.EnergyCell;
 import com.toxineren.exoframes.core.frame.ClickZones;
 import com.toxineren.exoframes.core.frame.FrameState;
 import com.toxineren.exoframes.core.module.ModuleType;
@@ -22,7 +18,6 @@ import com.toxineren.exoframes.entity.ExoframeEntity;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -34,12 +29,13 @@ import net.minecraft.world.phys.Vec3;
 
 /**
  * Le mani su un telaio piazzato (design §5.4): montare pezzi e cella (o scambiare la cella, §12.10), smontarli,
- * raccogliere il telaio vuoto. Nessuna interfaccia grafica: decide la mano principale e il punto cliccato. Il registro
- * e' la verita' (§4.5): ogni cambio passa da {@link FrameStateAccess#updatePlaced} o
- * {@link FrameStateAccess#removePlaced}, e cio' che lascia la mano o arriva al giocatore dipende dal loro esito; tutto
- * quello che lo stato potrebbe rifiutare si controlla prima, cosi' nessuna eccezione lascia il record cambiato a meta'.
- * Solo un cambio riuscito suona (design §12.13): montare un pezzo o la cella, o scambiare la cella,
- * {@link FrameSounds.Sound#MOUNT}, smontarli o ritirare l'armatura stivata
+ * raccogliere il telaio vuoto. Nessuna interfaccia grafica: decide la mano principale e il punto cliccato. Montare e
+ * smontare seguono la regola che anche la stazione di manutenzione usa, {@link FrameFitting} (design M4 §5.7): qui si
+ * sceglie solo lo slot dal punto cliccato. Il registro e' la verita' (§4.5): ogni cambio passa da
+ * {@link FrameStateAccess#updatePlaced} o {@link FrameStateAccess#removePlaced}, e cio' che lascia la mano o arriva al
+ * giocatore dipende dal loro esito; tutto quello che lo stato potrebbe rifiutare si controlla prima, cosi' nessuna
+ * eccezione lascia il record cambiato a meta'. Solo un cambio riuscito suona (design §12.13): montare un pezzo o la
+ * cella, o scambiare la cella, {@link FrameSounds.Sound#MOUNT}, smontarli o ritirare l'armatura stivata
  * {@link FrameSounds.Sound#UNMOUNT}; un rifiuto e la raccolta del telaio vuoto non suonano.
  * <p>
  * Lati e zone sono quelli del telaio ({@link ClickZones}): con yaw 0 guarda a sud (+Z) e ha la destra verso -X, come
@@ -98,8 +94,8 @@ public final class FrameInteractions {
         }
         double right = ClickZones.rightOf(frame.getYRot(), hit.x, hit.z);
         return switch (action) {
-            case MOUNT_PIECE -> mountPiece(player, frame, record, ClickZones.onRightSide(right));
-            case INSERT_CELL -> insertCell(player, frame, record);
+            case MOUNT_PIECE -> mountPiece(player, record, ClickZones.onRightSide(right));
+            case INSERT_CELL -> insertCell(player, record);
             case ENTER -> enter(player, frame, record);
             case UNMOUNT -> unmount(player, frame, record, hit.y, right);
             case NONE -> InteractionResult.PASS;
@@ -133,49 +129,22 @@ public final class FrameInteractions {
     }
 
     /**
-     * Monta il pezzo in mano nello slot del suo tipo; braccia e gambe sul lato cliccato se e' libero, altrimenti
-     * sull'altro. Moduli e aspetto vengono dai dati dello stack e vanno nello slot. Un oggetto lascia la mano (non in
-     * creativa) solo se il registro ha preso il pezzo.
+     * Monta il pezzo in mano nello slot del suo tipo ({@link FrameFitting#mountPiece}); braccia e gambe sul lato
+     * cliccato se e' libero, altrimenti sull'altro; con tutti e due occupati lo slot del lato cliccato, e
+     * {@link FrameFitting} dice che e' occupato. Un oggetto lascia la mano (non in creativa) solo se il registro ha
+     * preso il pezzo.
      */
-    private static InteractionResult mountPiece(ServerPlayer player, ExoframeEntity frame, PlacedFrame record,
-            boolean rightSide) {
+    private static InteractionResult mountPiece(ServerPlayer player, PlacedFrame record, boolean rightSide) {
         ItemStack held = player.getMainHandItem();
-        PieceItem item = (PieceItem) held.getItem();
-        FrameState state = record.state();
-        PieceSlot slot = null;
-        for (PieceSlot candidate : clickedSideFirst(item.kind(), rightSide)) {
-            if (!state.pieces().containsKey(candidate)) {
+        List<PieceSlot> order = clickedSideFirst(((PieceItem) held.getItem()).kind(), rightSide);
+        PieceSlot slot = order.get(0);
+        for (PieceSlot candidate : order) {
+            if (!record.state().pieces().containsKey(candidate)) {
                 slot = candidate;
                 break;
             }
         }
-        if (slot == null) {
-            tell(player, SLOT_TAKEN);
-            return InteractionResult.CONSUME;
-        }
-        PieceSlot target = slot;
-        Piece piece = item.toPiece(held, target);
-        Optional<PieceData> data = Compat.itemData().piece(held);
-        List<ModuleType> modules = data.map(PieceData::modules).orElse(List.of());
-        Appearance appearance = data.map(PieceData::appearance).orElse(Appearance.DEFAULT);
-        // Lo slot e' libero e i moduli letti dallo stack sono distinti e non null: mount, restoreModules e
-        // setAppearance non rifiutano.
-        boolean mounted = Compat.frameState().updatePlaced(player.getServer(), record.frameId(), s -> {
-            s.mount(piece);
-            if (!modules.isEmpty()) {
-                s.restoreModules(target, modules);
-            }
-            s.setAppearance(target, appearance);
-        });
-        if (!mounted) {
-            return InteractionResult.CONSUME;
-        }
-        if (!player.getAbilities().instabuild) {
-            held.shrink(1);
-        }
-        refreshSummary(player.getServer(), frame);
-        play(player, frame, FrameSounds.Sound.MOUNT);
-        return InteractionResult.SUCCESS;
+        return result(FrameFitting.mountPiece(player, record, held, slot));
     }
 
     /** Le posizioni di un tipo di pezzo, quella del lato cliccato per prima. */
@@ -190,31 +159,12 @@ public final class FrameInteractions {
     }
 
     /**
-     * Inserisce la cella in mano; se il telaio ne ha gia' una, le due si scambiano (design §12.10). Prima il registro
-     * (vecchia fuori, nuova dentro), poi la mano e il giocatore, solo se il registro ha preso la cella: la cella in
-     * mano si consuma (non in creativa, convenzione della 3b) e la vecchia, se c'era, va al giocatore
-     * ({@link Handouts#give}, anche in creativa).
+     * Inserisce la cella in mano; se il telaio ne ha gia' una, le due si scambiano (design §12.10): la cella in mano si
+     * consuma (non in creativa, convenzione della 3b) e la vecchia, se c'era, va al giocatore
+     * ({@link FrameFitting#insertCell}).
      */
-    private static InteractionResult insertCell(ServerPlayer player, ExoframeEntity frame, PlacedFrame record) {
-        ItemStack held = player.getMainHandItem();
-        EnergyCell incoming = ((CellItem) held.getItem()).toCell(held);
-        EnergyCell[] old = new EnergyCell[1];
-        boolean changed = Compat.frameState().updatePlaced(player.getServer(), record.frameId(), s -> {
-            old[0] = s.removeCell();
-            s.insertCell(incoming);
-        });
-        if (!changed) {
-            return InteractionResult.CONSUME;
-        }
-        if (!player.getAbilities().instabuild) {
-            held.shrink(1);
-        }
-        if (old[0] != null) {
-            Handouts.give(player, CellItem.fromCell(old[0]));
-        }
-        refreshSummary(player.getServer(), frame);
-        play(player, frame, FrameSounds.Sound.MOUNT);
-        return InteractionResult.SUCCESS;
+    private static InteractionResult insertCell(ServerPlayer player, PlacedFrame record) {
+        return result(FrameFitting.insertCell(player, record, player.getMainHandItem()));
     }
 
     /** Mano vuota, in piedi: il giocatore entra nel telaio ({@link FrameEntry#enter}); il clic si consuma comunque. */
@@ -245,18 +195,11 @@ public final class FrameInteractions {
         FrameState state = record.state();
         for (PieceSlot slot : ClickZones.bandNearestFirst(height, right)) {
             if (state.pieces().containsKey(slot)) {
-                return unmountPiece(player, frame, record, slot);
+                return result(FrameFitting.unmountPiece(player, record, slot));
             }
         }
         if (state.cell() != null) {
-            ItemStack cell = CellItem.fromCell(state.cell());
-            if (!frames.updatePlaced(server, record.frameId(), FrameState::removeCell)) {
-                return InteractionResult.CONSUME;
-            }
-            Handouts.give(player, cell);
-            refreshSummary(server, frame);
-            play(player, frame, FrameSounds.Sound.UNMOUNT);
-            return InteractionResult.SUCCESS;
+            return result(FrameFitting.removeCell(player, record));
         }
         if (state.pieces().isEmpty()) {
             if (!frames.removePlaced(server, record.frameId())) {
@@ -268,30 +211,6 @@ public final class FrameInteractions {
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.CONSUME;
-    }
-
-    /**
-     * Smonta il pezzo dello slot e lo da' al giocatore come oggetto con durabilita', moduli e aspetto dello slot.
-     * L'oggetto si costruisce prima di cambiare il registro: se per il livello del pezzo non c'e' un oggetto il pezzo
-     * resta montato.
-     */
-    private static InteractionResult unmountPiece(ServerPlayer player, ExoframeEntity frame, PlacedFrame record,
-            PieceSlot slot) {
-        ItemStack stack;
-        try {
-            stack = pieceStack(record.state(), slot);
-        } catch (IllegalArgumentException e) {
-            RedstoneExoframes.LOGGER.warn("Cannot unmount {} from frame {}: {}", slot, record.frameId(),
-                    e.getMessage());
-            return InteractionResult.CONSUME;
-        }
-        if (!Compat.frameState().updatePlaced(player.getServer(), record.frameId(), s -> s.unmount(slot))) {
-            return InteractionResult.CONSUME;
-        }
-        Handouts.give(player, stack);
-        refreshSummary(player.getServer(), frame);
-        play(player, frame, FrameSounds.Sound.UNMOUNT);
-        return InteractionResult.SUCCESS;
     }
 
     /**
@@ -309,13 +228,12 @@ public final class FrameInteractions {
         return PieceItem.fromPiece(piece, modules, state.appearance(slot));
     }
 
-    /** Il riassunto dell'entita' dallo stato del suo record, dopo un cambio. */
-    private static void refreshSummary(MinecraftServer server, ExoframeEntity frame) {
-        UUID frameId = frame.frameId();
-        Compat.frameState().placed(server, frameId).ifPresent(p -> frame.setSummary(SuitSummary.of(p.state())));
+    /** Il clic consumato: {@code SUCCESS} se il cambio e' riuscito, {@code CONSUME} altrimenti. */
+    private static InteractionResult result(FrameFitting.Result result) {
+        return result == FrameFitting.Result.DONE ? InteractionResult.SUCCESS : InteractionResult.CONSUME;
     }
 
-    /** Il suono di un cambio riuscito, nel punto dell'entita' del telaio (design §12.13). */
+    /** Il suono dell'armatura stivata ritirata, nel punto dell'entita' del telaio (design §12.13). */
     private static void play(ServerPlayer player, ExoframeEntity frame, FrameSounds.Sound sound) {
         FrameSounds.play(player.serverLevel(), frame.position(), sound);
     }

@@ -5,18 +5,24 @@ import com.toxineren.exoframes.core.armor.Appearance;
 import com.toxineren.exoframes.core.armor.PieceCondition;
 import com.toxineren.exoframes.core.armor.PieceSlot;
 import com.toxineren.exoframes.core.armor.Tier;
+import com.toxineren.exoframes.core.station.StationAction;
+import com.toxineren.exoframes.core.station.StationAction.Kind;
 import com.toxineren.exoframes.core.station.StationView;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.function.ToIntFunction;
 
 /**
  * La disposizione della schermata della stazione (design §5.3), in Java puro, senza classi di Minecraft: i
- * rettangoli dei widget della parte 4a-1, i colori dei testi, il colore di una condizione, il giro dell'anteprima e la
- * vista della tuta dalla vista del telaio; poi i disegni della schermata nella loro texture (parte 4d, stile A:
+ * rettangoli dei widget, i colori dei testi, il colore di una condizione, il giro dell'anteprima e la vista della tuta
+ * dalla vista del telaio; le regole dei clic sui posti del pannello del telaio e sulla freccia per smontare, che dicono
+ * quale numero mandare al server (design §5.3 e §5.6), lo stato di un pulsante, che sceglie il suo disegno, e se i
+ * numeri della durata stanno accanto alla condizione; poi i disegni della schermata nella loro texture (parte 4d,
+ * stile A:
  * {@code textures/gui/station.png}, scritta da tools/art/gui.py), con i nomi della mappa del generatore, anche quelli
  * dei widget delle parti 4a-2 e 4b, e quale disegno va con una condizione. I rettangoli sono in pixel dell'interfaccia,
  * relativi all'angolo in alto a sinistra della schermata, con il bordo destro e quello in basso esclusi; ogni disegno
@@ -62,8 +68,16 @@ final class StationLayout {
     static final Rect INVENTORY = new Rect(7, 149, 169, 203);
     /** La barra degli oggetti del giocatore, cornici degli slot comprese. */
     static final Rect HOTBAR = new Rect(7, 207, 169, 225);
-    /** Il pulsante di prova (il numero 102), dove andra' "salva" del preset 3. */
-    static final Rect TEST_BUTTON = new Rect(283, 186, 301, 202);
+    /**
+     * La riga dell'armatura custodita, nella riga del titolo, sulla sua piastra: "Custodisce un'armatura", solo se il
+     * telaio ne custodisce una (design §5.7); come si ritira lo dice il suo suggerimento. E' testo del codice: la
+     * texture non ha un disegno per lei.
+     */
+    static final Rect STOWED = new Rect(144, 6, 274, 15);
+    /** Il pulsante "Tutti", sotto i posti: sceglie tutti i pezzi montati (design §5.3). */
+    static final Rect ALL_BUTTON = new Rect(41, 103, 71, 119);
+    /** La freccia accanto al nome della scelta: smonta il pezzo scelto, o la cella, nell'inventario (design §5.3). */
+    static final Rect UNMOUNT = new Rect(195, 20, 207, 32);
     /**
      * La freccia a sinistra in fondo all'anteprima, a 3 pixel dai bordi del ritaglio (prima della parte 4d era il
      * carattere "<" negli stessi pixel): dice che la tuta si gira trascinando.
@@ -92,12 +106,20 @@ final class StationLayout {
     static final List<Integer> ALL_COLOURS = List.of(TEXT, TEXT_DIM, CONDITION_INTACT, CONDITION_DAMAGED,
             CONDITION_CRITICAL, CONDITION_BROKEN);
 
+    /**
+     * Fra il bordo di un posto del pannello del telaio e la sua icona, o il fantasma di un posto vuoto: il bordo e la
+     * cornice dello slot.
+     */
+    static final int ICON_INSET = 2;
+    /** Il posto della cella, dopo i sei dei pezzi numerati come {@link PieceSlot}: lo stesso numero della scelta. */
+    static final int CELL_PLACE = StationView.SELECT_CELL;
+    /** I pixel che separano almeno, nell'intestazione, la condizione dai numeri della durata. */
+    static final int HEADER_GAP = 4;
+
     /** La larghezza della texture della schermata (tools/art/gui.py, {@code textures/gui/station.png}). */
     static final int TEXTURE_W = 512;
     /** L'altezza della texture della schermata. */
     static final int TEXTURE_H = 256;
-    /** La larghezza di ciascuna delle due meta' del pulsante di prova, ritagliate da {@link #testButton}. */
-    static final int TEST_BUTTON_HALF = 9;
 
     /**
      * Lo sfondo della schermata, opaco, con le parti che non cambiano mai (cornice, pannelli, slot del giocatore, prese
@@ -250,6 +272,29 @@ final class StationLayout {
     /** I gradi di giro dell'anteprima per pixel dell'interfaccia trascinato (design §5.4). */
     static final double DEGREES_PER_PIXEL = 1.5;
 
+    /** Che cosa c'e' sul cursore, per il posto cliccato: decide il clic su un posto (design §5.3). */
+    enum Cursor {
+        /** Niente. */
+        EMPTY,
+        /** Un pezzo del tipo del posto: il suo tipo si monta nello slot del posto. */
+        FITTING_PIECE,
+        /** Una cella. */
+        CELL,
+        /** Altro: un pezzo di un altro tipo, un oggetto qualunque (e un pezzo, per il posto della cella). */
+        OTHER
+    }
+
+    /** Lo stato di un pulsante della schermata, con il suo disegno nella texture. */
+    enum ButtonState {
+        NORMAL,
+        /** Sotto il mouse. */
+        HOVER,
+        /** Premuto: il tasto sinistro premuto sul pulsante e non ancora lasciato, o la scelta che il pulsante fa. */
+        PRESSED,
+        /** Spento: il clic non fa nulla. */
+        OFF
+    }
+
     private StationLayout() {
     }
 
@@ -286,14 +331,14 @@ final class StationLayout {
 
     /**
      * La vista della tuta dell'anteprima dalla vista del telaio (design §5.4): per ogni pezzo montato lo stato visivo
-     * e' la posizione della sua condizione (integro 0, danneggiato 1, critico 2, rotto 3), e un colore
+     * della sua condizione ({@link SuitView#visualState}, come per il telaio nel mondo), e un colore
      * {@link Appearance#UNPAINTED} prende il colore predefinito del livello da {@link TierPalette}; gli slot senza
      * pezzo restano fuori, come in {@link SuitView#of}.
      */
     static SuitView suitView(StationView view) {
         Map<PieceSlot, SuitView.PieceView> pieces = new EnumMap<>(PieceSlot.class);
         view.pieces().forEach((slot, info) -> pieces.put(slot, new SuitView.PieceView(
-                PieceCondition.of(info.durability(), info.maxDurability()).ordinal(),
+                SuitView.visualState(PieceCondition.of(info.durability(), info.maxDurability())),
                 colour(info.primary(), info.tier(), TierPalette::primary),
                 colour(info.secondary(), info.tier(), TierPalette::secondary))));
         return new SuitView(pieces);
@@ -330,17 +375,149 @@ final class StationLayout {
     }
 
     /**
-     * La faccia del pulsante di prova (il numero 102, che se ne va con la parte 4a-2): un pulsante alto 16 della
-     * texture ({@link #TUTTI_NORMALE} e compagni), di cui si disegnano le due meta' esterne larghe
-     * {@link #TEST_BUTTON_HALF}, come il gioco base disegna un pulsante piu' stretto della sua texture. Premuto dopo la
-     * prima pressione confermata dal server (prima della parte 4d diventava verde), sotto il mouse prima di allora,
-     * altrimenti normale.
+     * Lo stato di un pulsante: spento prima di tutto, poi premuto, poi sotto il mouse, altrimenti normale.
+     *
+     * @param enabled vero se il clic sul pulsante fa qualcosa
+     * @param pressed vero se il pulsante e' premuto (il tasto sinistro tenuto, o la scelta che fa)
+     * @param hover   vero se il mouse ci sta sopra
      */
-    static Sprite testButton(int presses, boolean hovered) {
-        if (presses > 0) {
-            return TUTTI_PREMUTO;
+    static ButtonState buttonState(boolean enabled, boolean pressed, boolean hover) {
+        if (!enabled) {
+            return ButtonState.OFF;
         }
-        return hovered ? TUTTI_SOPRA : TUTTI_NORMALE;
+        if (pressed) {
+            return ButtonState.PRESSED;
+        }
+        return hover ? ButtonState.HOVER : ButtonState.NORMAL;
+    }
+
+    /** Il disegno del pulsante "Tutti" ({@link #ALL_BUTTON}) nello stato dato; l'etichetta la scrive il codice. */
+    static Sprite allSprite(ButtonState state) {
+        return switch (Objects.requireNonNull(state, "state must not be null")) {
+            case NORMAL -> TUTTI_NORMALE;
+            case HOVER -> TUTTI_SOPRA;
+            case PRESSED -> TUTTI_PREMUTO;
+            case OFF -> TUTTI_SPENTO;
+        };
+    }
+
+    /** Il disegno della freccia che smonta ({@link #UNMOUNT}) nello stato dato. */
+    static Sprite unmountSprite(ButtonState state) {
+        return switch (Objects.requireNonNull(state, "state must not be null")) {
+            case NORMAL -> SMONTA_NORMALE;
+            case HOVER -> SMONTA_SOPRA;
+            case PRESSED -> SMONTA_PREMUTO;
+            case OFF -> SMONTA_SPENTO;
+        };
+    }
+
+    /**
+     * Il fantasma di un posto vuoto, l'icona in trasparenza del suo tipo, da disegnare dove starebbe l'icona (a
+     * {@link #ICON_INSET} nel posto): l'elmo, il torso, un braccio per i due bracci, una gamba per le due gambe e la
+     * cella per il posto della cella.
+     *
+     * @param place il posto: 0-5 i pezzi nell'ordine di {@link PieceSlot}, {@link #CELL_PLACE} la cella
+     * @throws IllegalArgumentException per un posto che non c'e'
+     */
+    static Sprite ghostSprite(int place) {
+        checkPlace(place);
+        if (place == CELL_PLACE) {
+            return FANTASMA_CELLA;
+        }
+        return switch (PieceSlot.values()[place]) {
+            case HELMET -> FANTASMA_ELMO;
+            case TORSO -> FANTASMA_TORSO;
+            case LEFT_ARM, RIGHT_ARM -> FANTASMA_BRACCIO;
+            case LEFT_LEG, RIGHT_LEG -> FANTASMA_GAMBA;
+        };
+    }
+
+    /**
+     * Il posto del pannello del telaio nel punto dato, relativo all'angolo della schermata: 0-5 i pezzi nell'ordine di
+     * {@link PieceSlot}, {@link #CELL_PLACE} la cella; vuoto fuori dai posti.
+     */
+    static OptionalInt placeAt(double x, double y) {
+        for (PieceSlot slot : PieceSlot.values()) {
+            if (PIECE_SLOTS.get(slot).contains(x, y)) {
+                return OptionalInt.of(slot.ordinal());
+            }
+        }
+        return CELL.contains(x, y) ? OptionalInt.of(CELL_PLACE) : OptionalInt.empty();
+    }
+
+    /** Vero se nella vista il posto ha il suo pezzo, o la sua cella, montato. */
+    static boolean mounted(StationView view, int place) {
+        checkPlace(place);
+        return place == CELL_PLACE ? view.cell().isPresent() : view.pieces().containsKey(PieceSlot.values()[place]);
+    }
+
+    /**
+     * Il numero che manda il clic sinistro su un posto del pannello del telaio (design §5.3 e §5.6), o vuoto se il clic
+     * non manda nulla. Con le maiuscole smonta cio' che e' montato nel posto (16 + slot, 22 la cella), qualunque cosa
+     * ci sia sul cursore, e su un posto vuoto non fa nulla. Senza: con il cursore vuoto sceglie il posto (lo slot, 6 la
+     * cella); con un pezzo del tipo del posto lo monta (8 + slot: se lo slot e' occupato lo dice il server); con una
+     * cella sul posto della cella la monta (14, o la scambia con quella montata); con altro non fa nulla. Il posto
+     * cliccato e' quello: diversamente dalle mani, nessun ripiego sull'altro lato. Il server ricontrolla tutto.
+     *
+     * @param place   il posto: 0-5 i pezzi nell'ordine di {@link PieceSlot}, {@link #CELL_PLACE} la cella
+     * @param cursor  che cosa c'e' sul cursore, per quel posto
+     * @param shift   vero con le maiuscole premute
+     * @param mounted vero se nella vista il posto ha il suo pezzo, o la sua cella ({@link #mounted})
+     * @throws IllegalArgumentException per un posto che non c'e'
+     */
+    static OptionalInt placeButton(int place, Cursor cursor, boolean shift, boolean mounted) {
+        checkPlace(place);
+        Objects.requireNonNull(cursor, "cursor must not be null");
+        boolean cell = place == CELL_PLACE;
+        if (shift) {
+            if (!mounted) {
+                return OptionalInt.empty();
+            }
+            return OptionalInt.of(cell ? StationAction.button(Kind.UNMOUNT_CELL, 0)
+                    : StationAction.button(Kind.UNMOUNT_PIECE, place));
+        }
+        return switch (cursor) {
+            case EMPTY -> OptionalInt.of(cell ? StationAction.button(Kind.SELECT_CELL, 0)
+                    : StationAction.button(Kind.SELECT_PIECE, place));
+            case FITTING_PIECE -> cell ? OptionalInt.empty() : OptionalInt.of(StationAction.button(Kind.MOUNT_PIECE,
+                    place));
+            case CELL -> cell ? OptionalInt.of(StationAction.button(Kind.MOUNT_CELL, 0)) : OptionalInt.empty();
+            case OTHER -> OptionalInt.empty();
+        };
+    }
+
+    /**
+     * Il numero che manda la freccia ({@link #UNMOUNT}): smonta lo slot scelto se ha un pezzo (16 + slot), la cella se
+     * e' scelta e c'e' (22); vuoto altrimenti, e con tutti i pezzi scelti: la freccia e' spenta.
+     */
+    static OptionalInt unmountButton(StationView view) {
+        int selection = view.selection();
+        if (selection == StationView.SELECT_ALL || !mounted(view, selection)) {
+            return OptionalInt.empty();
+        }
+        return OptionalInt.of(selection == CELL_PLACE ? StationAction.button(Kind.UNMOUNT_CELL, 0)
+                : StationAction.button(Kind.UNMOUNT_PIECE, selection));
+    }
+
+    /**
+     * Vero se, nella riga della condizione dell'intestazione, i numeri allineati a destra in
+     * {@link #DURABILITY_NUMBERS} stanno accanto alla condizione scritta da {@link #CONDITION} con almeno
+     * {@link #HEADER_GAP} pixel fra le due: altrimenti i numeri di un pezzo perdono "/ massimo" (design §5.3; con
+     * durate massime da 10 000 in su "10000 / 10000" e' largo 74 pixel). La cella non ha condizione: la larghezza a
+     * sinistra e' 0, e i suoi numeri stanno nella riga intera.
+     *
+     * @param leftWidth  la larghezza del testo della condizione, in pixel dell'interfaccia
+     * @param rightWidth la larghezza del testo dei numeri
+     */
+    static boolean fitsBeside(int leftWidth, int rightWidth) {
+        return CONDITION.x0() + leftWidth + HEADER_GAP <= DURABILITY_NUMBERS.x1() - rightWidth;
+    }
+
+    /** @throws IllegalArgumentException per un posto che non e' fra 0 e {@link #CELL_PLACE} */
+    private static void checkPlace(int place) {
+        if (place < 0 || place > CELL_PLACE) {
+            throw new IllegalArgumentException("place must be in [0, " + CELL_PLACE + "]: " + place);
+        }
     }
 
     private static Map<PieceSlot, Rect> pieceSlots() {

@@ -257,6 +257,23 @@ public final class GameTestsImpl implements GameTests {
     }
 
     @Override
+    public Refusal refusePlacedUpdates(MinecraftServer server) {
+        FrameStateSavedData data = FrameStateSavedData.get(server);
+        data.placedUpdateRefusals++;
+        return new Refusal() {
+            private boolean closed;
+
+            @Override
+            public void close() {
+                if (!closed) {
+                    closed = true;
+                    data.placedUpdateRefusals--;
+                }
+            }
+        };
+    }
+
+    @Override
     public int syncCount(ServerPlayer player) {
         return SyncCounter.count(player.getUUID());
     }

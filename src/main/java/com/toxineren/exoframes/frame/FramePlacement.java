@@ -116,6 +116,21 @@ public final class FramePlacement {
     }
 
     /**
+     * Rifa' il riassunto visivo dell'entita' di un telaio piazzato dallo stato del suo record, dopo un cambio (le mani,
+     * la stazione): se il record e' piazzato e il livello ha la sua entita' ({@code getEntity} con l'identita' del
+     * telaio). Altrimenti non fa nulla: un'entita' che non e' caricata prende il riassunto dal record quando torna, al
+     * suo primo tick, e una che manca la ricrea il riallineamento con il riassunto del record ({@link #spawnView}).
+     */
+    public static void refreshView(ServerLevel level, UUID frameId) {
+        Objects.requireNonNull(level, "level must not be null");
+        Objects.requireNonNull(frameId, "frameId must not be null");
+        Optional<PlacedFrame> frame = Compat.frameState().placed(level.getServer(), frameId);
+        if (frame.isPresent() && level.getEntity(frameId) instanceof ExoframeEntity entity) {
+            entity.setSummary(SuitSummary.of(frame.get().state()));
+        }
+    }
+
+    /**
      * Vero se il chunk di {@code at} ha le entita' caricate ed e' un chunk pieno, senza caricare ne' generare nulla:
      * solo allora {@code getEntity} vede le entita' del chunk, e un'entita' che c'e' non sembra mancare. Lo chiedono
      * l'uscita dal telaio (l'entita' nasce subito solo qui; altrove basta il record, e l'entita' la crea il

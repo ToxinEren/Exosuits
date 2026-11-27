@@ -43,6 +43,8 @@ gametest | =1 | Frame registry file {TESTREG} could not be read: using the previ
 gametest | =1 | Frame registry file {TESTREG} could not be read, nor its previous copy {TESTREG}_old: frames are read-only for this session and nothing is written\. Restore {TESTREG} from a backup and restart the server \(a copy of the unreadable file is kept as {TESTREG}{STAMP}\) | registryFileIsReadBack
 # Un file del registro che si legge ma non ha schema ne' sezioni, in una copia in una cartella temporanea: sola lettura.
 gametest | =1 | Frame registry file {TESTREG} has no schema and no sections: frames are read-only this session | registryFileWithoutSectionsIsReadOnly
+# Un pezzo di un livello senza oggetto (in questa parte solo il Rottame ne ha) non si smonta dalla stazione: resta montato.
+gametest | =1 | Cannot unmount HELMET from frame {UUID}: no item for a INDUSTRIAL HELMET piece | unmountWithoutAnItemKeepsThePiece
 
 # --- avvio (test in gioco e client) ---------------------------------------------------------------------------------
 # Solo Fabric: il tipo di entita' del telaio non ha un data fixer di vanilla (deciso: vedi docs/compat.md); esattamente
