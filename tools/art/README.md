@@ -3,7 +3,8 @@
 Genera da script la grafica della tuta (telaio nudo e pezzi, con i loro stati visivi): geometria GeckoLib, atlante,
 maschera luminosa e animazioni. Direzione
 artistica e scelte in `docs/arte/README.md`; convenzioni delle ossa in
-`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`, §5.1.
+`docs/superpowers/specs/2026-11-13-m3-telaio-design.md`, §5.1. La stazione di manutenzione ha un generatore suo
+(`station.py`, parte 4d), descritto in fondo, in "Stazione di manutenzione".
 
 ## Comandi
 
@@ -322,3 +323,85 @@ chiara (vista dal basso), le dita delle mani verso il basso, le dita dei piedi i
 file) e che si piega poco verso l'alto nei due segmenti successivi (+5 gradi). Texture dritte su tutte le facce,
 sopra e sotto comprese, facce specchiate (`uv_size` negativo) specchiate. La texture d'esempio e' animata
 (64x192, tre fotogrammi): se il visore la mostra stirata, ha perso la gestione dei fotogrammi.
+
+## Stazione di manutenzione (parte 4d)
+
+Genera la grafica del blocco stazione (design M4, §5.1) in una delle direzioni proposte al proprietario: i modelli di
+blocco del gioco base delle due meta', le loro texture 16x16 (16 texel per lato di blocco) e l'icona piatta 16x16
+dell'oggetto. Finche' il proprietario non sceglie, nel mod restano i segnaposto di `tools/gen_placeholders.py`: il
+generatore scrive solo dove gli si dice.
+
+    python3 tools/art/station.py --list        le direzioni: nome, lettera, titolo, idea
+    python3 tools/art/station.py --direction <officina|rame|pistoni> --out <dir>
+                                               scrive <dir>/models/block/station_main.json e station_side.json,
+                                               <dir>/textures/block/station_top, station_side, station_front_main,
+                                               station_front_side, station_back_main, station_back_side,
+                                               station_bottom (.png) e <dir>/textures/item/station.png
+
+`--out` e' obbligatorio. L'integrazione (parte 4d, dopo la risposta) sara'
+`--out src/main/resources/assets/redstone_exoframes` con la direzione scelta: il blockstate `station.json` e il
+modello dell'oggetto `item/station.json` di oggi restano validi (stessi nomi). Restano da fare allora: togliere la
+stazione da `tools/gen_placeholders.py` (che oggi scrive `station_top`, `station_side`, `station_front_*` e
+`item/station.png`, e che `check_art.sh` confronta), mettere il nuovo generatore in `check_art.sh`.
+
+Stesse regole del generatore della tuta: stesso input, stessi byte (semi dai nomi, `paint.HashRng`, solo interi),
+JSON con `exo.dumps_json`, PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 9), numpy di `requirements.txt`.
+
+**Struttura.**
+- `bench.py`: le due meta' descritte insieme come un banco di 32 x 16 x 16 pixel visto da chi sta davanti (la
+  principale a sinistra, x 0..16, la laterale a destra, come le posa il gioco), una griglia di voxel piena in cui
+  un design scava tasche (`cut`) e rialza parti (`fill`) da una faccia, e dipinge le tele delle facce. Le facce
+  scoperte dei voxel diventano elementi piatti con una faccia sola, uniti in rettangoli: nessuna sovrapposizione
+  complanare per costruzione. UV: il fondo delle tasche e i piani esterni prendono la proiezione piana della tela
+  (come le UV predefinite del gioco base); le pareti delle tasche prendono i texel della parte piena accanto, piegati
+  attorno allo spigolo (con `rotation` 90 quando gli assi della faccia lo chiedono). `cullface` solo sul bordo del
+  blocco; le facce della giuntura fra le due meta' sono disegnate senza (una meta' da sola resta chiusa). Sopra e gli
+  estremi sono simmetrici: si dipingono per la principale e la laterale li prende specchiati (`station_top` e
+  `station_side` con le UV rovesciate). `check()` ferma il generatore se una tasca si apre verso un'altra faccia
+  esterna (terra, piano, un altro lato) o tocca una tasca di un'altra faccia: il blocco e' un cubo pieno che nasconde
+  le facce dei vicini, e una tasca aperta cosi' lascerebbe vedere attraverso il mondo. Provato a mano (27 novembre
+  2026) con tre difetti iniettati in memoria (una tasca del fronte fino a terra, una fino al piano, una che tocca una
+  tasca del piano: segnalate; una tasca chiusa: nessuna segnalazione); la prova negativa in `selftest.py`, che questo
+  file chiede per ogni controllo nuovo, si aggiunge con l'integrazione, quando `station.py` entra in `check_art.sh`.
+- `pixel.py`: tele a palette (un materiale e un gradino della sua scala per texel: luci e ombre a gradini, senza
+  sfumature), rumore, spazzolatura, rivetti, e `relief`, che illumina e ombreggia i bordi delle tasche dalla mappa
+  delle profondita' (luce dall'alto a sinistra).
+- `station_designs/*.py`: una direzione per file (`build(bench)`, `icon()`, lettera, titolo e idea per le
+  anteprime), nell'ordine di `station_designs.DIRECTIONS`.
+- `station.py`: il punto d'ingresso.
+
+**Luce nel gioco.** La stazione ha la forma di collisione piena, quindi il gioco prende la luce di ogni faccia, anche
+rientrata, nel blocco accanto nella direzione della faccia (`ModelBlockRenderer.calculateShape`, bit 0, e
+`renderModelFaceFlat`, letti con javap su 1.20.1 e 1.21.1). Le pareti delle tasche rivolte verso terra o verso
+l'altra meta' prendono la luce di un blocco opaco: nere con la luce liscia spenta, come nelle anteprime. Con la luce
+liscia accesa (il predefinito) dovrebbero restare piu' scure delle altre ma sfumate: e' una deduzione, non letta nel
+bytecode ne' vista nel client.
+
+**Anteprime** (solo locali, non nella CI; Playwright come sopra):
+
+    cd tools/art/preview && node station.js    tutte le direzioni in docs/superpowers/specs/anteprime/2026-11-27-m4d/
+    node station.js --directions rame --out <dir>
+    node station.js --check 1 --vanilla <dir>  controllo del visore sulla stazione segnaposto di oggi (sotto)
+
+`station.js` esegue `station.py` per ogni direzione in `out/stazione/gen/<nome>` e disegna con `scene.html` da quei
+file e dal blockstate del mod: la principale con facing=north e la laterale a ovest, alla destra di chi guarda il
+fronte, il telaio vero (Rottame, stato 0, senza pilota e senza strato luminoso) in piedi al centro della principale
+come lo posa l'oggetto, rivolto a nord. I blocchi passano da `blockmodel.js`, che legge i modelli del gioco base come
+`FaceBakery` (FaceInfo, UV per vertice con la rotazione, UV predefinite, rotazione y del blockstate) e da' a ogni
+faccia il colore del texel per l'ombra della direzione (sopra 1.0, nord e sud 0.8, est e ovest 0.6, sotto 0.5) e per
+la luce del blocco accanto (1.0, o circa 0.1 dentro un blocco opaco), senza gestione del colore, texel senza filtri,
+senza antialiasing. Opzioni nuove di `scene.html` (le viste di `shot.js` non cambiano): `blocks`, `assets`,
+`vanilla`, `dy` dei modelli, `antialias`, `background`, `floor.color`. Scrive `<L>-<nome>-mondo.png`,
+`<L>-<nome>-texture.png` e `confronto.png`, e si ferma se una PNG ha blocchi oltre a IHDR, IDAT, IEND.
+
+Il controllo `--check` disegna la stazione segnaposto di oggi (modelli del mod con il genitore `orientable` del gioco
+base, i cui JSON `orientable`, `orientable_with_bottom`, `cube` e `block` si estraggono a parte dal jar del client
+in `<dir>/assets/minecraft/models/block/`, fuori dal repository) in `out/stazione/controllo.png`; confrontata con
+`docs/test-in-gioco/m4a1-screenshot/1.20.1-forge-stazione-posata.png` (27 novembre 2026): la spia rossa a sinistra
+sul fronte della principale, la griglia sulla laterale a destra, le guide del piano da sinistra a destra, i bordi
+chiari del piano davanti e a destra e quelli del fronte in alto e a sinistra, come nel gioco. Quello scatto mostra
+solo il fronte e il piano di un cubo con le UV predefinite; il resto delle regole che `bench.py` e `blockmodel.js`
+seguono e' letto con javap, uguale su 1.20.1 e 1.21.1: l'ordine dei vertici di `FaceInfo` nelle sei direzioni,
+`BlockFaceUV.getU/getV` con l'indice spostato dalla rotazione, le UV predefinite di `BlockElement.uvsByFace` e il
+verso della rotazione del blockstate (`BlockModelRotation`: `rotateYXZ(-y, -x, 0)`, quindi y 90 porta il nord a
+est). Il client vero non ha ancora disegnato gli elementi piatti a una faccia ne' le facce con `rotation` 90.

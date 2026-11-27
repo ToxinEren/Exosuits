@@ -6,8 +6,8 @@
 <script type="module">
 // Scena per le anteprime in scala (servita da shot.js): ?cfg=<json>. Coordinate della scena: quelle di three.js
 // dopo geo.js (x negata rispetto al file, come in GeckoLib): fronte verso -z, destra del pilota a +x.
-// cfg.models: [{geo, tex, glow, S, dx, dz, pose, p1, p2, state}]
-//                                  tuta scalata di S attorno ai piedi e spostata di dx, dz; geo/tex/glow sono percorsi
+// cfg.models: [{geo, tex, glow, S, dx, dy, dz, pose, p1, p2, state}]
+//                                  tuta scalata di S attorno ai piedi e spostata di dx, dy, dz; geo/tex/glow sono percorsi
 //                                  serviti da shot.js; glow (maschera luminosa) si usa come emissiva; le ossa _p1/_p2
 //                                  si tingono di p1/p2 (predefiniti: i colori del Rottame) come farebbe il renderer;
 //                                  state: stato visivo dei pezzi da mostrare (0-3, predefinito 0; -1 = telaio nudo).
@@ -22,17 +22,26 @@
 // cfg.fit: [[minx,miny,minz],[maxx,maxy,maxz]] oppure 'auto' (tute e piloti); cfg.pad margine (predefinito 1.08)
 // cfg.ambient, cfg.key: intensita' delle luci (predefinite 0.75 e 1.35, piu' morbide di index.html: la texture
 // porta gia' la sua luce dipinta)
+// cfg.blocks: [{state, variant, pos}]  blocchi del gioco base (modelli JSON con "elements", vedi blockmodel.js): il
+//                                  blockstate `state` (percorso servito), la sua variante ("facing=north,part=main"),
+//                                  la posizione in blocchi [x, y, z] (un blocco = 16 / 0.9375 px della scena, la
+//                                  misura della tuta); i modelli e le texture del namespace della mod si cercano sotto
+//                                  cfg.assets (percorso servito con models/ e textures/), quelli di minecraft sotto
+//                                  cfg.vanilla. Luce delle facce come nel mondo (blockmodel.js): nessuna luce della
+//                                  scena, nessuna gestione del colore; i blocchi sotto y 0 sono terra opaca
+// cfg.antialias (predefinito true), cfg.background (colore, predefinito 0x808080), cfg.floor.color
 import * as THREE from 'three';
 import { bakeGeo } from '/preview/geo.js';
+import { bakeBlock, SHADE, STEP, LIGHT_DARK } from '/preview/blockmodel.js';
 
 const cfg = JSON.parse(new URLSearchParams(location.search).get('cfg'));
-const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+const renderer = new THREE.WebGLRenderer({ antialias: cfg.antialias ?? true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(devicePixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x808080);
+scene.background = new THREE.Color(cfg.background ?? 0x808080);
 const fitGroup = new THREE.Group(); scene.add(fitGroup);
 
 async function loadTex(url) {
@@ -68,8 +77,84 @@ for (const md of cfg.models || []) {
   const mesh = new THREE.Mesh(g, new THREE.MeshLambertMaterial(opts));
   mesh.scale.setScalar(md.S || 1);           // scala uniforme attorno a (0,0,0), i piedi
   mesh.position.x = md.dx || 0;
+  mesh.position.y = md.dy || 0;
   mesh.position.z = md.dz || 0;
   fitGroup.add(mesh);
+}
+
+// blocchi del gioco base (vedi blockmodel.js): un blocco = 16 / 0.9375 px della scena, come la tuta
+const BLOCK_SCALE = 1 / 0.9375;
+function assetPath(id, kind, ext) {
+  const [ns, p] = id.includes(':') ? id.split(':') : ['minecraft', id];
+  const base = ns === 'minecraft' ? cfg.vanilla : cfg.assets;
+  if (!base) throw new Error('nessuna cartella per il namespace ' + ns);
+  return `/${base}/${kind}/${p}.${ext}`;
+}
+async function loadModel(id) {
+  const json = await (await fetch(assetPath(id, 'models', 'json'))).json();
+  if (json.parent && !json.elements) {
+    const parent = await loadModel(json.parent);
+    return { textures: { ...parent.textures, ...(json.textures || {}) }, elements: parent.elements };
+  }
+  if (json.parent) {
+    const parent = await loadModel(json.parent);
+    return { textures: { ...parent.textures, ...(json.textures || {}) }, elements: json.elements };
+  }
+  return { textures: json.textures || {}, elements: json.elements };
+}
+const placed = [];
+for (const bk of cfg.blocks || []) {
+  const state = await (await fetch('/' + bk.state)).json();
+  const v = state.variants[bk.variant];
+  if (!v) throw new Error('variante assente: ' + bk.variant);
+  const variant = Array.isArray(v) ? v[0] : v;
+  if (variant.x || variant.uvlock) throw new Error('rotazione x o uvlock non gestiti');
+  placed.push({ pos: bk.pos, model: await loadModel(variant.model), rotY: variant.y || 0 });
+}
+const occupied = new Set(placed.map(p => p.pos.join(',')));
+const opaque = (x, y, z) => y < 0 || occupied.has([x, y, z].join(','));
+const blockTex = new Map();
+for (const p of placed) {
+  const groups = new Map();
+  for (const q of bakeBlock(p.model, p.rotY)) {
+    const n = STEP[q.dir];
+    const nb = [p.pos[0] + n[0], p.pos[1] + n[1], p.pos[2] + n[2]];
+    if (q.cullface) {
+      const c = STEP[q.cullface];
+      if (opaque(p.pos[0] + c[0], p.pos[1] + c[1], p.pos[2] + c[2])) continue;
+    }
+    const light = opaque(...nb) ? LIGHT_DARK : 1.0;
+    if (!groups.has(q.texture)) groups.set(q.texture, { pos: [], uv: [], bright: [] });
+    const g = groups.get(q.texture);
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      const v = q.verts[k];
+      g.pos.push((p.pos[0] * 16 + v[0]) * BLOCK_SCALE, (p.pos[1] * 16 + v[1]) * BLOCK_SCALE, (p.pos[2] * 16 + v[2]) * BLOCK_SCALE);
+      g.uv.push(q.uvs[k][0] / 16, q.uvs[k][1] / 16);
+      g.bright.push(SHADE[q.dir] * light);
+    }
+  }
+  for (const [tex, g] of groups) {
+    if (!blockTex.has(tex)) {
+      const t = await new THREE.TextureLoader().loadAsync(assetPath(tex, 'textures', 'png'));
+      t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+      t.colorSpace = THREE.NoColorSpace; t.flipY = false;
+      blockTex.set(tex, t);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(g.pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(g.uv, 2));
+    geo.setAttribute('bright', new THREE.Float32BufferAttribute(g.bright, 1));
+    // nessuna gestione del colore: texel sRGB * ombra * luce, scritti cosi' come sono, come fa il gioco
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { map: { value: blockTex.get(tex) } },
+      vertexShader: 'attribute float bright; varying vec2 vUv; varying float vB; void main() { vUv = uv; vB = bright; '
+        + 'gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform sampler2D map; varying vec2 vUv; varying float vB; void main() { vec4 t = texture2D(map, vUv); '
+        + 'if (t.a < 0.1) discard; gl_FragColor = vec4(t.rgb * vB, 1.0); }',
+      side: THREE.DoubleSide,
+    });
+    fitGroup.add(new THREE.Mesh(geo, mat));
+  }
 }
 
 // pilota di riferimento (skin semplice: viso, maglia, pantaloni, scarpe)
@@ -101,7 +186,7 @@ function thick(fn, n = 3, step = 0.08) { for (let k = 0; k < n; k++) fn((k - (n 
 
 if (cfg.floor) {
   const { block, from, to, zfrom, zto } = cfg.floor;
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(to - from, zto - zfrom), M(0x9a9a96));
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(to - from, zto - zfrom), M(cfg.floor.color ?? 0x9a9a96));
   plane.rotation.x = -Math.PI / 2; plane.position.set((from + to) / 2, -0.02, (zfrom + zto) / 2); scene.add(plane);
   const pts = [];
   for (let x = from; x <= to + 1e-6; x += block) pts.push(x, 0, zfrom, x, 0, zto);
