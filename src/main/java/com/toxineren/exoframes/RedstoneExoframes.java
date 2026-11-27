@@ -30,6 +30,7 @@ import com.toxineren.exoframes.gametest.DamageGameTests;
 import com.toxineren.exoframes.gametest.DataGameTests;
 import com.toxineren.exoframes.gametest.EnergyGameTests;
 import com.toxineren.exoframes.gametest.ExoframeGameTests;
+import com.toxineren.exoframes.gametest.FrameItemGameTests;
 import com.toxineren.exoframes.gametest.MovementGameTests;
 import com.toxineren.exoframes.gametest.StationActionGameTests;
 import com.toxineren.exoframes.gametest.StationBlockGameTests;
@@ -109,6 +110,7 @@ public final class RedstoneExoframes {
         Compat.gameTests().register(StationMenuGameTests.class);
         Compat.gameTests().register(StationBlockGameTests.class);
         Compat.gameTests().register(StationActionGameTests.class);
+        Compat.gameTests().register(FrameItemGameTests.class);
     }
 
     /** La configurazione in uso: i valori di specifica finche' non ne viene impostata un'altra con {@link #setConfig}. */

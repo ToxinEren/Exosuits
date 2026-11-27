@@ -86,9 +86,9 @@ import net.minecraft.world.phys.Vec3;
  * {@code DamageGameTests}, {@code MovementGameTests} e {@code CellGameTests} la parte 3c-1, {@code ChargerGameTests},
  * {@code DataGameTests} e {@code SurvivalGameTests} la parte 3c-2, {@code StationMenuGameTests} il menu della stazione
  * e {@code StationBlockGameTests} il suo blocco di due meta' (parte 4a-1), {@code StationActionGameTests} i suoi
- * pulsanti (parte 4a-2). Ogni classe ha un costruttore pubblico senza
- * argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e una riga
- * {@code Compat.gameTests().register(Classe.class)} in {@code RedstoneExoframes.init()}. Un test e' un metodo
+ * pulsanti e {@code FrameItemGameTests} l'oggetto telaio raccolto e posato di nuovo (parte 4a-2). Ogni classe ha un
+ * costruttore pubblico senza argomenti, un metodo {@link GameTestGenerator}, {@code import static GameTestKit.*} e
+ * una riga {@code Compat.gameTests().register(Classe.class)} in {@code RedstoneExoframes.init()}. Un test e' un metodo
  * {@code private static void temaCaso(GameTestHelper helper)} che chiude con {@code helper.succeed()}, piu' una riga
  * {@code add(tests, "temaCaso", Classe::temaCaso);} nel generatore della sua classe ({@link #add}); i nomi sono unici
  * fra tutte le classi. tools/run_gametests.sh conta quelle righe in tutti i file di {@code gametest/} per sapere
@@ -368,12 +368,22 @@ final class GameTestKit {
     }
 
     /**
-     * Usa l'oggetto telaio (uno, in mano) sulla faccia superiore del blocco dato con il suo {@code useOn}; se
-     * {@code expectPlaced} restituisce l'unico telaio in piedi sul blocco, altrimenti verifica il rifiuto e da' null.
+     * Usa un oggetto telaio nuovo, senza dati (uno, in mano), sulla faccia superiore del blocco dato:
+     * {@link #useExoframeItem(GameTestHelper, ServerPlayer, ItemStack, BlockPos, boolean)}.
      */
     static ExoframeEntity useExoframeItem(GameTestHelper helper, ServerPlayer player, BlockPos relative,
             boolean expectPlaced) {
-        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(ModItems.EXOFRAME.get()));
+        return useExoframeItem(helper, player, new ItemStack(ModItems.EXOFRAME.get()), relative, expectPlaced);
+    }
+
+    /**
+     * Mette lo stack dato nella mano principale, al posto di cio' che c'era, e lo usa sulla faccia superiore del blocco
+     * dato con il {@code useOn} dell'oggetto telaio; se {@code expectPlaced} restituisce l'unico telaio in piedi sul
+     * blocco, altrimenti verifica il rifiuto e da' null.
+     */
+    static ExoframeEntity useExoframeItem(GameTestHelper helper, ServerPlayer player, ItemStack stack,
+            BlockPos relative, boolean expectPlaced) {
+        player.setItemInHand(InteractionHand.MAIN_HAND, stack);
         BlockPos clicked = helper.absolutePos(relative);
         BlockHitResult hit = new BlockHitResult(Vec3.atCenterOf(clicked).add(0.0, 0.5, 0.0), Direction.UP, clicked,
                 false);

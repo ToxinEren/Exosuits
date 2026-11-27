@@ -6,7 +6,7 @@ import com.toxineren.exoframes.compat.FrameStateAccess;
 import com.toxineren.exoframes.compat.PlacedFrame;
 import com.toxineren.exoframes.compat.StowedStack;
 import com.toxineren.exoframes.content.CellItem;
-import com.toxineren.exoframes.content.ModItems;
+import com.toxineren.exoframes.content.ExoframeItem;
 import com.toxineren.exoframes.content.PieceItem;
 import com.toxineren.exoframes.content.PieceKind;
 import com.toxineren.exoframes.core.armor.Piece;
@@ -175,7 +175,9 @@ public final class FrameInteractions {
     /**
      * Mano vuota, accovacciati, in quest'ordine: l'armatura stivata che si legge, tutta; altrimenti il pezzo della
      * parte cliccata o, se lo slot e' vuoto, quello piu' vicino della stessa fascia; con la fascia vuota la cella;
-     * senza cella, con il telaio del tutto vuoto, il telaio stesso torna oggetto. Altrimenti nulla.
+     * senza cella, con il telaio del tutto vuoto, il telaio stesso torna oggetto, se il registro lo toglie: l'oggetto
+     * di {@link ExoframeItem#pickedUp}, fatto con lo stato letto prima di toglierlo (lo sblocco, il rinforzo e, se a
+     * raccoglierlo non e' il proprietario, il proprietario). Altrimenti nulla.
      */
     private static InteractionResult unmount(ServerPlayer player, ExoframeEntity frame, PlacedFrame record,
             double height, double right) {
@@ -202,12 +204,13 @@ public final class FrameInteractions {
             return result(FrameFitting.removeCell(player, record));
         }
         if (state.pieces().isEmpty()) {
+            ItemStack item = ExoframeItem.pickedUp(state, player.getUUID());
             if (!frames.removePlaced(server, record.frameId())) {
                 return InteractionResult.CONSUME;
             }
             frame.discard();
             FrameLog.event(record.frameId(), "picked up", player, player.serverLevel(), record.position());
-            Handouts.give(player, new ItemStack(ModItems.EXOFRAME.get()));
+            Handouts.give(player, item);
             return InteractionResult.SUCCESS;
         }
         return InteractionResult.CONSUME;
