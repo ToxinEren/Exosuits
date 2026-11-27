@@ -4,7 +4,9 @@ Genera da script la grafica della tuta (telaio nudo e pezzi, con i loro stati vi
 maschera luminosa e animazioni. Direzione
 artistica e scelte in `docs/arte/README.md`; convenzioni delle ossa in
 `docs/superpowers/specs/2026-11-13-m3-telaio-design.md`, §5.1. La stazione di manutenzione ha un generatore suo
-(`station.py`, parte 4d), descritto in fondo, in "Stazione di manutenzione".
+(`station.py`, parte 4d), descritto in fondo, in "Stazione di manutenzione"; la schermata della stazione, i disegni
+dell'HUD, la vignetta del casco e l'icona del kit di riparazione un altro (`gui.py`, parte 4d), nell'ultima sezione,
+"Schermata, HUD, vignetta e icona del kit".
 
 ## Comandi
 
@@ -440,3 +442,77 @@ anteprime, gli elementi piatti a una faccia al loro posto, e delle facce con `ro
 basso delle tasche degli estremi) quella in basso, vista dall'alto, porta i texel della riga dello zoccolo lungo il
 bordo, rivetti compresi, come nelle anteprime (quella in alto e' rivolta verso terra, quindi nera); gli scatti
 `*-stazione-posata.png` sono rifatti con questa grafica.
+
+## Schermata, HUD, vignetta e icona del kit (parte 4d)
+
+Genera nello stile A, Officina (la direzione della stazione scelta dal proprietario il 27 novembre 2026), la grafica
+2D della milestone 4: la texture della schermata della stazione (design M4, §5.3), quella dei disegni dell'HUD
+(§5.12), gli angoli della vignetta del casco (§5.12, "Vignetta") e l'icona del kit di riparazione (§5.8). Sono
+anteprime per il proprietario: nulla e' integrato, il gioco disegna ancora schermata e HUD con i colori pieni e la
+vignetta segnaposto di `tools/gen_placeholders.py`. L'integrazione, dopo la sua risposta, sostituira' i riempimenti
+con i disegni e portera' il confronto in `check_art.sh`, come per la stazione.
+
+    python3 tools/art/gui.py --out <dir>       scrive <dir>/textures/gui/station.png, <dir>/textures/gui/hud.png,
+                                               <dir>/textures/gui/hud_vignette.png e <dir>/textures/item/repair_kit.png
+    python3 tools/art/gui.py --map             stampa dove sta ogni disegno nelle due texture (u, v, larghezza,
+                                               altezza), anche ogni pezzo della sagoma per stato
+
+`--out` e' obbligatorio e il generatore non scrive mai nei sorgenti: la vignetta del mod resta quella di
+`gen_placeholders.py`, che `check_art.sh` confronta.
+
+- `textures/gui/station.png`, 512x256: lo sfondo di 316x232 in (0, 0) con cio' che non cambia mai (cornice di bronzo e
+  piastra d'acciaio rivettata, i quattro pannelli incassati, i 36 slot del giocatore, le prese dei sei posti e della
+  cella, la vaschetta della tavolozza, l'incavo della barra della durata, il fondo dell'anteprima con la piattaforma
+  girevole e gli angoli di bronzo, le scanalature dei preset, la riga dei costi; lo spazio dei moduli resta pannello
+  vuoto), a destra e sotto i disegni dei widget nei loro stati; il resto trasparente.
+- `textures/gui/hud.png`, 256x128: le due piastre (88x35 e 67x35), le cinque figure della sagoma (21x35: integro,
+  danneggiato, critico, rotto, non montato; un pezzo si ritaglia dalla figura del suo stato con il suo rettangolo del
+  sottogruppo), la cornice della barra (63x8) e i riempimenti verde, rosso, grigio e bianco (61x6), l'avviso rosso e
+  grigio (8x8), l'icona della cella di scorta (5x8) normale e spenta.
+- `textures/gui/hud_vignette.png`, 144x80: i quattro angoli 72x40 dove li prende `SuitHud` (alto a sinistra, alto a
+  destra; basso a sinistra, basso a destra).
+- `textures/item/repair_kit.png`, 16x16, piatta.
+
+I posti dei disegni (`gui_layout.py`, `STATION_ATLAS` e `HUD_ATLAS`; `--map` li stampa) sono quelli da copiare nel
+codice all'integrazione, e ogni disegno ha la grandezza del rettangolo del design che sostituisce. I colori che il
+codice mette da se' restano al codice: le sedici tinte e i colori del livello si riempiono prima, sotto le cornici
+`tinta` e `predefinito` (con le finestre trasparenti), i dodici colori di un preset sopra il suo fondo; i testi li
+scrive il codice con il carattere del gioco.
+
+Stesse regole degli altri generatori: stesso input, stessi byte (semi dai nomi delle tele, `paint.HashRng`, solo
+interi), PNG con `exo.write_png` (solo IHDR, IDAT, IEND, zlib 9), numpy di `requirements.txt`. Esce con 1, senza
+scrivere nulla, se un controllo non passa: ogni disegno dentro la sua texture e nessuno sovrapposto a un altro, fuori
+dai disegni tutto trasparente, lo sfondo opaco; i colori della legenda esatti (bordi dei posti e riempimenti della
+barra della durata; pezzi della sagoma pieni del colore con il contorno a un terzo e solo quei due colori; riempimenti
+della barra dell'energia con la prima riga piu' chiara; avvisi); nessun texel "magenta" per
+`tools/client/arm_measure.sh`; la vignetta con l'opacita' 107 (0,42) nei pixel d'angolo e mai di piu', zero sui due lati
+opposti di ogni angolo, i riflessi solo nei due angoli in alto. Provati a mano il 27 novembre 2026 con nove difetti
+iniettati in memoria (un texel magenta, la vignetta troppo scura, aperta sul lato opposto, con un riflesso in basso,
+con il pixel d'angolo sbagliato, un verde della legenda ritoccato, un bordo di un posto, un texel fuori dai disegni, un
+buco nello sfondo): tutti segnalati. Le prove negative in `selftest.py` e il confronto in `check_art.sh` arrivano con
+l'integrazione.
+
+Struttura: `gui_layout.py` (la geometria del design, i posti nelle texture, la legenda, le tinte), `gui_officina.py`
+(i disegni, con le scale di `pixel.py`), `gui.py` (il punto d'ingresso con i controlli).
+
+**Anteprime** (solo locali, non nella CI; servono Pillow e alcune risorse del gioco base, estratte a parte dal jar del
+client in una cartella fuori dal repository):
+
+    mkdir -p <dir> && cd <dir> && unzip -o ~/.gradle/caches/fabric-loom/1.21.1/minecraft-client.jar \
+        'assets/minecraft/font/include/default.json' 'assets/minecraft/textures/font/*.png' \
+        'assets/minecraft/textures/item/iron_ingot.png' 'assets/minecraft/textures/item/copper_ingot.png' \
+        'assets/minecraft/textures/item/red_dye.png' 'assets/minecraft/textures/item/white_dye.png' \
+        'assets/minecraft/textures/item/black_dye.png' 'assets/minecraft/textures/item/blue_dye.png' \
+        'assets/minecraft/textures/item/redstone.png'
+    python3 -I tools/art/preview/gui_preview.py --vanilla <dir> [--assets <dir>] [--out <dir>]
+
+Senza `--assets` lo script fa scrivere a `gui.py` i file in `tools/art/preview/out/gui/` (ignorata da git); scrive le
+anteprime in `docs/superpowers/specs/anteprime/2026-11-27-m4d-grafica/` e si ferma se una PNG ha blocchi oltre a IHDR,
+IDAT e IEND. Ritaglia ogni disegno dalle PNG generate con i posti di `gui_layout.py` e lo mette nel rettangolo del
+design, a scala 1, poi ingrandisce senza filtri alla scala 2. La schermata a 960x540 sta sullo scatto della 4a-1
+`1.21.1-neoforge-stazione-colori-suoi.png`, nello stesso punto in cui la disegna il gioco, e il telaio dell'anteprima
+3D e' quello del suo ritaglio, copiato pixel per pixel; quella a 640x480 (la grandezza minima) sta sullo scatto
+`stazione-posata` oscurato come fa il gioco dietro una schermata. L'HUD e la vignetta stanno sugli scatti della 4c
+senza la vignetta segnaposto (`danneggiato` con la mano destra, `mancino-danneggiato` con la sinistra), dove il gruppo
+disegnato oggi a colori pieni si copre prima con l'erba delle righe subito sopra, specchiata (la piastra e'
+traslucida). Le icone sono quelle generate e quella della stazione nel mod.
