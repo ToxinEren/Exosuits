@@ -152,17 +152,18 @@
 # pressione sopra uno slot, con una pila sul cursore; la morte e l'uscita dal server con la schermata aperta e una pila
 # sul cursore. Sono nella checklist per il PC.
 #
-# Dura poco piu' di due minuti a cache calde: misurati 140 s su 1.21.1-neoforge e 144 s su 1.20.1-forge, di cui 131 e
-# 135 s l'esecuzione di client_shot.sh. Dentro la schermata gli scatti delle quattro varianti sono uguali al pixel,
-# anteprima di fronte compresa: la scala della tuta nell'interfaccia passa da GuiEntityScale, che la applica come il
-# gioco base di ogni versione (senza, su 1.20.1 la tuta usciva piu' scura). Di fianco, in girata e suggerimento-torso,
-# le due varianti di una versione restano uguali al pixel, mentre fra le due versioni la luce della tuta differisce di
-# 1/255 al piu' (in 11906 pixel), e la sagoma della rotazione, che conta i pixel vicini alla soglia del 4 %, cambia di
-# poco (i valori accanto alle soglie, piu' sotto); le misure della scelta, dello smontaggio, del montaggio, del
-# lucchetto, della vista e del rinforzato sono le stesse su 1.21.1-neoforge e su 1.20.1-forge. Il kill degli oggetti a
-# terra della fase 16 deve arrivare prima che finiscano i 2 s del ritardo di raccolta (poi il giocatore, a un blocco, li
-# raccoglierebbe e kill fallirebbe senza bersagli): arriva nel secondo dopo "/exoframe remove" (orari del log di
-# client_shot.sh) e toglie i sette oggetti.
+# Dura poco piu' di due minuti a cache calde: misurati 146 s su 1.20.1-forge, 135 s su 1.20.1-fabric, 136 s su
+# 1.21.1-fabric e 133 s su 1.21.1-neoforge, di cui 138, 127, 128 e 123 s l'esecuzione di client_shot.sh. Dentro la
+# schermata gli scatti delle quattro varianti sono uguali al pixel, anteprima di fronte compresa: la scala della tuta
+# nell'interfaccia passa da GuiEntityScale, che la applica come il gioco base di ogni versione (senza, su 1.20.1 la
+# tuta usciva piu' scura). Di fianco, da girata a rinforzato, le due varianti di una versione restano uguali al pixel,
+# mentre fra le due versioni la luce della tuta differisce di 1/255 al piu' (in 11906 pixel, 11470 in smontato, senza
+# l'elmo, tutti nel ritaglio dell'anteprima), e la sagoma della rotazione, che conta i pixel vicini alla soglia del
+# 4 %, cambia di poco (i valori accanto alle soglie, piu' sotto); le misure della scelta, dello smontaggio, del
+# montaggio, del lucchetto, della vista e del rinforzato sono le stesse sulle quattro varianti. Il kill degli oggetti
+# a terra della fase 16 deve arrivare prima che finiscano i 2 s del ritardo di raccolta (poi il giocatore, a un
+# blocco, li raccoglierebbe e kill fallirebbe senza bersagli): sulle quattro varianti arriva entro il secondo dopo
+# "/exoframe remove" (orari del log di client_shot.sh) e toglie i sette oggetti.
 #
 # Uscita: una riga "ok <nome>: <misure>" o "KO <nome>: <misure> (atteso ...)" per controllo, tutti valutati anche dopo
 # un fallimento; l'ultima riga e' "OK <variante>: scatti in <cartella>" (uscita 0) se client_shot.sh e' uscito con 0 e
