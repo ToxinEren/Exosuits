@@ -525,7 +525,8 @@ public final class StationActionGameTests {
      * Il proprietario sblocca e blocca dalla stazione (design §5.11 e §5.17): sul telaio di A, bloccato, il pulsante 26
      * lo sblocca, A ha sulla barra delle azioni il messaggio di {@code /exoframe unlock} e suona lo sblocco; al tick
      * dopo lo stesso pulsante lo blocca, con il messaggio di {@code /exoframe lock} e il suono del blocco. Due tick
-     * dopo l'ultima vista mandata ha il telaio bloccato.
+     * dopo il menu ha mandato due viste, una per cambio (la vista dell'apertura, gia' bloccata, non conta), e l'ultima
+     * ha il telaio bloccato.
      */
     private static void ownerTogglesTheLockFromTheStation(GameTestHelper helper) {
         Bench bench = new Bench(helper);
@@ -546,7 +547,8 @@ public final class StationActionGameTests {
             });
             bench.last(3, h -> {
                 StationView sent = menu.lastSentView();
-                h.assertTrue(!sent.unlocked(), "two ticks after locking the last view sent is " + sent);
+                h.assertTrue(!sent.unlocked() && menu.viewsSent() == 2, "two ticks after locking the menu sent "
+                        + menu.viewsSent() + " views, the last " + sent);
             });
         });
     }

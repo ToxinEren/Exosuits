@@ -110,11 +110,11 @@ import net.minecraft.world.phys.Vec3;
  * d'ingresso), ma non chiama mai {@code doTick()}, quindi niente {@code Player.tick()}, niente fisica e niente
  * {@code TickEvent.PLAYER_PRE}/{@code PLAYER_POST}: chi conta sul contatore lo imposta, e i tick della mod
  * ({@code SlotGuard.tick}, {@code SafeSpots}, {@code SuitTick}) si chiamano a mano;</li>
- * <li>sa che il giocatore finto dice sempre di essere in creativa ({@code isCreative()}), ma che le sue capacita'
- * ({@code instabuild}, {@code invulnerable}) seguono la modalita' di gioco del mondo dei test, che su 1.20.1-forge non
- * e' la creativa: i test che vogliono la sopravvivenza usano {@code Compat.gameTests().survivalPlayer(helper)}, quelli
- * che vogliono la creativa chiamano {@code setGameMode(GameType.CREATIVE)}, e nessuno conta sulla modalita' di
- * partenza;</li>
+ * <li>sa che il giocatore finto dice sempre di essere in creativa ({@code isCreative()}; quello operatore di
+ * {@code operatorPlayer} no: segue la modalita' di gioco), ma che le sue capacita' ({@code instabuild},
+ * {@code invulnerable}) seguono la modalita' di gioco del mondo dei test, che su 1.20.1-forge non e' la creativa: i
+ * test che vogliono la sopravvivenza usano {@code Compat.gameTests().survivalPlayer(helper)}, quelli che vogliono la
+ * creativa chiamano {@code setGameMode(GameType.CREATIVE)}, e nessuno conta sulla modalita' di partenza;</li>
  * <li>non lascia avvisi nel log oltre a quelli che prova di proposito.</li>
  * </ul>
  *

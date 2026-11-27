@@ -58,12 +58,12 @@ public interface GameTests {
     /**
      * Il giocatore finto di {@link #mockServerPlayer} in sopravvivenza e con la protezione d'ingresso finita: lo crea,
      * lo mette in {@code GameType.SURVIVAL} (capacita' {@code instabuild}, {@code invulnerable} e {@code mayfly} false;
-     * {@code isCreative()} resta vero come per ogni giocatore finto) e chiama 60 volte {@code player.tick()}, perche'
-     * {@code ServerPlayer.spawnInvulnerableTime} nasce a 60 e prima di zero i colpi non contano. {@code tick()} non
-     * muove il giocatore, non manda eventi di Architectury e non cambia {@code tickCount}, ma scala anche
-     * {@code invulnerableTime}: per questo si chiama solo qui, prima del primo colpo. Come il giocatore finto ricorda i
-     * messaggi di sistema ({@link #messagesTo}). Nasce vicino al punto di rinascita del mondo: il test lo sposta nella
-     * sua struttura. Esiste solo per i test.
+     * {@code isCreative()} resta vero come per ogni giocatore finto di {@link #mockServerPlayer}) e chiama 60 volte
+     * {@code player.tick()}, perche' {@code ServerPlayer.spawnInvulnerableTime} nasce a 60 e prima di zero i colpi non
+     * contano. {@code tick()} non muove il giocatore, non manda eventi di Architectury e non cambia {@code tickCount},
+     * ma scala anche {@code invulnerableTime}: per questo si chiama solo qui, prima del primo colpo. Come il giocatore
+     * finto ricorda i messaggi di sistema ({@link #messagesTo}). Nasce vicino al punto di rinascita del mondo: il test
+     * lo sposta nella sua struttura. Esiste solo per i test.
      */
     ServerPlayer survivalPlayer(GameTestHelper helper);
 
